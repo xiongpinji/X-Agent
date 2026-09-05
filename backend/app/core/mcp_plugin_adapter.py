@@ -77,6 +77,12 @@ ENV_REQUEST_TIMEOUT = "XAGENT_MCP_PLUGIN_REQUEST_TIMEOUT"
 DEFAULT_START_TIMEOUT = 15.0
 DEFAULT_REQUEST_TIMEOUT = 60.0
 
+# 插件子进程读取自身配置的约定环境变量：值为 manifest.configuration 校验后的
+# JSON 对象（经官方 SDK 与默认安全 env 合并注入；密钥类配置只走环境变量，
+# 不落盘、不进工具 schema）。插件端约定：缺必填配置时向 stderr 输出诊断并
+# 以非零码退出（握手 fail-closed，可诊断），绝不伪造可用。
+PLUGIN_CONFIG_ENV_VAR = "XAGENT_PLUGIN_CONFIG"
+
 
 def _env_float(name: str, default: float) -> float:
     """从环境变量读取 float 配置，非法值告警回退默认（不静默崩溃）。"""
@@ -789,7 +795,9 @@ class MCPPluginAdapter:
         entry_point = plugin.manifest.entry_point
         plugin_path = Path(plugin.plugin_path)
         if entry_point.type == "python":
-            # 以当前解释器运行插件模块（cwd=插件目录，模块可相对导入）
+            # 以当前解释器运行插件模块（cwd=插件目录，模块可相对导入）。
+            # sys.executable 保证 venv 下用同一解释器（Windows 下为绝对路径
+            # 的 python.exe，避免依赖 PATH）。
             return sys.executable, ["-m", entry_point.module], str(plugin_path)
         if entry_point.type == "node":
             return "node", [str(plugin_path / entry_point.module)], str(plugin_path)
@@ -798,6 +806,26 @@ class MCPPluginAdapter:
             f"（插件：{plugin.manifest.name}）；仅支持 python/node。"
         )
 
+    @staticmethod
+    def _build_plugin_env(plugin: MCPPlugin) -> dict[str, str] | None:
+        """把插件配置序列化进子进程环境变量（插件配置注入契约）。
+
+        契约：插件子进程从 ``XAGENT_PLUGIN_CONFIG`` 读取 JSON 对象配置。
+        官方 SDK 会在默认安全 env（PATH/SYSTEMROOT 等白名单）之上合并本
+        字典，因此这里只携带配置本身。配置不可序列化时显式报错（fail
+        fast，不静默丢弃配置后拉起一个"缺配置"的插件）。
+        """
+        if not plugin.config:
+            return None
+        try:
+            payload = json.dumps(plugin.config, ensure_ascii=True, default=str)
+        except (TypeError, ValueError) as exc:
+            raise MCPPluginHandshakeError(
+                f"插件 {plugin.manifest.name} 的配置无法序列化为"
+                f" {PLUGIN_CONFIG_ENV_VAR} 环境变量：{exc}"
+            ) from exc
+        return {PLUGIN_CONFIG_ENV_VAR: payload}
+
     def start_server(self, plugin: MCPPlugin, timeout: float | None = None) -> bool:
         """Start MCP server for plugin：真实 stdio MCP 握手。
 
@@ -805,6 +833,11 @@ class MCPPluginAdapter:
         capabilities / clientInfo）→ initialized 通知 → tools/list 工具发现。
         任一步失败即 fail-closed：进程被终止、status=ERROR、
         error_message 含可诊断信息（命令行/cwd/stderr 尾部）。
+
+        配置注入：``plugin.config``（经 update_config / PluginRuntime.start
+        校验后）以 ``XAGENT_PLUGIN_CONFIG`` 环境变量传给子进程（JSON 对象，
+        与官方 SDK 默认安全 env 合并）；插件缺必填配置应在握手前退出并
+        输出 stderr 诊断（fail-closed，可诊断）。
 
         Args:
             plugin: 已加载的插件实例。
@@ -824,6 +857,7 @@ class MCPPluginAdapter:
 
         try:
             command, args, cwd = self._build_server_command(plugin)
+            env = self._build_plugin_env(plugin)
         except MCPPluginHandshakeError as e:
             plugin.status = MCPPluginStatus.ERROR
             plugin.error_message = str(e)
@@ -834,6 +868,7 @@ class MCPPluginAdapter:
             command=command,
             args=args,
             cwd=cwd,
+            env=env,
             client_name=self.client_name,
             client_version=self.client_version,
             start_timeout=timeout if timeout is not None else self.start_timeout,

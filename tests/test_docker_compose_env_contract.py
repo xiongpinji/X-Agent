@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+pytestmark = pytest.mark.contracts
 
 
 def _service_environment(service_name: str) -> dict[str, object]:

@@ -9,8 +9,8 @@ interface Workflow {
   id: string
   name: string
   description?: string
-  nodes: any[]
-  edges: any[]
+  nodes: unknown[]
+  edges: unknown[]
   created_at?: string
   updated_at?: string
 }
@@ -22,7 +22,7 @@ interface WorkflowRun {
   status: string
   started_at?: string
   completed_at?: string
-  node_results?: Record<string, any>
+  node_results?: Record<string, unknown>
 }
 
 const RUN_BADGE: Record<string, string> = {
@@ -38,10 +38,6 @@ export const WorkflowsPage: React.FC = () => {
   const [runs, setRuns] = useState<WorkflowRun[]>([])
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null)
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
@@ -49,14 +45,18 @@ export const WorkflowsPage: React.FC = () => {
         apiClient.listWorkflows(),
         apiClient.listWorkflowRuns(),
       ])
-      setWorkflows(wfList)
-      setRuns(runList)
+      setWorkflows(wfList as Workflow[])
+      setRuns(runList as WorkflowRun[])
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to load workflows')
     } finally {
       setLoading(false)
     }
   }, [setLoading, setError])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleRun = async (workflowId: string) => {
     try {

@@ -109,7 +109,7 @@ async function networkFirstStrategy(request: Request): Promise<Response> {
     }
 
     return response;
-  } catch (error) {
+  } catch {
     // Network failed, try cache
     const cached = await caches.match(request);
     if (cached) {
@@ -139,7 +139,7 @@ async function cacheFirstStrategy(request: Request): Promise<Response> {
       cache.put(request, response.clone());
     }
     return response;
-  } catch (error) {
+  } catch {
     return new Response('Not found', { status: 404 });
   }
 }
@@ -152,6 +152,7 @@ function isStaticAsset(pathname: string): boolean {
 // Message handler for cache management
 self.addEventListener('message', (event: ExtendedMessageEvent) => {
   const { type, payload } = event.data;
+  const payloadData = payload as { urls: string[]; endpoints: string[] };
 
   switch (type) {
     case 'SKIP_WAITING':
@@ -169,14 +170,14 @@ self.addEventListener('message', (event: ExtendedMessageEvent) => {
     case 'CACHE_URLS':
       event.waitUntil(
         caches.open(CACHE_NAMES.dynamic).then((cache) => {
-          return cache.addAll(payload.urls);
+          return cache.addAll(payloadData.urls);
         })
       );
       break;
 
     case 'PRECACHE_API':
       event.waitUntil(
-        precacheApiEndpoints(payload.endpoints)
+        precacheApiEndpoints(payloadData.endpoints)
       );
       break;
   }
@@ -200,9 +201,11 @@ async function precacheApiEndpoints(endpoints: string[]): Promise<void> {
 }
 
 // Background sync for offline actions
-self.addEventListener('sync', (event: any) => {
-  if (event.tag === 'sync-offline-queue') {
-    event.waitUntil(syncOfflineQueue());
+self.addEventListener('sync', (event) => {
+  // 'sync' events carry a tag and waitUntil (not in the TS DOM lib version we target).
+  const syncEvent = event as Event & { tag?: string; waitUntil?: (p: Promise<void>) => void };
+  if (syncEvent.tag === 'sync-offline-queue') {
+    syncEvent.waitUntil?.(syncOfflineQueue());
   }
 });
 
@@ -243,7 +246,7 @@ function openIndexedDB(): Promise<IDBDatabase> {
   });
 }
 
-function getOfflineQueue(db: IDBDatabase): Promise<any[]> {
+function getOfflineQueue(db: IDBDatabase): Promise<Array<{ id: string; request: string }>> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction('offline-queue', 'readonly');
     const store = transaction.objectStore('offline-queue');
@@ -267,7 +270,7 @@ function removeFromQueue(db: IDBDatabase, id: string): Promise<void> {
 
 // Type definitions
 interface ExtendedEvent extends Event {
-  waitUntil(promise: Promise<any>): void;
+  waitUntil(promise: Promise<unknown>): void;
 }
 
 interface FetchEvent extends Event {
@@ -278,7 +281,7 @@ interface FetchEvent extends Event {
 interface ExtendedMessageEvent extends MessageEvent {
   data: {
     type: string;
-    payload?: any;
+    payload?: unknown;
   };
 }
 

@@ -6,6 +6,13 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthState, User } from '../types';
 import * as SecureStore from 'expo-secure-store';
+import { getApiConfig } from '../config/env';
+
+// 登录契约对齐 backend/app/api/auth.py:
+//   POST /api/v1/auth/login   body {email, password}
+//     → AuthTokenResponse {access_token, refresh_token, expires_in, token_type, user}
+//   POST /api/v1/auth/refresh (Authorization: Bearer <refresh_token>)
+//     → {access_token, token_type, expires_in}
 
 interface AuthStore extends AuthState {
   loading: boolean;
@@ -30,27 +37,33 @@ export const useAuthStore = create<AuthStore>()(
       login: async (email: string, password: string) => {
         set({ loading: true });
         try {
-          // 调用后端API
-          const response = await fetch('https://api.xagent.local/auth/login', {
+          const { baseUrl } = await getApiConfig();
+          const response = await fetch(`${baseUrl}/api/v1/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
           });
 
-          if (!response.ok) throw new Error('Login failed');
+          if (!response.ok) {
+            const detail = await response.text().catch(() => '');
+            throw new Error(
+              `Login failed with status ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`
+            );
+          }
 
+          // AuthTokenResponse: {access_token, refresh_token, expires_in, token_type, user}
           const data = await response.json();
 
-          // 安全存储token
-          await SecureStore.setItemAsync('token', data.token);
-          await SecureStore.setItemAsync('refreshToken', data.refreshToken);
+          // 安全存储 token
+          await SecureStore.setItemAsync('token', data.access_token);
+          await SecureStore.setItemAsync('refreshToken', data.refresh_token);
 
           set({
             isAuthenticated: true,
             user: data.user,
-            token: data.token,
-            refreshToken: data.refreshToken,
-            expiresAt: new Date(data.expiresAt),
+            token: data.access_token,
+            refreshToken: data.refresh_token,
+            expiresAt: new Date(Date.now() + (data.expires_in ?? 900) * 1000),
             loading: false,
           });
         } catch (error) {
@@ -81,20 +94,30 @@ export const useAuthStore = create<AuthStore>()(
           const refreshToken = await SecureStore.getItemAsync('refreshToken');
           if (!refreshToken) throw new Error('No refresh token');
 
-          const response = await fetch('https://api.xagent.local/auth/refresh', {
+          const { baseUrl } = await getApiConfig();
+          const response = await fetch(`${baseUrl}/api/v1/auth/refresh`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken }),
+            headers: {
+              'Content-Type': 'application/json',
+              // 后端 refresh 端点通过认证主体鉴权，refresh token 作为 Bearer 凭证
+              Authorization: `Bearer ${refreshToken}`,
+            },
           });
 
-          if (!response.ok) throw new Error('Token refresh failed');
+          if (!response.ok) {
+            const detail = await response.text().catch(() => '');
+            throw new Error(
+              `Token refresh failed with status ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`
+            );
+          }
 
+          // {access_token, token_type, expires_in}
           const data = await response.json();
-          await SecureStore.setItemAsync('token', data.token);
+          await SecureStore.setItemAsync('token', data.access_token);
 
           set({
-            token: data.token,
-            expiresAt: new Date(data.expiresAt),
+            token: data.access_token,
+            expiresAt: new Date(Date.now() + (data.expires_in ?? 900) * 1000),
           });
         } catch (error) {
           console.error('Token refresh error:', error);

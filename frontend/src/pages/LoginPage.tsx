@@ -34,7 +34,7 @@ export const LoginPage: React.FC = () => {
         localStorage.setItem('api_key', apiKey.trim())
         setUser({ id: 'api-key-user', name: 'Developer', email: 'dev@local' })
         navigate('/')
-      } catch (err: any) {
+      } catch (err) {
         setError(toErrorMessage(err, 'API Key login failed'))
       } finally {
         setLoading(false)
@@ -86,7 +86,7 @@ export const LoginPage: React.FC = () => {
       })
 
       navigate('/')
-    } catch (err: any) {
+    } catch (err) {
       setError(toErrorMessage(err, 'Authentication failed'))
     } finally {
       setLoading(false)

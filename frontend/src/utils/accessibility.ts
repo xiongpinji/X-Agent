@@ -81,7 +81,7 @@ export const KeyCode = {
  * Check if key is navigation key
  */
 export function isNavigationKey(key: string): boolean {
-  return [
+  return ([
     KeyCode.ARROW_UP,
     KeyCode.ARROW_DOWN,
     KeyCode.ARROW_LEFT,
@@ -90,14 +90,14 @@ export function isNavigationKey(key: string): boolean {
     KeyCode.END,
     KeyCode.PAGE_UP,
     KeyCode.PAGE_DOWN,
-  ].includes(key as any)
+  ] as readonly string[]).includes(key)
 }
 
 /**
  * Check if key is activation key
  */
 export function isActivationKey(key: string): boolean {
-  return [KeyCode.ENTER, KeyCode.SPACE].includes(key as any)
+  return ([KeyCode.ENTER, KeyCode.SPACE] as readonly string[]).includes(key)
 }
 
 /**

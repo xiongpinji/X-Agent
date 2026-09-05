@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
+
 _LEGACY_OPEN_SOURCE = ".".join(("backend", "app", "core", "open_source"))
 _PUBLIC_OPEN_SOURCE_API = ".".join(("backend", "app", "core", "open_source_api"))
+
+pytestmark = pytest.mark.contracts
 
 
 def test_public_open_source_api_exports_are_available() -> None:

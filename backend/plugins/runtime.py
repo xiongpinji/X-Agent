@@ -17,6 +17,9 @@ archive/dead_code_2026-07-19/，本运行时不复用、不复活归档代码。
   MCP 协议握手**（官方 ``mcp`` SDK：spawn → initialize → initialized →
   tools/list），失败 fail-closed 且错误可诊断；工具调用经
   call_plugin_tool() → ``tools/call``。
+- start(config=...) 的配置经 manifest schema 校验后以
+  ``XAGENT_PLUGIN_CONFIG`` 环境变量注入子进程；插件缺必填配置时在握手前
+  退出（fail-closed，stderr 可诊断），不伪造可用。
 - inspect_entrypoint() 提供进程内真实验证：导入入口模块并实例化入口类，
   比对 manifest 声明的 tools 与类方法，结果如实上报。
 """
@@ -331,6 +334,7 @@ class PluginRuntime:
         *,
         timeout: float | None = None,
         tool_registry: Any | None = None,
+        config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """拉起插件子进程并完成真实 stdio MCP 握手。
 
@@ -343,10 +347,26 @@ class PluginRuntime:
             timeout: per-server 握手超时（秒）；None 用适配器默认。
             tool_registry: 可选的运行时 ToolRegistry；传入时把发现的
                 MCP 工具桥接进 Agent 主循环执行表（plugin_mcp__ 前缀）。
+            config: 可选的本次启动配置；与 manifest.configuration 校验
+                （manifest default + 已有配置合并后校验）后经
+                ``XAGENT_PLUGIN_CONFIG`` 环境变量注入子进程。校验失败
+                ok=False 且不 spawn（显式错误，不静默降级）。
         """
         plugin = self._loaded.get(name)
         if plugin is None:
             return {"name": name, "ok": False, "error": "plugin not loaded; call load() first"}
+
+        if config is not None:
+            invalid_reason = self._apply_start_config(plugin, config)
+            if invalid_reason is not None:
+                logger.error(f"Configuration rejected for plugin '{name}': {invalid_reason}")
+                return {
+                    "name": name,
+                    "ok": False,
+                    "status": plugin.status.value,
+                    "error": f"configuration invalid: {invalid_reason}",
+                }
+
         ok = self._adapter.start_server(plugin, timeout=timeout)
         result: dict[str, Any] = {
             "name": name,
@@ -363,6 +383,32 @@ class PluginRuntime:
             if tool_registry is not None:
                 result["registered_tools"] = self.bridge_tools(name, tool_registry)
         return result
+
+    def _apply_start_config(
+        self, plugin: MCPPlugin, config: dict[str, Any]
+    ) -> str | None:
+        """校验并合并启动配置；返回 None 表示成功，否则返回可诊断错误。
+
+        合并顺序：manifest default < 已有 plugin.config < 本次 config
+        （后者覆盖前者）。manifest 校验只做 schema 层（必填/类型）；
+        语义校验（如 postgresql 必须提供 db_host）由插件子进程自己在
+        握手前执行——缺配置即 fail-closed 退出，错误经 stderr 回传。
+        """
+        from datetime import UTC, datetime
+
+        merged = {
+            **self._default_config_for(plugin.manifest),
+            **plugin.config,
+            **config,
+        }
+        try:
+            self._adapter._validate_config(plugin.manifest, merged)
+        except ValueError as e:
+            return str(e)
+        plugin.config.clear()
+        plugin.config.update(merged)
+        plugin.updated_at = datetime.now(UTC)
+        return None
 
     def stop(self, name: str) -> dict[str, Any]:
         """停止插件子进程（含 MCP 会话关停与桥接工具移除）"""

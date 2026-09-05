@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { apiClient, Memory } from '@/services/api'
 import { useI18n } from '@/i18n/context'
@@ -13,15 +13,7 @@ export const MemoryPage: React.FC = () => {
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null)
   const [filteredMemories, setFilteredMemories] = useState<Memory[]>([])
 
-  useEffect(() => {
-    loadMemories()
-  }, [])
-
-  useEffect(() => {
-    filterMemories()
-  }, [memories, searchQuery])
-
-  const loadMemories = async () => {
+  const loadMemories = useCallback(async () => {
     try {
       setLoading(true)
       const response = await apiClient.listMemories()
@@ -31,9 +23,13 @@ export const MemoryPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [setMemories, setLoading, setError])
 
-  const filterMemories = async () => {
+  useEffect(() => {
+    loadMemories()
+  }, [loadMemories])
+
+  const filterMemories = useCallback(async () => {
     if (!searchQuery.trim()) {
       setFilteredMemories(memories)
       return
@@ -46,7 +42,11 @@ export const MemoryPage: React.FC = () => {
       console.error('Search failed:', error)
       setFilteredMemories(memories)
     }
-  }
+  }, [memories, searchQuery])
+
+  useEffect(() => {
+    filterMemories()
+  }, [filterMemories])
 
   // PUT /api/v1/memory/{id} and DELETE /api/v1/memory/{id} exist in the
   // backend — edit and delete are fully wired.

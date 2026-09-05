@@ -12,14 +12,35 @@ export interface StreamEvent {
   timestamp: string;
   run_id: string;
   sequence: number;
-  [key: string]: any;
+  /** Optional payloads carried by specific event types (message/log/progress/…). */
+  role?: string;
+  content?: string;
+  tool_name?: string;
+  success?: boolean;
+  current_step?: string;
+  completed_steps?: number;
+  total_steps?: number;
+  estimated_time_remaining?: number;
+  overall_progress?: number;
+  level?: string;
+  message?: string;
+  error_code?: string;
+  error_message?: string;
+  status?: string;
+  /** Present on 'metric' events. */
+  metric_name: string;
+  metric_value: number | string;
+  unit: string;
+  /** Present on 'completion' events. */
+  result?: unknown;
+  [key: string]: unknown;
 }
 
 export interface ProgressData {
-  overall_progress: number;
-  current_step: string;
-  total_steps: number;
-  completed_steps: number;
+  overall_progress?: number;
+  current_step?: string;
+  total_steps?: number;
+  completed_steps?: number;
   estimated_time_remaining?: number;
 }
 
@@ -37,7 +58,7 @@ export interface UseStreamingEventsOptions {
   onProgress?: (progress: ProgressData) => void;
   onMetric?: (metric: { name: string; value: number | string; unit: string }) => void;
   onError?: (error: Error) => void;
-  onComplete?: (result: any) => void;
+  onComplete?: (result: unknown) => void;
 }
 
 export const useStreamingEvents = (

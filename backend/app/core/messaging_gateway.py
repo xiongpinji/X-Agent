@@ -348,16 +348,86 @@ class MessagingGateway:
         self._channels: dict[PlatformType, BaseChannel] = {}
         self._message_queue: asyncio.Queue[IncomingMessage] = asyncio.Queue()
         self._running = False
+        # Optional agent relay: (IncomingMessage) -> reply text (None/"" = no reply).
+        # Injected via set_incoming_handler(); the queue is always filled first,
+        # so existing queue-only consumers keep working when no handler is set.
+        self._incoming_handler: Callable[[IncomingMessage], Coroutine] | None = None
 
     def register_channel(self, channel: BaseChannel) -> None:
         """Register a platform channel."""
+        old = self._channels.get(channel.platform)
+        if old is not None and old is not channel:
+            try:
+                # Best-effort disconnect of the replaced channel; register_channel
+                # is sync by contract so we cannot await here.
+                old._running = False
+            except Exception:
+                pass
         self._channels[channel.platform] = channel
         channel.on_message(self._handle_incoming)
         logger.info(f"Registered channel: {channel.platform.value}")
 
+    def unregister_channel(self, platform: PlatformType) -> BaseChannel | None:
+        """Unregister a platform channel. Returns the removed channel (or None)."""
+        channel = self._channels.pop(platform, None)
+        if channel is not None:
+            channel._message_handler = None
+            logger.info(f"Unregistered channel: {platform.value}")
+        return channel
+
+    def get_channel(self, platform: PlatformType) -> BaseChannel | None:
+        """Return the registered channel for a platform, if any."""
+        return self._channels.get(platform)
+
+    def has_channel(self, platform: PlatformType) -> bool:
+        """Whether a channel is registered for the platform."""
+        return platform in self._channels
+
+    @property
+    def running(self) -> bool:
+        """Whether the gateway has been started."""
+        return self._running
+
+    def set_incoming_handler(
+        self, handler: Callable[[IncomingMessage], Coroutine] | None
+    ) -> None:
+        """Inject the agent relay for incoming messages.
+
+        The handler receives every IncomingMessage routed through
+        _handle_incoming and returns a reply string (or None/"" to stay
+        silent). Passing None detaches it (queue-only behaviour).
+        """
+        self._incoming_handler = handler
+
     async def _handle_incoming(self, message: IncomingMessage) -> None:
-        """Handle incoming message from any platform."""
+        """Handle incoming message from any platform.
+
+        Always enqueues the message; when an agent relay is wired, also
+        forwards it and sends the reply back through the same platform.
+        """
         await self._message_queue.put(message)
+
+        handler = self._incoming_handler
+        if handler is None:
+            return
+        try:
+            reply = await handler(message)
+        except Exception as e:
+            logger.error(f"Gateway incoming handler error: {e}")
+            return
+        if not reply:
+            return
+        try:
+            await self.send(
+                OutgoingMessage(
+                    content=str(reply),
+                    platform=message.platform,
+                    channel_id=message.channel_id,
+                    reply_to=message.id,
+                )
+            )
+        except Exception as e:
+            logger.error(f"Gateway reply send failed: {e}")
 
     async def start(self) -> None:
         """Start all enabled channels."""
@@ -395,6 +465,25 @@ class MessagingGateway:
                 results[platform.value] = False  # Placeholder
         return results
 
+    async def broadcast_to_targets(
+        self, content: str, targets: dict[PlatformType, str]
+    ) -> dict[str, bool]:
+        """Broadcast content to explicit platform -> channel_id targets.
+
+        Unlike broadcast() (which lacks per-platform channel ids), this sends a
+        real OutgoingMessage to each target via send() and reports delivery.
+        """
+        results: dict[str, bool] = {}
+        for platform, channel_id in targets.items():
+            if not channel_id:
+                results[platform.value] = False
+                continue
+            sent = await self.send(
+                OutgoingMessage(content=content, platform=platform, channel_id=channel_id)
+            )
+            results[platform.value] = sent
+        return results
+
     def get_status(self) -> dict[str, Any]:
         """Get gateway status."""
         return {
@@ -407,6 +496,30 @@ class MessagingGateway:
                 }
                 for p, c in self._channels.items()
             },
+            "queue_size": self._message_queue.qsize(),
+        }
+
+    async def get_status_async(self) -> dict[str, Any]:
+        """Async-safe variant of get_status() for use inside a running loop.
+
+        get_status() calls run_until_complete(), which raises when invoked from
+        a coroutine (e.g. a FastAPI handler); this variant awaits each
+        channel's is_connected() instead and returns the same shape.
+        """
+        channels: dict[str, Any] = {}
+        for platform, channel in self._channels.items():
+            try:
+                connected = await channel.is_connected()
+            except Exception as e:
+                logger.error(f"Status check failed for {platform.value}: {e}")
+                connected = False
+            channels[platform.value] = {
+                "enabled": channel.config.enabled,
+                "connected": connected,
+            }
+        return {
+            "running": self._running,
+            "channels": channels,
             "queue_size": self._message_queue.qsize(),
         }
 

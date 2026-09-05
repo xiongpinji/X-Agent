@@ -43,13 +43,20 @@ const CodeReviewPage: React.FC = () => {
     setError(null)
     setResult(null)
     try {
-      const resp = await apiClient.postCodeReview(code, language)
+      const resp = (await apiClient.postCodeReview(code, language)) as {
+        approved?: boolean
+        status?: string
+        score?: number
+        comments?: ReviewComment[]
+        findings?: ReviewComment[]
+        results?: ReviewComment[]
+      } | null
       setResult({
         approved: resp?.approved ?? resp?.status === 'approved',
         score: resp?.score,
         comments: resp?.comments ?? resp?.findings ?? resp?.results ?? [],
       })
-    } catch (err: any) {
+    } catch (err) {
       setError(toErrorMessage(err, 'Review request failed'))
     } finally {
       setLoading(false)

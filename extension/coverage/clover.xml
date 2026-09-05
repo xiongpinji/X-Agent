@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1788617352197" clover="3.2.0">
-  <project timestamp="1788617352198" name="All files">
+<coverage generated="1788649899843" clover="3.2.0">
+  <project timestamp="1788649899844" name="All files">
     <metrics statements="992" coveredstatements="547" conditionals="601" coveredconditionals="301" methods="161" coveredmethods="89" elements="1754" coveredelements="937" complexity="0" loc="992" ncloc="992" packages="1" files="6" classes="6"/>
     <file name="api-client.js" path="D:\AI编程库\项目库\进行中的项目\X-Agent\extension\api-client.js">
       <metrics statements="186" coveredstatements="160" conditionals="229" coveredconditionals="154" methods="19" coveredmethods="17"/>

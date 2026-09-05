@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toErrorMessage } from '@/services/errorMessage'
 import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/i18n/context'
@@ -28,7 +28,7 @@ const STAGE_META: Record<string, { icon: string; badge: string }> = {
   learn: { icon: '🧠', badge: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
 }
 
-function safeJsonParse(raw: string): Record<string, any> | null {
+function safeJsonParse(raw: string): Record<string, unknown> | null {
   const trimmed = raw.trim()
   if (!trimmed) return {}
   try {
@@ -95,11 +95,12 @@ const EvolutionPage: React.FC = () => {
   const [stageFilter, setStageFilter] = useState<StageFilter>('all')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  // `t` from the i18n context is not referentially stable; keep it in a ref so
+  // loadData keeps a stable identity and the initial fetch stays mount-only.
+  const tRef = useRef(t)
+  tRef.current = t
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
     const results = await Promise.allSettled([
@@ -118,10 +119,14 @@ const EvolutionPage: React.FC = () => {
     if (distilledR.status === 'fulfilled') setDistilledSkills(distilledR.value)
     if (historyR.status === 'fulfilled') setHistory(historyR.value)
     if (results.every(r => r.status === 'rejected')) {
-      setError(t('evolution.loadFailed', 'Failed to load evolution data'))
+      setError(tRef.current('evolution.loadFailed', 'Failed to load evolution data'))
     }
     setLoading(false)
-  }
+  }, [setLoading, setError])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   // ── Trigger handlers ──
 
@@ -138,7 +143,7 @@ const EvolutionPage: React.FC = () => {
     try {
       setGepaOutcome(await evolutionOps.triggerGepa(trajectory, result))
       await loadData()
-    } catch (e: any) {
+    } catch (e) {
       setGepaError(toErrorMessage(e, t('evolution.triggerFailed', 'Trigger failed')))
     } finally {
       setGepaBusy(false)
@@ -156,7 +161,7 @@ const EvolutionPage: React.FC = () => {
     try {
       setCycleOutcome(await evolutionOps.triggerCycle(cycleTaskId.trim()))
       await loadData()
-    } catch (e: any) {
+    } catch (e) {
       setCycleError(toErrorMessage(e, t('evolution.cycleFailed', 'Cycle trigger failed')))
     } finally {
       setCycleBusy(false)
@@ -178,7 +183,7 @@ const EvolutionPage: React.FC = () => {
       setEvalExecId(out.execution_id)
       setOptExecId(out.execution_id)
       await loadData()
-    } catch (e: any) {
+    } catch (e) {
       setRecError(toErrorMessage(e, 'record failed'))
     } finally { setRecBusy(false) }
   }
@@ -194,7 +199,7 @@ const EvolutionPage: React.FC = () => {
     try {
       setEvalOutcome(await evolutionOps.evaluateExecution(evalExecId.trim(), evalFeedback.trim() ? feedback : undefined))
       await loadData()
-    } catch (e: any) {
+    } catch (e) {
       setEvalError(toErrorMessage(e, 'evaluate failed'))
     } finally { setEvalBusy(false) }
   }
@@ -209,7 +214,7 @@ const EvolutionPage: React.FC = () => {
     try {
       setOptOutcome(await evolutionOps.optimizeStrategy(optExecId.trim(), score))
       await loadData()
-    } catch (e: any) {
+    } catch (e) {
       setOptError(toErrorMessage(e, 'optimize failed'))
     } finally { setOptBusy(false) }
   }
@@ -221,7 +226,7 @@ const EvolutionPage: React.FC = () => {
     try {
       setDistillOutcome(await evolutionOps.distillSkill(ids))
       await loadData()
-    } catch (e: any) {
+    } catch (e) {
       setDistillError(toErrorMessage(e, 'distill failed'))
     } finally { setDistillBusy(false) }
   }
@@ -263,7 +268,7 @@ const EvolutionPage: React.FC = () => {
 
   const renderError = (msg: string | null) => (msg ? <div className={errBoxCls}>⚠️ {msg}</div> : null)
 
-  const renderJson = (data: Record<string, any>) => (
+  const renderJson = (data: Record<string, unknown>) => (
     <pre className={clsx(
       'mt-2 p-2 rounded-lg text-[11px] overflow-x-auto max-h-48 overflow-y-auto',
       isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-600'
@@ -372,16 +377,18 @@ const EvolutionPage: React.FC = () => {
             <div className={cardCls}>
               <h3 className="font-medium text-sm mb-1">⚡ {t('evolution.gepaTrigger', 'GEPA Loop Trigger')}</h3>
               <p className={clsx('text-xs mb-3', mutedCls)}>POST /evolution/trigger</p>
-              <label className={clsx('block text-xs mb-1', mutedCls)}>trajectory (JSON)</label>
+              <label htmlFor="gepa-trajectory" className={clsx('block text-xs mb-1', mutedCls)}>trajectory (JSON)</label>
               <textarea
+                id="gepa-trajectory"
                 value={gepaTrajectory}
                 onChange={e => setGepaTrajectory(e.target.value)}
                 placeholder='{"tool_calls": [...], "status": "completed"}'
                 rows={3}
                 className={clsx(inputCls, 'font-mono text-xs')}
               />
-              <label className={clsx('block text-xs mt-2 mb-1', mutedCls)}>result (JSON)</label>
+              <label htmlFor="gepa-result" className={clsx('block text-xs mt-2 mb-1', mutedCls)}>result (JSON)</label>
               <textarea
+                id="gepa-result"
                 value={gepaResult}
                 onChange={e => setGepaResult(e.target.value)}
                 placeholder='{"success": true}'
@@ -425,8 +432,9 @@ const EvolutionPage: React.FC = () => {
             <div className={cardCls}>
               <h3 className="font-medium text-sm mb-1">🔁 {t('evolution.fullCycle', 'Full Evolution Cycle')}</h3>
               <p className={clsx('text-xs mb-3', mutedCls)}>POST /evolution/self-evolution/cycle · Execute → Evaluate → Optimize → Learn</p>
-              <label className={clsx('block text-xs mb-1', mutedCls)}>task_id</label>
+              <label htmlFor="cycle-task-id" className={clsx('block text-xs mb-1', mutedCls)}>task_id</label>
               <input
+                id="cycle-task-id"
                 value={cycleTaskId}
                 onChange={e => setCycleTaskId(e.target.value)}
                 placeholder={t('evolution.taskIdPlaceholder', 'Task ID with a recorded execution')}

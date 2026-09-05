@@ -41,6 +41,12 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "backup:read",
         "backup:write",
         "analytics:read",
+        # 2026-09-06 统一任务层配套: /api/v1/agent/tasks（异步 agent 任务提交/轮询/取消）
+        "tasks:manage",
+        # 2026-09-06 调度 API 配套（B3 常驻调度落地后 /api/scheduler/* 对所有角色
+        # 403——scheduler:manage/read 此前从未登记进角色表）
+        "scheduler:manage",
+        "scheduler:read",
     ],
     "developer": [
         "agent:run",
@@ -62,6 +68,11 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "mcp:read",
         "backup:read",
         "analytics:read",
+        # 2026-09-06 统一任务层配套（developer 已有 agent:run/sandbox:run）
+        "tasks:manage",
+        # 2026-09-06 调度 API 配套：developer 读 + 建定时任务（管理面只读口径）
+        "scheduler:manage",
+        "scheduler:read",
     ],
     "user": [
         "agent:run",

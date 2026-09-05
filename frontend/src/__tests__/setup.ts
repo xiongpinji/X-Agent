@@ -38,7 +38,7 @@ global.IntersectionObserver = class IntersectionObserver {
     return []
   }
   unobserve() {}
-} as any
+} as unknown as typeof IntersectionObserver
 
 // Mock ResizeObserver (not implemented in jsdom)
 global.ResizeObserver = class ResizeObserver {
@@ -46,7 +46,7 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
   observe() {}
   unobserve() {}
-} as any
+} as unknown as typeof ResizeObserver
 
 // jsdom does not implement EventSource; provide a minimal stub so that
 // module-level references (e.g. EventSource.OPEN) do not throw. Individual
@@ -57,14 +57,14 @@ if (typeof global.EventSource === 'undefined') {
     static OPEN = 1
     static CLOSED = 2
     readyState = 0
-    onopen: ((ev: any) => void) | null = null
-    onmessage: ((ev: any) => void) | null = null
-    onerror: ((ev: any) => void) | null = null
+    onopen: ((ev: Event) => void) | null = null
+    onmessage: ((ev: MessageEvent) => void) | null = null
+    onerror: ((ev: Event) => void) | null = null
     addEventListener() {}
     removeEventListener() {}
     close() {}
   }
-  global.EventSource = EventSourceStub as any
+  global.EventSource = EventSourceStub as unknown as typeof EventSource
 }
 
 // jsdom does not implement scrollIntoView (used by chat auto-scroll)
@@ -73,7 +73,7 @@ Element.prototype.scrollIntoView = vi.fn()
 // Suppress noisy console output in tests where it is expected
 const originalError = console.error
 beforeAll(() => {
-  console.error = (...args: any[]) => {
+  console.error = (...args: unknown[]) => {
     if (
       typeof args[0] === 'string' &&
       args[0].includes('Warning: ReactDOM.render')

@@ -10,7 +10,7 @@ interface NotificationOptions {
   tag?: string;
   requireInteraction?: boolean;
   actions?: NotificationAction[];
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   vibrate?: number[];
   sound?: string;
 }
@@ -19,14 +19,6 @@ interface NotificationAction {
   action: string;
   title: string;
   icon?: string;
-}
-
-interface PushSubscription {
-  endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
 }
 
 class PushNotificationManager {
@@ -67,7 +59,7 @@ class PushNotificationManager {
       // Check existing subscription
       const subscription = await this.registration.pushManager.getSubscription();
       if (subscription) {
-        this.subscription = subscription as any;
+        this.subscription = subscription;
       }
     } catch (error) {
       console.error('Push notification initialization failed:', error);
@@ -117,13 +109,13 @@ class PushNotificationManager {
         applicationServerKey: this.urlBase64ToUint8Array(vapidPublicKey),
       });
 
-      this.subscription = subscription as any;
+      this.subscription = subscription;
       this.emit('subscribe', subscription);
 
       // Send subscription to server
       await this.sendSubscriptionToServer(subscription);
 
-      return subscription as any;
+      return subscription;
     } catch (error) {
       console.error('Push subscription failed:', error);
       this.emit('error', error);
@@ -140,7 +132,7 @@ class PushNotificationManager {
     }
 
     try {
-      const success = await (this.subscription as any).unsubscribe();
+      const success = await this.subscription.unsubscribe();
       if (success) {
         this.subscription = null;
         this.emit('unsubscribe');
@@ -223,7 +215,7 @@ class PushNotificationManager {
   /**
    * Send subscription to server
    */
-  private async sendSubscriptionToServer(subscription: any): Promise<void> {
+  private async sendSubscriptionToServer(subscription: PushSubscription): Promise<void> {
     try {
       const response = await fetch('/api/v1/notifications/subscribe', {
         method: 'POST',
@@ -234,8 +226,8 @@ class PushNotificationManager {
           subscription: {
             endpoint: subscription.endpoint,
             keys: {
-              p256dh: this.arrayBufferToBase64(subscription.getKey('p256dh')),
-              auth: this.arrayBufferToBase64(subscription.getKey('auth')),
+              p256dh: this.arrayBufferToBase64(subscription.getKey('p256dh') as ArrayBuffer),
+              auth: this.arrayBufferToBase64(subscription.getKey('auth') as ArrayBuffer),
             },
           },
         }),
@@ -314,7 +306,7 @@ class PushNotificationManager {
   /**
    * Emit event
    */
-  private emit(event: string, data?: any): void {
+  private emit(event: string, data?: unknown): void {
     this.listeners.get(event)?.forEach((callback) => {
       callback(data);
     });

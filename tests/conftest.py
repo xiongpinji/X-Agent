@@ -12,6 +12,30 @@ os.environ.setdefault("XAGENT_QDRANT_URL", "")
 # TestClient 每次启动都会跑 startup_event，后台循环在测试事件循环间漂移且
 # 引入不确定计时；需要测调度接线本身的用例自行 monkeypatch 为 true。
 os.environ.setdefault("XAGENT_SCHEDULER_ENABLED", "false")
+# 测试密闭性总开关：禁止 Settings 读取开发者本地 .env/.env.development
+# （CI 的 DATABASE_URL 等通过 job env 显式注入，不依赖 env 文件）
+os.environ.setdefault("XAGENT_DISABLE_ENV_FILE", "1")
+# env 文件禁用后 database_url 回落 Postgres 默认值，本机无 Postgres 时
+# asyncpg 连接会挂起超时——测试进程显式给 sqlite 文件库
+os.environ.setdefault(
+    "XAGENT_DATABASE_URL",
+    "sqlite:///./data/test_app.db",
+)
+# 同理：embedding_backend 默认 auto 会导入 sentence-transformers/torch，
+# Windows 下首次导入 20-30s（负载下更久）直接撞爆 30s 测试超时——用确定性 local
+os.environ.setdefault("XAGENT_EMBEDDING_BACKEND", "local")
+# 测试密闭性（LLM）：宿主机 OS env 可能残留真实（或已失效的）LLM key 与
+# backend 选择——app 的 agent 单例会据此构建真实后端打真 API（曾因 key 失效
+# 401×3 退避重试拖爆 30s 超时）。这里强制覆盖（setdefault 不够，OS env 已有值）
+# 而非 setdefault；需要真实 LLM 的验证走手动冒烟（XAGENT_TEST_REAL_LLM=1 逃生口）。
+if os.environ.get("XAGENT_TEST_REAL_LLM") != "1":
+    os.environ["XAGENT_LLM_BACKEND"] = "mock"
+    for _llm_key in (
+        "XAGENT_OPENAI_API_KEY",
+        "XAGENT_DEEPSEEK_API_KEY",
+        "XAGENT_ANTHROPIC_API_KEY",
+    ):
+        os.environ.pop(_llm_key, None)
 # P0-15：测试会话属开发环境，显式 opt-in 宿主机降级写（agent_fix_runner 在无
 # Docker sandbox 时默认 fail-closed；test_agent_fix_runner 走 sandbox=None 路径）
 os.environ.setdefault("XAGENT_ALLOW_DEGRADED_HOST_WRITE", "1")

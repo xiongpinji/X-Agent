@@ -5,7 +5,7 @@
  * Supports multiple question types: single choice, multiple choice, text input, confirmation.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 interface QuestionOption {
   value: string;
@@ -13,13 +13,16 @@ interface QuestionOption {
   description?: string;
 }
 
+/** Value a user may submit for a question: choice(s), free text, or confirmation. */
+type QuestionAnswerValue = string | string[] | boolean | null;
+
 interface InteractiveQuestion {
   question_id: string;
   run_id: string;
   type: 'single_choice' | 'multiple_choice' | 'text_input' | 'confirmation' | 'file_selection' | 'code_review';
   title: string;
   description: string;
-  context: Record<string, any>;
+  context: Record<string, unknown>;
   options: QuestionOption[];
   allow_multiple: boolean;
   placeholder: string;
@@ -30,17 +33,17 @@ interface InteractiveQuestion {
   timeout_seconds?: number;
   expires_at?: string;
   status: 'pending' | 'answered' | 'timeout' | 'cancelled';
-  answer?: any;
+  answer?: QuestionAnswerValue;
   answered_at?: string;
   priority: string;
   blocking: boolean;
-  default_answer?: any;
+  default_answer?: QuestionAnswerValue;
   tags: string[];
 }
 
 interface InteractiveQuestionProps {
   question: InteractiveQuestion;
-  onAnswer: (answer: any) => Promise<void>;
+  onAnswer: (answer: QuestionAnswerValue) => Promise<void>;
   onTimeout?: () => void;
   onCancel?: () => void;
 }
@@ -51,7 +54,7 @@ export const InteractiveQuestion: React.FC<InteractiveQuestionProps> = ({
   onTimeout,
   onCancel,
 }) => {
-  const [answer, setAnswer] = useState<any>(null);
+  const [answer, setAnswer] = useState<QuestionAnswerValue>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
@@ -97,7 +100,7 @@ export const InteractiveQuestion: React.FC<InteractiveQuestionProps> = ({
     }
   };
 
-  const validateAnswer = (value: any): boolean => {
+  const validateAnswer = (value: QuestionAnswerValue): boolean => {
     switch (question.type) {
       case 'confirmation':
         return typeof value === 'boolean';
@@ -239,7 +242,7 @@ export const InteractiveQuestion: React.FC<InteractiveQuestionProps> = ({
           {question.type === 'text_input' && (
             <div className="mb-3">
               <textarea
-                value={answer || ''}
+                value={(answer as string) || ''}
                 onChange={(e) => setAnswer(e.target.value)}
                 placeholder={question.placeholder}
                 disabled={loading}
@@ -249,7 +252,7 @@ export const InteractiveQuestion: React.FC<InteractiveQuestionProps> = ({
               />
               {question.max_length && (
                 <div className="text-xs text-gray-600 mt-1">
-                  {(answer || '').length} / {question.max_length}
+                  {((answer as string) || '').length} / {question.max_length}
                 </div>
               )}
             </div>
@@ -327,7 +330,12 @@ export const InteractiveQuestions: React.FC<InteractiveQuestionsProps> = ({
   const [questions, setQuestions] = useState<InteractiveQuestion[]>([]);
   const [, setLoading] = useState(false);
 
-  const fetchPendingQuestions = async () => {
+  // Keep the latest optional callback without making fetchPendingQuestions'
+  // identity depend on it (the parent may pass an inline function).
+  const onQuestionsUpdateRef = useRef(onQuestionsUpdate);
+  onQuestionsUpdateRef.current = onQuestionsUpdate;
+
+  const fetchPendingQuestions = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/v1/questions/pending?run_id=${runId}`);
@@ -335,21 +343,21 @@ export const InteractiveQuestions: React.FC<InteractiveQuestionsProps> = ({
 
       const data = await response.json();
       setQuestions(data.questions);
-      onQuestionsUpdate?.(data.questions);
+      onQuestionsUpdateRef.current?.(data.questions);
     } catch (e) {
       console.error('Failed to fetch questions:', e);
     } finally {
       setLoading(false);
     }
-  };
+  }, [runId]);
 
   useEffect(() => {
     fetchPendingQuestions();
     const interval = setInterval(fetchPendingQuestions, 2000);
     return () => clearInterval(interval);
-  }, [runId]);
+  }, [fetchPendingQuestions]);
 
-  const handleAnswer = async (questionId: string, answer: any) => {
+  const handleAnswer = async (questionId: string, answer: QuestionAnswerValue) => {
     try {
       const response = await fetch(`/api/v1/questions/${questionId}/answer`, {
         method: 'POST',

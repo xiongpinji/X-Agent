@@ -27,6 +27,8 @@ from cli.evidence import (
 )
 from cli.main import app, set_current_config
 
+pytestmark = pytest.mark.contracts
+
 REQUIRED_KEYS = {
     "task",
     "trace_id",

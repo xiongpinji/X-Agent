@@ -1,4 +1,6 @@
-import axios, { AxiosInstance, AxiosError } from 'axios'
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
+
+import { resolveApiBaseUrl } from '../lib/tauri'
 
 /**
  * API client aligned with the real backend routes (re-verified against the
@@ -10,7 +12,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios'
  * - GET /chat/stream and /ws still do not exist; callers must not use them.
  */
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data: T
   status: number
   message?: string
@@ -36,7 +38,7 @@ export interface Task {
   description?: string
   priority?: 'low' | 'medium' | 'high' | 'critical'
   tags?: string[]
-  result?: any
+  result?: unknown
   error?: string
 }
 
@@ -59,7 +61,7 @@ export interface Memory {
   /** 0..1 importance score */
   importance: number
   tags: string[]
-  metadata: Record<string, any>
+  metadata: Record<string, unknown>
   sessionId?: string
   createdAt: string
   /** Relevance score, present only on search hits */
@@ -78,7 +80,7 @@ export interface Tool {
   description: string
   riskLevel: string
   requiredScope?: string
-  parameters?: Record<string, any>
+  parameters?: Record<string, unknown>
 }
 
 export interface AuthTokenResponse {
@@ -88,7 +90,7 @@ export interface AuthTokenResponse {
     id: string
     email: string
     display_name?: string
-    [key: string]: any
+    [key: string]: unknown
   }
 }
 
@@ -97,7 +99,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export interface ChatRunEvent {
@@ -105,7 +107,7 @@ export interface ChatRunEvent {
   status?: string
   message: string
   created_at?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /** Session summary returned by GET /api/v1/chat/history (snake_case, seconds). */
@@ -124,7 +126,7 @@ export interface ChatHistoryMessage {
   role: string
   content: string
   timestamp: number
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /** Full session payload returned by GET /api/v1/chat/history/{session_id}. */
@@ -178,15 +180,15 @@ export interface AgentDetailRecord {
   status: string
   capabilities: string[]
   created_at?: string
-  config?: Record<string, any>
-  [key: string]: any
+  config?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 /** Payload returned by POST /agent/run (ad-hoc agent task execution). */
 export interface AgentRunResult {
   message?: string
   answer?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /** A single agent's outcome inside a parallel ("ultra mode") run. */
@@ -198,7 +200,7 @@ export interface ParallelAgentResult {
   tokens_used?: number
   duration_seconds?: number
   error?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**
@@ -213,7 +215,7 @@ export interface ParallelRunResponse {
   merged_answer?: string
   agents_used?: number
   status?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**
@@ -234,7 +236,7 @@ export interface DashboardMetrics {
   request_count?: number
   error_rate?: number | null
   avg_latency_ms?: number | null
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /** API key record as returned by the /security/api-keys endpoints. */
@@ -246,13 +248,44 @@ export interface ApiKeyRecord {
   created_at?: string
   expires_at?: string | null
   last_used_at?: string | null
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /** Response of POST /security/api-keys: the raw key plus its record. */
 export interface ApiKeyCreateResponse {
   key: string
   record: ApiKeyRecord
+}
+
+/**
+ * Loose workflow record as returned by the /workflows endpoints. Fields vary
+ * between the list and editor payloads, so unknown keys are tolerated and the
+ * common fields are surfaced for views that map them into view models.
+ */
+export interface WorkflowRecord {
+  id?: string
+  workflow_id?: string
+  name?: string
+  title?: string
+  description?: string
+  nodes?: unknown[]
+  edges?: unknown[]
+  status?: string
+  created_at?: string
+  updated_at?: string
+  [key: string]: unknown
+}
+
+/** Workflow run record as returned by GET /workflows/runs. */
+export interface WorkflowRunRecord {
+  run_id?: string
+  workflow_id?: string
+  workflow_name?: string
+  status?: string
+  started_at?: string
+  completed_at?: string
+  node_results?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 // ---------------------------------------------------------------------------
@@ -317,7 +350,8 @@ class ApiClient {
   private client: AxiosInstance
   private baseURL: string
 
-  constructor(baseURL: string = '/api/v1') {
+  // Tauri 桌面壳内相对路径不可用，经适配层解析绝对后端地址（浏览器模式不变）
+  constructor(baseURL: string = resolveApiBaseUrl()) {
     this.baseURL = baseURL
     this.client = axios.create({
       baseURL,
@@ -351,9 +385,9 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        const originalRequest = error.config as any
+        const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined
         // Token refresh logic: on 401, try to refresh once
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
           const refreshToken = localStorage.getItem('refresh_token')
           if (refreshToken) {
             originalRequest._retry = true
@@ -420,7 +454,7 @@ class ApiClient {
       params: { limit, offset },
     })
     const payload = response.data
-    const rawItems: any[] = Array.isArray(payload) ? payload : payload?.tasks ?? []
+    const rawItems: unknown[] = Array.isArray(payload) ? payload : payload?.tasks ?? []
     const total: number = typeof payload?.total === 'number' ? payload.total : rawItems.length
     return {
       items: rawItems.map(adaptTask),
@@ -441,7 +475,7 @@ class ApiClient {
     return adaptTask(response.data)
   }
 
-  async updateTask(id: string, data: Record<string, any>): Promise<Task> {
+  async updateTask(id: string, data: Record<string, unknown>): Promise<Task> {
     const response = await this.client.put(`/tasks/${id}`, data)
     return adaptTask(response.data)
   }
@@ -457,7 +491,7 @@ class ApiClient {
       query: '',
       top_k: topK,
     })
-    const rawItems: any[] = response.data?.items ?? []
+    const rawItems: unknown[] = response.data?.items ?? []
     return {
       items: rawItems.map((item) => adaptMemory(item)),
       total: rawItems.length,
@@ -473,12 +507,12 @@ class ApiClient {
       top_k: topK,
       include_scores: true,
     })
-    const rawItems: any[] = response.data?.items ?? []
-    const hits: any[] = response.data?.hits ?? []
+    const rawItems: Array<{ id?: unknown }> = response.data?.items ?? []
+    const hits: Array<{ item?: { id?: unknown }; score?: unknown }> = response.data?.hits ?? []
     const scoreById = new Map<string, number>(
       hits
         .filter((hit) => hit && hit.item && typeof hit.score === 'number')
-        .map((hit) => [String(hit.item.id), hit.score as number])
+        .map((hit) => [String(hit.item?.id), hit.score as number])
     )
     return rawItems.map((item) => adaptMemory(item, scoreById.get(String(item?.id ?? ''))))
   }
@@ -489,7 +523,7 @@ class ApiClient {
   }
 
   // POST /api/v1/memory — returns { id }
-  async createMemory(data: { content: string; layer?: number; importance?: number; tags?: string[]; metadata?: Record<string, any> }): Promise<{ id: string }> {
+  async createMemory(data: { content: string; layer?: number; importance?: number; tags?: string[]; metadata?: Record<string, unknown> }): Promise<{ id: string }> {
     const response = await this.client.post('/memory', {
       content: data.content,
       layer: data.layer ?? 3,
@@ -501,7 +535,7 @@ class ApiClient {
   }
 
   // PUT /api/v1/memory/{id} — update a memory item (backend: api/memory.py)
-  async updateMemory(id: string, data: { content?: string; layer?: number; importance?: number; tags?: string[]; metadata?: Record<string, any> }): Promise<Memory> {
+  async updateMemory(id: string, data: { content?: string; layer?: number; importance?: number; tags?: string[]; metadata?: Record<string, unknown> }): Promise<Memory> {
     const response = await this.client.put(`/memory/${id}`, data)
     return adaptMemory(response.data)
   }
@@ -520,35 +554,35 @@ class ApiClient {
   }
 
   // PUT /api/v1/tools/{name} — update tool config (backend: api/tools.py)
-  async updateTool(name: string, data: { enabled?: boolean; config?: Record<string, any> }): Promise<any> {
+  async updateTool(name: string, data: { enabled?: boolean; config?: Record<string, unknown> }): Promise<unknown> {
     const response = await this.client.put(`/tools/${name}`, data)
     return response.data
   }
 
   // POST /api/v1/tools/{name}/test — test a tool
-  async testTool(name: string, parameters: Record<string, any> = {}): Promise<any> {
+  async testTool(name: string, parameters: Record<string, unknown> = {}): Promise<unknown> {
     const response = await this.client.post(`/tools/${name}/test`, { parameters })
     return response.data
   }
 
   // Workflows API — GET /api/v1/workflows, POST /api/v1/workflows/{id}/run
-  async listWorkflows(): Promise<any[]> {
+  async listWorkflows(): Promise<WorkflowRecord[]> {
     const response = await this.client.get('/workflows')
     const payload = response.data
     return Array.isArray(payload) ? payload : payload?.items ?? []
   }
 
-  async getWorkflow(id: string): Promise<any> {
+  async getWorkflow(id: string): Promise<WorkflowRecord> {
     const response = await this.client.get(`/workflows/${id}`)
     return response.data
   }
 
-  async runWorkflow(id: string, input?: Record<string, any>): Promise<any> {
+  async runWorkflow(id: string, input?: Record<string, unknown>): Promise<unknown> {
     const response = await this.client.post(`/workflows/${id}/run`, { input: input ?? {} })
     return response.data
   }
 
-  async listWorkflowRuns(limit: number = 20): Promise<any[]> {
+  async listWorkflowRuns(limit: number = 20): Promise<WorkflowRunRecord[]> {
     const response = await this.client.get('/workflows/runs', { params: { limit } })
     const payload = response.data
     return Array.isArray(payload) ? payload : payload?.items ?? []
@@ -587,7 +621,7 @@ class ApiClient {
   /** POST /api/v1/chat/history/{session_id}/messages — append a message. */
   async addChatMessage(
     sessionId: string,
-    message: { role: string; content: string; metadata?: Record<string, any> }
+    message: { role: string; content: string; metadata?: Record<string, unknown> }
   ): Promise<{ id: string; session_id: string; message_count: number }> {
     const response = await this.client.post(`/chat/history/${sessionId}/messages`, message)
     return response.data
@@ -632,13 +666,13 @@ class ApiClient {
   }
 
   // Code Review API — POST /api/v1/code-review/file
-  async postCodeReview(content: string, language: string): Promise<any> {
+  async postCodeReview(content: string, language: string): Promise<unknown> {
     const response = await this.client.post('/code-review/file', { content, language })
     return response.data
   }
 
   // Evolution API — GET /api/v1/evolution/stats, GET /api/v1/evolution/skills
-  async getEvolutionStats(): Promise<{ total_tasks: number; patterns_extracted: number; skills_promoted: number; [key: string]: any }> {
+  async getEvolutionStats(): Promise<{ total_tasks: number; patterns_extracted: number; skills_promoted: number; [key: string]: unknown }> {
     const response = await this.client.get('/evolution/stats')
     return response.data
   }
@@ -656,7 +690,7 @@ class ApiClient {
     return Array.isArray(payload) ? payload : payload?.goals ?? payload?.items ?? []
   }
 
-  async createGoal(objective: string): Promise<any> {
+  async createGoal(objective: string): Promise<unknown> {
     const response = await this.client.post('/goals', { objective })
     return response.data
   }

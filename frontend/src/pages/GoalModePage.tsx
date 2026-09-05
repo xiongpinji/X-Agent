@@ -13,10 +13,22 @@ interface _ParallelTask {
   result?: string
 }
 
+interface GoalCheckpoint {
+  label: string
+  done: boolean
+}
+
+interface Goal {
+  id: string
+  objective: string
+  status: string
+  checkpoints?: GoalCheckpoint[]
+}
+
 const GoalModePage: React.FC = () => {
   const { t } = useI18n()
   const { theme } = useAppStore()
-  const [goals, setGoals] = useState<any[]>([])
+  const [goals, setGoals] = useState<Goal[]>([])
   const [newGoal, setNewGoal] = useState('')
   const [loading, setLoading] = useState(false)
   const isDark = theme === 'dark'
@@ -27,7 +39,7 @@ const GoalModePage: React.FC = () => {
 
   const loadGoals = async () => {
     try {
-      const data = await apiClient.getGoals()
+      const data = (await apiClient.getGoals()) as Goal[]
       setGoals(data)
     } catch { /* start with empty list */ }
   }
@@ -36,7 +48,7 @@ const GoalModePage: React.FC = () => {
     if (!newGoal.trim()) return
     setLoading(true)
     try {
-      const goal = await apiClient.createGoal(newGoal)
+      const goal = (await apiClient.createGoal(newGoal)) as Goal
       setGoals(prev => [...prev, goal])
       setNewGoal('')
     } catch {
@@ -105,7 +117,7 @@ const GoalModePage: React.FC = () => {
               </div>
               {/* Checkpoints timeline */}
               <div className="ml-2 border-l-2 border-slate-200 dark:border-slate-700 pl-3 space-y-1">
-                {(goal.checkpoints || []).map((cp: any, i: number) => (
+                {(goal.checkpoints || []).map((cp, i: number) => (
                   <div key={i} className="flex items-center gap-2 text-xs">
                     <span className={cp.done ? 'text-green-500' : 'text-slate-400'}>{cp.done ? '✓' : '○'}</span>
                     <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>{cp.label}</span>

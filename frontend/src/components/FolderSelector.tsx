@@ -10,7 +10,7 @@
  * - Unmount operations
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './FolderSelector.css';
 
 interface Mount {
@@ -37,17 +37,12 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load mounts on component mount
-  useEffect(() => {
-    loadMounts();
-  }, []);
+  // Keep the latest optional error callback without making loadMounts'
+  // identity depend on it (the parent may pass an inline function).
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
-  // Notify parent of mount changes
-  useEffect(() => {
-    onMountChange?.(mounts);
-  }, [mounts, onMountChange]);
-
-  const loadMounts = async () => {
+  const loadMounts = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch('/api/v1/workspace/mounts');
@@ -60,11 +55,21 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       setError(message);
-      onError?.(message);
+      onErrorRef.current?.(message);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Load mounts on component mount
+  useEffect(() => {
+    loadMounts();
+  }, [loadMounts]);
+
+  // Notify parent of mount changes
+  useEffect(() => {
+    onMountChange?.(mounts);
+  }, [mounts, onMountChange]);
 
   const handleMount = async (e: React.FormEvent) => {
     e.preventDefault();

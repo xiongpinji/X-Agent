@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scripts.rc_ci_contract import DEFAULT_WORKFLOW, run_contract
+
+pytestmark = pytest.mark.contracts
 
 
 def _copy_workflow(tmp_path: Path) -> Path:

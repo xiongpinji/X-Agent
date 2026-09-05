@@ -15,7 +15,7 @@ interface StreamingConsoleProps {
   maxMessages?: number;
   autoScroll?: boolean;
   filterLevel?: FilterLevel;
-  onComplete?: (result: any) => void;
+  onComplete?: (result: unknown) => void;
   onError?: (error: Error) => void;
 }
 
@@ -33,10 +33,10 @@ const EventRenderer = React.memo(({ event, showTimestamps }: {
         <div className="mb-2 p-2 bg-gray-50 rounded border-l-4 border-blue-500 text-sm">
           {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
           <span className="text-xs text-gray-600 ml-2 font-semibold">
-            {(event as any).role?.toUpperCase()}
+            {event.role?.toUpperCase()}
           </span>
           <div className="text-gray-800 mt-1 whitespace-pre-wrap break-words">
-            {(event as any).content}
+            {event.content}
           </div>
         </div>
       );
@@ -47,7 +47,7 @@ const EventRenderer = React.memo(({ event, showTimestamps }: {
           {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
           <span className="text-xs text-yellow-700 ml-2 font-semibold">TOOL CALL</span>
           <div className="font-mono text-xs text-yellow-700 mt-1">
-            {(event as any).tool_name}
+            {event.tool_name}
           </div>
         </div>
       );
@@ -57,10 +57,10 @@ const EventRenderer = React.memo(({ event, showTimestamps }: {
         <div className="mb-2 p-2 bg-green-50 rounded border-l-4 border-green-500 text-sm">
           {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
           <span className="text-xs text-green-700 ml-2 font-semibold">
-            TOOL RESULT {!(event as any).success && '(FAILED)'}
+            TOOL RESULT {!event.success && '(FAILED)'}
           </span>
           <div className="font-mono text-xs text-green-700 mt-1">
-            {(event as any).tool_name}
+            {event.tool_name}
           </div>
         </div>
       );
@@ -71,13 +71,13 @@ const EventRenderer = React.memo(({ event, showTimestamps }: {
           {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
           <span className="text-xs text-blue-700 ml-2 font-semibold">PROGRESS</span>
           <div className="text-blue-700 mt-1">
-            {(event as any).current_step} ({(event as any).completed_steps}/{(event as any).total_steps})
+            {event.current_step} ({event.completed_steps}/{event.total_steps})
           </div>
         </div>
       );
 
     case 'log': {
-      const logLevel = (event as any).level || 'info';
+      const logLevel = event.level || 'info';
       const logColors = {
         debug: 'bg-gray-50 border-gray-400 text-gray-700',
         info: 'bg-blue-50 border-blue-400 text-blue-700',
@@ -91,7 +91,7 @@ const EventRenderer = React.memo(({ event, showTimestamps }: {
           {timestamp && <span className="text-xs opacity-60">[{timestamp}]</span>}
           <span className="text-xs font-semibold ml-2">{logLevel.toUpperCase()}</span>
           <div className="mt-1 whitespace-pre-wrap break-words">
-            {(event as any).message}
+            {event.message}
           </div>
         </div>
       );
@@ -103,10 +103,10 @@ const EventRenderer = React.memo(({ event, showTimestamps }: {
           {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
           <span className="text-xs text-red-700 ml-2 font-semibold">ERROR</span>
           <div className="font-semibold text-red-700 mt-1">
-            {(event as any).error_code}
+            {event.error_code}
           </div>
           <div className="text-red-600 mt-1">
-            {(event as any).error_message}
+            {event.error_message}
           </div>
         </div>
       );
@@ -117,7 +117,7 @@ const EventRenderer = React.memo(({ event, showTimestamps }: {
           {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
           <span className="text-xs text-green-700 ml-2 font-semibold">COMPLETION</span>
           <div className="text-green-700 mt-1">
-            Status: {(event as any).status}
+            Status: {event.status}
           </div>
         </div>
       );
@@ -128,7 +128,7 @@ const EventRenderer = React.memo(({ event, showTimestamps }: {
           {timestamp && <span className="text-xs text-gray-500">[{timestamp}]</span>}
           <span className="text-xs text-purple-700 ml-2 font-semibold">METRIC</span>
           <div className="text-purple-700 mt-1">
-            {(event as any).metric_name}: {(event as any).metric_value} {(event as any).unit}
+            {event.metric_name}: {event.metric_value} {event.unit}
           </div>
         </div>
       );

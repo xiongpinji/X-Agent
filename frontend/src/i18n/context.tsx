@@ -4,6 +4,12 @@
  * Provides language switching and translation utilities
  */
 
+/* eslint-disable react-refresh/only-export-components --
+ * Context module: the Provider component intentionally lives alongside its
+ * consumer hooks (useI18n/useLanguage/useTranslation/useFormatters), the
+ * standard React context pattern. Extracting the hooks to another file would
+ * change many import sites with no behavior or Fast Refresh benefit. */
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { LanguageCode, SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, getLanguageConfig, isRTL } from './config'
 import enTranslations from './translations/en.json'

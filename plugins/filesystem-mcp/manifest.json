@@ -42,7 +42,7 @@
   },
   "capabilities": {
     "tools": true,
-    "resources": true,
+    "resources": false,
     "prompts": false
   },
   "permissions": {
@@ -66,8 +66,7 @@
   "dependencies": {
     "python": ">=3.11",
     "packages": {
-      "pathlib": ">=1.0.0",
-      "pydantic": ">=2.0.0"
+      "mcp": ">=1.28.0"
     }
   },
   "configuration": {
@@ -212,15 +211,7 @@
       }
     }
   ],
-  "resources": [
-    {
-      "uri": "filesystem://files",
-      "name": "Files",
-      "description": "File system resources",
-      "description_zh": "文件系统资源",
-      "mime_type": "application/json"
-    }
-  ],
+  "resources": [],
   "security": {
     "sandbox": true,
     "max_memory_mb": 512,

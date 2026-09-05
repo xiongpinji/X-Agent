@@ -1,13 +1,13 @@
 {
   "build": {
-    "beforeDevCommand": "npm --prefix ../frontend run dev",
-    "beforeBuildCommand": "npm --prefix ../frontend run build",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
     "devPath": "http://localhost:3000",
     "distDir": "../frontend/dist"
   },
   "package": {
     "productName": "X-Agent",
-    "version": "0.3.0-alpha"
+    "version": "0.4.0"
   },
   "tauri": {
     "windows": [
@@ -131,15 +131,6 @@
         "entitlements": null,
         "signingIdentity": null,
         "providerShortName": null
-      },
-      "deb": {
-        "depends": []
-      },
-      "appimage": {
-        "bundleMediaFramework": true
-      },
-      "rpm": {
-        "epoch": 0
       }
     }
   }

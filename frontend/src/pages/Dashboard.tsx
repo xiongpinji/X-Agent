@@ -29,10 +29,6 @@ export const Dashboard: React.FC = React.memo(() => {
     avgLatency: '—',
   })
 
-  useEffect(() => {
-    loadDashboardData()
-  }, [])
-
   const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true)
@@ -64,6 +60,10 @@ export const Dashboard: React.FC = React.memo(() => {
       setLoading(false)
     }
   }, [setLoading, setError])
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [loadDashboardData])
 
   // Status row items (numbers in tabular mono, labels 12px uppercase 50%)
   const statusItems = useMemo(() => [

@@ -2,8 +2,7 @@
 // 离线同步管理
 
 import { database } from './database';
-import { apiClient } from './apiClient';
-import { SyncQueue, Task, WorkflowRun } from '../types';
+import { SyncQueue } from '../types';
 import NetInfo from '@react-native-community/netinfo';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -145,50 +144,29 @@ class SyncManager {
   private async syncQueueItem(item: SyncQueue): Promise<void> {
     const { action, resource, resourceId, payload } = item;
 
-    switch (action) {
-      case 'create':
-        await apiClient.post(`/${resource}`, payload);
-        break;
-      case 'update':
-        await apiClient.put(`/${resource}/${resourceId}`, payload);
-        break;
-      case 'delete':
-        await apiClient.delete(`/${resource}/${resourceId}`);
-        break;
-    }
+    // TODO(后端契约): 后端不存在通用的 `/task`、`/workflow`、`/memory` REST 资源端点。
+    //  - 任务写入应走 POST/PUT /api/v1/tasks（backend/app/api/tasks_ui.py）
+    //  - 移动端 run 触发走 POST /api/v1/mobile/trigger（backend/app/api/mobile.py）
+    //  - 记忆写入走 /api/v1/memory*（backend/app/api/memory.py）
+    // 在打通离线队列协议前，这里显式抛错（标记为 failed），绝不静默假成功。
+    throw new Error(
+      `Sync queue "${action} ${resource}/${resourceId}" has no backend endpoint; ` +
+        `backend provides /api/v1/tasks, /api/v1/mobile/*, /api/v1/memory* instead. ` +
+        `Refused to fake success (payload dropped: ${JSON.stringify(payload).slice(0, 200)})`
+    );
   }
 
   private async pullRemoteChanges(): Promise<void> {
-    try {
-      const lastSyncTime = await database.getCache('lastSyncTime');
-      const since = lastSyncTime || new Date(0).toISOString();
-
-      const response = await apiClient.get<{
-        tasks?: Task[];
-        workflows?: WorkflowRun[];
-      }>('/sync', {
-        params: { since },
-      });
-
-      // 更新本地数据
-      if (response.tasks) {
-        for (const task of response.tasks) {
-          await database.updateTask(task.id, task);
-        }
-      }
-
-      if (response.workflows) {
-        for (const workflow of response.workflows) {
-          // 更新工作流
-        }
-      }
-
-      // 更新同步时间
-      await database.setCache('lastSyncTime', new Date().toISOString());
-    } catch (error) {
-      console.error('Pull remote changes error:', error);
-      throw error;
-    }
+    // TODO(后端契约): 后端没有增量拉取端点 GET /sync。
+    // backend/app/api/sync.py 仅提供: POST /api/v1/sync/enqueue、GET /api/v1/sync/status/{id}、
+    // POST /api/v1/sync/trigger、GET /api/v1/sync/conflicts、GET /api/v1/sync/history 等，
+    // 没有按 since 时间戳返回 {tasks, workflows} 增量的接口。
+    // 在后端补齐增量同步契约前，这里显式抛错（可诊断），不静默假成功。
+    throw new Error(
+      'Pull sync (GET /sync) is not implemented by backend; ' +
+        'backend/app/api/sync.py only exposes /api/v1/sync/{enqueue,status,trigger,conflicts,history}. ' +
+        'Remote pull skipped with explicit error until the delta-sync contract exists.'
+    );
   }
 
   private async resolveConflicts(): Promise<void> {

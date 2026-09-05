@@ -3,10 +3,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 # 精确匹配旧入口（core 下单文件模块名），避免把 open_source_* 误判为违规；
 # 用 join 拼接模块路径，避免本文件出现完整字面量而被正则命中。
 _LEGACY_OPEN_SOURCE_MODULE = ".".join(("backend", "app", "core", "open_source"))
 _LEGACY_OPEN_SOURCE_IMPORT = re.compile(re.escape(_LEGACY_OPEN_SOURCE_MODULE) + r"\b")
+
+pytestmark = pytest.mark.contracts
 
 
 def test_no_legacy_open_source_imports_remain() -> None:

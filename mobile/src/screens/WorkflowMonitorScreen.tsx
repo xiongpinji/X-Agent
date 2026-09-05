@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { WorkflowRun, WorkflowNode } from '../types';
 import { ProgressBar } from '../components/ProgressBar';
+import { apiClient } from '../services/apiClient';
 
 interface WorkflowMonitorScreenProps {
   navigation: any;
@@ -32,12 +33,31 @@ export const WorkflowMonitorScreen: React.FC<WorkflowMonitorScreenProps> = ({
   }, [workflowId]);
 
   const fetchWorkflow = async () => {
+    if (!workflowId) {
+      setLoading(false);
+      return;
+    }
     try {
-      const response = await fetch(
-        `https://api.xagent.local/workflows/${workflowId}`
+      // 契约对齐 backend/app/api/workflows.py: GET /api/v1/workflows/{workflow_id}
+      // （经 apiClient 附加配置化 base URL 与 x-api-key 认证头）
+      const data = await apiClient.get<Record<string, any>>(
+        `/api/v1/workflows/${workflowId}`
       );
-      const data = await response.json();
-      setWorkflow(data);
+      setWorkflow({
+        id: data.id ?? data.workflow_id ?? String(workflowId),
+        workflowId: data.workflow_id ?? String(workflowId),
+        status: data.status === 'running' || data.status === 'completed' || data.status === 'failed'
+          ? data.status
+          : 'pending',
+        progress:
+          typeof data.progress === 'number' ? data.progress : 0,
+        nodes: Array.isArray(data.nodes) ? (data.nodes as WorkflowNode[]) : [],
+        startedAt: data.created_at ? new Date(data.created_at) : new Date(),
+        duration: data.duration,
+        result: data.result,
+        error: data.error,
+        syncStatus: 'synced',
+      });
       setLoading(false);
     } catch (error) {
       console.error('Fetch workflow error:', error);

@@ -136,7 +136,12 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 }
 
 function TraceSummaryCard({ envelope, traceSummary, dispatch }: { envelope: LinkedSummaryEnvelope | null; traceSummary: { trace_id?: string; event_count?: number; last_event?: string; task?: string } | null; dispatch: DispatchResult | null }) {
-  const summary = traceSummary ?? envelope?.linked_summaries?.primary ?? null;
+  const summary = (traceSummary ?? envelope?.linked_summaries?.primary ?? null) as {
+    trace_id?: string;
+    event_count?: number;
+    last_event?: string;
+    task?: string;
+  } | null;
   return (
     <section className="rounded-2xl border p-4">
       <h3 className="font-semibold">Trace 概览</h3>

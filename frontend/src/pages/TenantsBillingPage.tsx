@@ -383,11 +383,20 @@ const TenantsBillingPage: React.FC = () => {
                   {tenants.map(tn => (
                     <div
                       key={tn.id}
+                      role="button"
+                      tabIndex={0}
                       className={clsx(
                         'row-line flex items-center justify-between gap-3 cursor-pointer px-2 -mx-2',
                         selectedTenantId === tn.id && (isDark ? 'bg-slate-800' : 'bg-slate-100')
                       )}
                       onClick={() => { setSelectedTenantId(tn.id); setActiveTab('detail') }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedTenantId(tn.id);
+                          setActiveTab('detail');
+                        }
+                      }}
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{tn.name}</p>

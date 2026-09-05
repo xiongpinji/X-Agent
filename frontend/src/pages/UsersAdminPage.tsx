@@ -378,7 +378,7 @@ const UsersAdminPage: React.FC = () => {
                         {item.created_at || item.timestamp ? new Date(String(item.created_at ?? item.timestamp)).toLocaleString() : '—'}
                       </p>
                     </div>
-                    {(item.resource_type || item.resource_id || item.details) && (
+                    {((item.resource_type || item.resource_id || item.details) as React.ReactNode) && (
                       <p className="cell-data opacity-50 mt-1 break-all">
                         {[item.resource_type, item.resource_id].filter(Boolean).join(' / ')}
                         {item.details ? ` — ${typeof item.details === 'string' ? item.details : JSON.stringify(item.details)}` : ''}

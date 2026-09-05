@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.core.open_source_api import (
@@ -9,6 +10,8 @@ from backend.app.core.open_source_api import (
 )
 from backend.app.main import app, require_api_key_header
 from backend.app.services.desktop.ui_tars_client import UiTarsDesktopClient
+
+pytestmark = pytest.mark.contracts
 
 
 def test_api_key_guard_blocks_protected_routes_when_enabled(monkeypatch) -> None:

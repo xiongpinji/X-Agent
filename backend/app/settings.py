@@ -9,9 +9,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+# 测试密闭性（2026-09-06）：开发者本地 .env 的值（如 XAGENT_CORS_ALLOW_HEADERS=*、
+# 真实 GITHUB_TOKEN）曾被 BaseSettings 读进测试进程，污染 production 模拟类用例。
+# tests/conftest.py 默认设置 XAGENT_DISABLE_ENV_FILE=1，使 pytest 与本地配置完全隔离；
+# 需要带本地配置跑测试时显式 XAGENT_DISABLE_ENV_FILE= python -m pytest ...
+_ENV_FILES: tuple[str, ...] = () if os.environ.get("XAGENT_DISABLE_ENV_FILE") else (".env", ".env.development")
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=(".env", ".env.development"), env_file_encoding="utf-8", extra="ignore", env_prefix="XAGENT_")
+    model_config = SettingsConfigDict(env_file=_ENV_FILES, env_file_encoding="utf-8", extra="ignore", env_prefix="XAGENT_")
 
     app_name: str = "X-Agent"
     app_mode: str = "development"

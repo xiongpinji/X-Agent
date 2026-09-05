@@ -1,3 +1,8 @@
+/* eslint-disable react-refresh/only-export-components --
+ * Context module: co-locating the Provider component with its consumer hooks
+ * (useConsoleState/useConsoleDispatch) is the standard React context pattern.
+ * Splitting them would force the hooks to re-import the contexts from another
+ * file without any behavior or Fast Refresh benefit. */
 import React, { createContext, useContext, useMemo, useReducer } from "react";
 import { consoleReducer, createInitialConsoleState, type ConsoleAction, type ConsoleState } from "./consoleReducer";
 

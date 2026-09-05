@@ -12,8 +12,11 @@ MCPPluginAdapter / backend.plugins.runtime.PluginRuntime）：
 - 真实 MCP server（官方 SDK FastMCP，经临时插件目录）下 PluginRuntime
   全生命周期：start（握手+工具发现）→ call_plugin_tool（tools/call）→
   桥接进 ToolRegistry（Agent 主循环可调用）→ stop（工具与进程清理）；
-- 适配器契约：命令推导、docker 拒绝、未启动调用报错、env 超时解析、
-  真实插件目录中非 MCP 插件 fail-closed。
+- 真实 plugins/ 目录三个示例插件（filesystem/github/database，已迁移为
+  真实 stdio MCP server）：缺配置 fail-closed（错误含插件 stderr 诊断）、
+  配置注入后握手→工具发现→工具调用→stop 全链路（filesystem 用临时目录
+  验证真实读写与路径越界拒绝；database 用 sqlite 真实查询往返）；
+- 适配器契约：命令推导、docker 拒绝、未启动调用报错、env 超时解析。
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ except Exception:  # pragma: no cover
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -467,17 +471,243 @@ class TestAdapterContract:
         assert session._start_timeout == DEFAULT_START_TIMEOUT
         assert session._request_timeout == DEFAULT_REQUEST_TIMEOUT
 
-    def test_real_world_plugin_without_mcp_fails_closed(self):
-        """真实 plugins/ 目录中的插件入口是普通 Python 类（非 MCP server），
-        握手必须 fail-closed 且错误可诊断——不伪造成功。"""
+
+# ---------------------------------------------------------------------------
+# 真实 plugins/ 目录插件（已迁移为真实 stdio MCP server）：
+# 缺配置 fail-closed（可诊断）+ 配置后全生命周期（握手→发现→调用→stop）
+# ---------------------------------------------------------------------------
+
+
+def _as_dict(output: Any) -> dict:
+    """工具返回值归一化：JSON 文本 → dict（dict 返回原样）。"""
+    if isinstance(output, str):
+        return json.loads(output)
+    return output
+
+
+@pytest.mark.mcp
+@pytest.mark.timeout(60)
+class TestRealPluginsMissingConfig:
+    """缺配置（无凭证）启动必须 fail-closed：不 spawn 成功、错误可诊断。"""
+
+    @pytest.mark.parametrize(
+        "plugin_name, expected_reason",
+        [
+            ("filesystem-mcp", "allowed_paths"),
+            ("github-mcp", "github_token"),
+            ("database-mcp", "required configuration missing"),
+        ],
+    )
+    def test_missing_config_fails_closed_with_reason(
+        self, plugin_name: str, expected_reason: str
+    ):
         from backend.plugins.runtime import get_default_plugins_dir
 
         runtime = PluginRuntime(get_default_plugins_dir())
-        runtime.load("filesystem-mcp")
-        result = runtime.start("filesystem-mcp", timeout=12)
+        assert runtime.load(plugin_name).status == "loaded"
+
+        result = runtime.start(plugin_name, timeout=20)
         assert result["ok"] is False
-        plugin = runtime.get_loaded("filesystem-mcp")
+        plugin = runtime.get_loaded(plugin_name)
         assert plugin.status == MCPPluginStatus.ERROR
         assert plugin.session is None
-        assert "握手" in (result.get("error") or "")
+
+        error = result.get("error") or ""
+        # 握手失败（fail-closed）且错误携带插件自身的缺配置诊断（stderr 尾部）
+        assert "握手" in error
+        assert expected_reason in error
+        runtime.unload(plugin_name)
+
+
+@pytest.mark.mcp
+@pytest.mark.timeout(120)
+class TestRealPluginsLifecycle:
+    """三个真实插件的完整子进程生命周期（spawn → 握手 → 工具发现 → 调用 → stop）。"""
+
+    def test_filesystem_full_lifecycle_with_sandbox(self, tmp_path: Path):
+        from backend.plugins.runtime import get_default_plugins_dir
+
+        runtime = PluginRuntime(get_default_plugins_dir())
+        assert runtime.load("filesystem-mcp").status == "loaded"
+
+        # --- start（真实握手 + 工具发现），allowed_paths 指向临时目录 ---
+        result = runtime.start(
+            "filesystem-mcp",
+            timeout=30,
+            config={"allowed_paths": [str(tmp_path)], "max_file_size_mb": 5},
+        )
+        assert result["ok"] is True, result.get("error")
+        plugin = runtime.get_loaded("filesystem-mcp")
+        assert plugin.status == MCPPluginStatus.RUNNING
+        assert plugin.server_info["server_name"] == "filesystem-mcp"
+        assert plugin.server_info["protocol_version"]
+        assert set(result["tools"]) == {
+            "read_file", "write_file", "list_files",
+            "search_files", "delete_file", "get_file_info",
+        }
+
+        # --- 真实读写往返 ---
+        target = tmp_path / "notes" / "hello.txt"
+        written = _as_dict(runtime.call_plugin_tool(
+            "filesystem-mcp", "write_file",
+            {"path": str(target), "content": "hello x-agent"},
+        ))
+        assert written["status"] == "success", written
+
+        read = _as_dict(runtime.call_plugin_tool(
+            "filesystem-mcp", "read_file", {"path": str(target)},
+        ))
+        assert read["status"] == "success"
+        assert read["data"]["content"] == "hello x-agent"
+
+        listed = _as_dict(runtime.call_plugin_tool(
+            "filesystem-mcp", "list_files", {"path": str(tmp_path), "recursive": True},
+        ))
+        assert listed["status"] == "success"
+        assert any(item["name"] == "hello.txt" for item in listed["data"])
+
+        found = _as_dict(runtime.call_plugin_tool(
+            "filesystem-mcp", "search_files",
+            {"path": str(tmp_path), "pattern": "*.txt"},
+        ))
+        assert found["count"] == 1
+
+        info = _as_dict(runtime.call_plugin_tool(
+            "filesystem-mcp", "get_file_info", {"path": str(target)},
+        ))
+        assert info["data"]["size"] == len("hello x-agent")
+
+        # --- 信任边界：越界路径拒绝（allowed_paths 之外） ---
+        escape = _as_dict(runtime.call_plugin_tool(
+            "filesystem-mcp", "read_file",
+            {"path": str(tmp_path.parent / "escape-attempt.txt")},
+        ))
+        assert escape["status"] == "error"
+        assert "not allowed" in escape["message"]
+
+        # --- manifest 信任边界：未声明工具 / 必填参数缺失 ---
+        with pytest.raises(ValueError, match="Tool not found"):
+            runtime.call_plugin_tool("filesystem-mcp", "undeclared_tool", {})
+        with pytest.raises(ValueError, match="Required field missing"):
+            runtime.call_plugin_tool("filesystem-mcp", "write_file", {"path": str(target)})
+
+        # --- 删除（写操作）+ stop ---
+        deleted = _as_dict(runtime.call_plugin_tool(
+            "filesystem-mcp", "delete_file", {"path": str(target)},
+        ))
+        assert deleted["status"] == "success"
+        assert not target.exists()
+
+        stop_result = runtime.stop("filesystem-mcp")
+        assert stop_result["ok"] is True
+        assert plugin.status == MCPPluginStatus.STOPPED
+        assert plugin.session is None
+        runtime.unload("filesystem-mcp")
+
+    def test_github_missing_config_then_configured_start(self):
+        """无凭证 fail-closed 后，提供 token 可重新启动成功（占位工具可用）。"""
+        from backend.plugins.runtime import get_default_plugins_dir
+
+        runtime = PluginRuntime(get_default_plugins_dir())
+        assert runtime.load("github-mcp").status == "loaded"
+
+        # --- 无 token：fail-closed（可诊断） ---
+        skipped = runtime.start("github-mcp", timeout=20)
+        assert skipped["ok"] is False
+        assert "github_token" in (skipped.get("error") or "")
+
+        # --- 提供 token：真实握手 + 工具发现 + 占位工具调用（无网络请求） ---
+        result = runtime.start(
+            "github-mcp", timeout=30, config={"github_token": "ghp_test_placeholder"},
+        )
+        assert result["ok"] is True, result.get("error")
+        plugin = runtime.get_loaded("github-mcp")
+        assert plugin.status == MCPPluginStatus.RUNNING
+        assert plugin.server_info["server_name"] == "github-mcp"
+        assert set(result["tools"]) == {
+            "list_repositories", "get_repository", "create_issue",
+            "list_issues", "create_pull_request",
+        }
+
+        placeholder = _as_dict(runtime.call_plugin_tool(
+            "github-mcp", "get_repository", {"owner": "octocat", "repo": "Hello-World"},
+        ))
+        assert placeholder["status"] == "placeholder"
+        assert placeholder["arguments"] == {"owner": "octocat", "repo": "Hello-World"}
+
+        assert runtime.stop("github-mcp")["ok"] is True
+        runtime.unload("github-mcp")
+
+    def test_database_missing_config_then_sqlite_roundtrip(self, tmp_path: Path):
+        """无数据库配置 fail-closed；sqlite 配置后真实 SQL 往返。"""
+        from backend.plugins.runtime import get_default_plugins_dir
+
+        runtime = PluginRuntime(get_default_plugins_dir())
+        assert runtime.load("database-mcp").status == "loaded"
+
+        # --- 无配置：fail-closed（默认 postgresql 缺连接五元组） ---
+        skipped = runtime.start("database-mcp", timeout=20)
+        assert skipped["ok"] is False
+        assert "required configuration" in (skipped.get("error") or "")
+
+        # --- sqlite 本地库：真实握手 + 真实查询往返 ---
+        db_file = tmp_path / "lifecycle.db"
+        result = runtime.start(
+            "database-mcp", timeout=30,
+            config={"db_type": "sqlite", "db_name": str(db_file)},
+        )
+        assert result["ok"] is True, result.get("error")
+        plugin = runtime.get_loaded("database-mcp")
+        assert plugin.status == MCPPluginStatus.RUNNING
+        assert plugin.server_info["server_name"] == "database-mcp"
+        assert set(result["tools"]) == {
+            "execute_query", "list_tables", "get_table_schema",
+            "export_query_result", "analyze_table",
+        }
+
+        def query(sql: str) -> dict:
+            return _as_dict(runtime.call_plugin_tool(
+                "database-mcp", "execute_query", {"query": sql},
+            ))
+
+        assert query("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT)")["status"] == "success"
+        assert query("INSERT INTO notes (body) VALUES ('hello')")["status"] == "success"
+
+        selected = query("SELECT id, body FROM notes")
+        assert selected["status"] == "success"
+        assert selected["data"] == [{"id": 1, "body": "hello"}]
+
+        tables = _as_dict(runtime.call_plugin_tool("database-mcp", "list_tables", {}))
+        assert tables["data"] == ["notes"]
+
+        schema = _as_dict(runtime.call_plugin_tool(
+            "database-mcp", "get_table_schema", {"table_name": "notes"},
+        ))
+        assert [c["name"] for c in schema["data"]] == ["id", "body"]
+
+        stats = _as_dict(runtime.call_plugin_tool(
+            "database-mcp", "analyze_table", {"table_name": "notes"},
+        ))
+        assert stats["data"]["row_count"] == 1
+
+        assert runtime.stop("database-mcp")["ok"] is True
+        runtime.unload("database-mcp")
+
+    def test_invalid_start_config_rejected_without_spawn(self):
+        """config 未知键/类型不符：显式拒绝且不 spawn（不静默降级）。"""
+        from backend.plugins.runtime import get_default_plugins_dir
+
+        runtime = PluginRuntime(get_default_plugins_dir())
+        assert runtime.load("filesystem-mcp").status == "loaded"
+
+        result = runtime.start(
+            "filesystem-mcp", timeout=20, config={"unknown_key": "x"},
+        )
+        assert result["ok"] is False
+        assert "configuration invalid" in (result.get("error") or "")
+        assert "unknown_key" in (result.get("error") or "")
+        plugin = runtime.get_loaded("filesystem-mcp")
+        # 未 spawn：状态保持 loaded，无会话残留
+        assert plugin.status == MCPPluginStatus.LOADED
+        assert plugin.session is None
         runtime.unload("filesystem-mcp")

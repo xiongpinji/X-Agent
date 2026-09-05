@@ -4,7 +4,9 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import { PushNotification } from '../types';
+import { apiClient } from './apiClient';
 
 class PushNotificationManager {
   async initialize(): Promise<void> {
@@ -49,11 +51,16 @@ class PushNotificationManager {
   }
 
   private async registerPushToken(token: string): Promise<void> {
+    // 契约对齐 backend/app/api/mobile.py:
+    //   POST /api/v1/mobile/push/register
+    //   body PushRegisterRequest {device_id, platform: "ios"|"android"|"harmony", push_token, topics}
+    //   → PushRegisterResponse {device_id, registered, topics}
     try {
-      await fetch('https://api.xagent.local/notifications/register-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+      await apiClient.post('/api/v1/mobile/push/register', {
+        device_id: Constants.deviceId || 'expo-mobile-device',
+        platform: Platform.OS === 'ios' ? 'ios' : 'android',
+        push_token: token,
+        topics: ['agent_complete', 'agent_error'],
       });
     } catch (error) {
       console.error('Register push token error:', error);

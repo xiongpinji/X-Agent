@@ -67,13 +67,14 @@ export const OptimizedImage = memo(
               { rootMargin: '50px' }
             )
 
-            if (imgRef.current) {
-              observer.observe(imgRef.current)
+            const imgEl = imgRef.current
+            if (imgEl) {
+              observer.observe(imgEl)
             }
 
             return () => {
-              if (imgRef.current) {
-                observer.unobserve(imgRef.current)
+              if (imgEl) {
+                observer.unobserve(imgEl)
               }
             }
           } else {

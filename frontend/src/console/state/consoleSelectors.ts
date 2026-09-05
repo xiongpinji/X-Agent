@@ -146,7 +146,10 @@ export function selectWorkflowData(state: ConsoleState) {
     roleCatalog: (primary.role_catalog as RoleCatalog | undefined) ?? state.roleCatalog,
     workflowSummary,
     traceSummary: linked?.trace ?? null,
-    activeWorkflowId: workflowSummary?.data?.workflow_id ?? workflowSummary?.summary?.workflow_id ?? state.selectedWorkflowId ?? null,
+    activeWorkflowId:
+      ((workflowSummary?.data?.workflow_id ?? workflowSummary?.summary?.workflow_id) as string | undefined) ??
+      state.selectedWorkflowId ??
+      null,
     primary,
   };
 }

@@ -12,6 +12,8 @@ from backend.app.core.evidence.contracts import (
 from backend.app.core.evidence.collector import EvidenceCollector
 from backend.app.core.evidence.verifier import EvidenceVerifier
 
+pytestmark = pytest.mark.contracts
+
 
 # ─── EvidenceItem Tests ───────────────────────────────────────────────────────
 

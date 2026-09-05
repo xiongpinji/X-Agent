@@ -1,11 +1,11 @@
 import React from 'react'
 import clsx from 'clsx'
 
-export interface DataTableProps<T extends Record<string, any>> {
+export interface DataTableProps<T extends object> {
   columns: Array<{
     key: keyof T
     label: string
-    render?: (value: any, row: T) => React.ReactNode
+    render?: (value: T[keyof T], row: T) => React.ReactNode
     width?: string
   }>
   data: T[]
@@ -14,7 +14,7 @@ export interface DataTableProps<T extends Record<string, any>> {
   striped?: boolean
 }
 
-export const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any>>(
+export const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<Record<string, unknown>>>(
   ({ columns, data, isLoading = false, onRowClick, striped = true }, ref) => {
     if (isLoading) {
       return (

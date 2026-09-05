@@ -13,20 +13,24 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import apiClient from '@/services/api'
+import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 
 /**
  * Extract the registered request interceptor's fulfillment fn from the
  * underlying axios instance of the singleton client.
  */
-function requestInterceptor(): (config: any) => any {
-  const handlers = (apiClient as any).client.interceptors.request.handlers as Array<{
-    fulfilled: (config: any) => any
+// The interceptor under test is synchronous; assert the sync-only signature.
+function requestInterceptor(): (config: InternalAxiosRequestConfig) => InternalAxiosRequestConfig {
+  const handlers = (
+    apiClient as unknown as { client: AxiosInstance }
+  ).client.interceptors.request.handlers as unknown as Array<{
+    fulfilled: (config: InternalAxiosRequestConfig) => InternalAxiosRequestConfig
   }>
   return handlers[0].fulfilled
 }
 
 function runInterceptor() {
-  return requestInterceptor()({ headers: {} })
+  return requestInterceptor()({ headers: {} } as InternalAxiosRequestConfig)
 }
 
 describe('apiClient request interceptor', () => {
@@ -72,7 +76,7 @@ describe('apiClient request interceptor', () => {
   it('always returns the config so the request proceeds', () => {
     localStorage.setItem('api_key', 'xk-dev-secret')
 
-    const config = { headers: {} }
+    const config = { headers: {} } as InternalAxiosRequestConfig
     expect(requestInterceptor()(config)).toBe(config)
   })
 })

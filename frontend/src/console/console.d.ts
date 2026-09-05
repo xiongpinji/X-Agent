@@ -13,19 +13,19 @@
 
 /** 链接摘要段落：{ summary, data } 结构，后端各中心 / 信封通用 */
 type LinkedSummary = {
-  summary?: ({ title?: string } & Record<string, any>);
-  data?: Record<string, any>;
-  [key: string]: any;
+  summary?: ({ title?: string } & Record<string, unknown>);
+  data?: Record<string, unknown>;
+  [key: string]: unknown;
 };
 
 /** 统一信封：primary + linked_summaries 结构 */
 type LinkedSummaryEnvelope = {
   resource_type?: string;
   resource_id?: string;
-  primary?: Record<string, any>;
+  primary?: Record<string, unknown>;
   linked_summaries?: Record<string, LinkedSummary>;
-  snapshot?: Record<string, any>;
-  [key: string]: any;
+  snapshot?: Record<string, unknown>;
+  [key: string]: unknown;
 };
 
 /** 实时消息（messages/stream、collaboration rooms messages） */
@@ -116,10 +116,10 @@ type DispatchResult = {
   request?: Record<string, unknown>;
   suggestion: {
     confidence: number;
-    reason: { summary: string } & Record<string, any>;
+    reason: { summary: string } & Record<string, unknown>;
     next_actions: DispatchAction[];
     decision_path?: DispatchDecisionStep[];
-    [key: string]: any;
+    [key: string]: unknown;
   };
   status: string;
   trace_id?: string | null;
@@ -127,8 +127,8 @@ type DispatchResult = {
   actions: DispatchAction[];
   pending: DispatchAction[];
   queue_size: number;
-  last_result: ({ task_id: string } & Record<string, any>) | null;
-  [key: string]: any;
+  last_result: ({ task_id: string } & Record<string, unknown>) | null;
+  [key: string]: unknown;
 };
 
 /** 角色形象（backend.app.core.org.RoleAvatar） */

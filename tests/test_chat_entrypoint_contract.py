@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
 from backend.app.settings import get_settings
+
+pytestmark = pytest.mark.contracts
 
 
 def test_chat_static_entrypoint_serves_first_run_html() -> None:

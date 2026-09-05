@@ -25,6 +25,8 @@ from backend.app.core.contracts import (
     TraceEvent,
 )
 
+pytestmark = pytest.mark.contracts
+
 
 class TestRunContext:
     """Test RunContext model."""

@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { I18nProvider, useI18n } from '../context'
-import { SUPPORTED_LANGUAGES, isRTL, getLanguageConfig } from '../config'
+import { SUPPORTED_LANGUAGES, isRTL, getLanguageConfig, type LanguageCode } from '../config'
 
 // The provider resolves the initial language as
 // localStorage -> browser language -> defaultLanguage prop, so tests that
@@ -25,7 +25,7 @@ describe('I18n Configuration', () => {
   it('should have all required languages configured', () => {
     const requiredLanguages = ['en', 'zh', 'ja', 'ko', 'es', 'ar']
     requiredLanguages.forEach(lang => {
-      expect(SUPPORTED_LANGUAGES[lang as any]).toBeDefined()
+      expect(SUPPORTED_LANGUAGES[lang as LanguageCode]).toBeDefined()
     })
   })
 

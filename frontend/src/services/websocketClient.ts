@@ -8,7 +8,7 @@ export interface Notification {
   title: string
   body: string
   timestamp: number
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 type NotificationHandler = (notification: Notification) => void

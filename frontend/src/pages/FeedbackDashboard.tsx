@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { feedbackService, Feedback, FeedbackStats, FeedbackTrend, NotificationConfig } from '@/services/feedback'
 import { FeedbackList } from '@/components/feedback/FeedbackList'
@@ -20,14 +20,7 @@ export const FeedbackDashboard: React.FC = () => {
   const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
 
-  useEffect(() => {
-    loadData()
-    // Refresh data every 30 seconds
-    const interval = setInterval(loadData, 30000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true)
       const [feedbacksData, statsData, trendsData, notificationsData] = await Promise.all([
@@ -46,7 +39,14 @@ export const FeedbackDashboard: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [setLoading, setError])
+
+  useEffect(() => {
+    loadData()
+    // Refresh data every 30 seconds
+    const interval = setInterval(loadData, 30000)
+    return () => clearInterval(interval)
+  }, [loadData])
 
   const handleSelectFeedback = (feedback: Feedback) => {
     setSelectedFeedback(feedback)

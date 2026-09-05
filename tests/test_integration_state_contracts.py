@@ -1,6 +1,10 @@
+import pytest
+
 from backend.app.services.browser.playwright_client import browser_client
 from backend.app.services.memory.qdrant_client import vector_client
 from backend.app.services.observability.langfuse_client import langfuse_client
+
+pytestmark = pytest.mark.contracts
 
 
 def test_integration_clients_expose_real_state_contracts() -> None:

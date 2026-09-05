@@ -9,13 +9,24 @@ import StreamingOutput from '@/components/StreamingOutput'
 import TaskList from '@/components/TaskList'
 import ProgressIndicator from '@/components/ProgressIndicator'
 
+type Mock = ReturnType<typeof vi.fn>
+
+/** Typed view of the vi.fn() installed on global.fetch in beforeEach. */
+const fetchMock = () => global.fetch as unknown as Mock
+
+type EventSourceMockInstance = {
+  addEventListener: Mock
+  close: Mock
+  readyState: number
+}
+
 describe('StreamingOutput Component', () => {
   beforeEach(() => {
-    global.EventSource = vi.fn(() => ({
+    global.EventSource = vi.fn((): EventSourceMockInstance => ({
       addEventListener: vi.fn(),
       close: vi.fn(),
       readyState: 1,
-    })) as any
+    })) as unknown as typeof EventSource
   })
 
   test('should render streaming output', () => {
@@ -44,10 +55,11 @@ describe('StreamingOutput Component', () => {
     )
 
     // Simulate completion event
-    const eventSource = (global.EventSource as any).mock.results[0].value
+    const eventSourceConstructor = global.EventSource as unknown as Mock
+    const eventSource = eventSourceConstructor.mock.results[0].value as EventSourceMockInstance
     const completionHandler = eventSource.addEventListener.mock.calls.find(
-      (call: any) => call[0] === 'completion'
-    )?.[1]
+      (call: unknown[]) => call[0] === 'completion'
+    )?.[1] as ((event: MessageEvent) => void) | undefined
 
     completionHandler?.(
       new MessageEvent('completion', {
@@ -74,7 +86,7 @@ describe('TaskList Component', () => {
   })
 
   test('should render task list', async () => {
-    ;(global.fetch as any).mockResolvedValueOnce({
+    fetchMock().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         tasks: [
@@ -108,7 +120,7 @@ describe('TaskList Component', () => {
   })
 
   test('should display task stats', async () => {
-    ;(global.fetch as any).mockResolvedValueOnce({
+    fetchMock().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         tasks: [],
@@ -129,7 +141,7 @@ describe('TaskList Component', () => {
   })
 
   test('should handle refresh', async () => {
-    ;(global.fetch as any).mockResolvedValue({
+    fetchMock().mockResolvedValue({
       ok: true,
       json: async () => ({
         tasks: [],
@@ -153,7 +165,7 @@ describe('TaskList Component', () => {
   })
 
   test('should show empty state', async () => {
-    ;(global.fetch as any).mockResolvedValueOnce({
+    fetchMock().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         tasks: [],
@@ -179,7 +191,7 @@ describe('ProgressIndicator Component', () => {
   })
 
   test('should render progress indicator', async () => {
-    ;(global.fetch as any).mockResolvedValueOnce({
+    fetchMock().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         events: [
@@ -204,7 +216,7 @@ describe('ProgressIndicator Component', () => {
   })
 
   test('should display progress percentage', async () => {
-    ;(global.fetch as any).mockResolvedValueOnce({
+    fetchMock().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         events: [
@@ -229,7 +241,7 @@ describe('ProgressIndicator Component', () => {
   })
 
   test('should show step breakdown', async () => {
-    ;(global.fetch as any).mockResolvedValueOnce({
+    fetchMock().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         events: [
@@ -257,15 +269,15 @@ describe('ProgressIndicator Component', () => {
 describe('Component Integration', () => {
   beforeEach(() => {
     global.fetch = vi.fn()
-    global.EventSource = vi.fn(() => ({
+    global.EventSource = vi.fn((): EventSourceMockInstance => ({
       addEventListener: vi.fn(),
       close: vi.fn(),
       readyState: 1,
-    })) as any
+    })) as unknown as typeof EventSource
   })
 
   test('should handle multiple components together', async () => {
-    ;(global.fetch as any).mockResolvedValue({
+    fetchMock().mockResolvedValue({
       ok: true,
       json: async () => ({
         tasks: [],

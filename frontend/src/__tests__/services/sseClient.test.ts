@@ -7,8 +7,14 @@ import { SSEClient } from '@/services/sseClient'
 
 describe('SSEClient', () => {
   let client: SSEClient
-  let mockEventSource: any
-  let originalEventSource: any
+  type MockEventSource = {
+    addEventListener: ReturnType<typeof vi.fn>
+    close: ReturnType<typeof vi.fn>
+    readyState: number
+    onerror: ((ev: Event) => void) | null
+  }
+  let mockEventSource: MockEventSource
+  let originalEventSource: typeof EventSource | undefined
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -20,14 +26,15 @@ describe('SSEClient', () => {
       addEventListener: vi.fn(),
       close: vi.fn(),
       readyState: 1, // OPEN
-      onerror: null as ((ev: any) => void) | null,
+      onerror: null,
     }
-    global.EventSource = vi.fn(() => mockEventSource) as any
+    global.EventSource = vi.fn(() => mockEventSource) as unknown as typeof EventSource
   })
 
   afterEach(() => {
     client.disconnect()
-    global.EventSource = originalEventSource
+    // Restore whatever constructor (or stub) was present before this test.
+    global.EventSource = originalEventSource as typeof EventSource
   })
 
   test('should connect to SSE stream', () => {
@@ -45,7 +52,7 @@ describe('SSEClient', () => {
     client.connect('test-run-id', onMessage)
 
     const messageHandler = mockEventSource.addEventListener.mock.calls.find(
-      (call: any) => call[0] === 'message'
+      (call: unknown[]) => call[0] === 'message'
     )?.[1]
 
     const event = new MessageEvent('message', {
@@ -113,7 +120,7 @@ describe('SSEClient', () => {
     client.connect('test-run-id', vi.fn(), undefined, onComplete)
 
     const completionHandler = mockEventSource.addEventListener.mock.calls.find(
-      (call: any) => call[0] === 'completion'
+      (call: unknown[]) => call[0] === 'completion'
     )?.[1]
 
     completionHandler?.(

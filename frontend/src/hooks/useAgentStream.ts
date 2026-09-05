@@ -14,13 +14,21 @@ export interface TraceEvent {
   timestamp?: string;
   tool_name?: string;
   tool_id?: string;
-  arguments?: Record<string, any>;
-  result?: any;
+  arguments?: Record<string, unknown>;
+  result?: unknown;
   success?: boolean;
   message?: string;
   content?: string;
   status?: string;
-  [key: string]: any;
+  role?: string;
+  current_step?: string;
+  completed_steps?: number;
+  total_steps?: number;
+  overall_progress?: number;
+  error_message?: string;
+  /** Nested payload some backends emit for progress/tool events. */
+  data?: Partial<Pick<TraceEvent, 'tool_name' | 'success' | 'current_step'>>;
+  [key: string]: unknown;
 }
 
 export interface AgentStreamResult {
@@ -28,10 +36,10 @@ export interface AgentStreamResult {
   result?: {
     status: string;
     answer?: string;
-    tool_calls?: any[];
+    tool_calls?: unknown[];
     iterations?: number;
     trace_id?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   error?: string;
 }
@@ -41,7 +49,7 @@ export interface UseAgentStreamReturn {
   isStreaming: boolean;
   finalResult: AgentStreamResult | null;
   error: string | null;
-  startStream: (task: string, extraContext?: Record<string, any>) => Promise<void>;
+  startStream: (task: string, extraContext?: Record<string, unknown>) => Promise<void>;
   stopStream: () => void;
   reset: () => void;
 }
@@ -86,7 +94,7 @@ export function useAgentStream(options?: {
   const abortRef = useRef<AbortController | null>(null);
   const bufferRef = useRef('');
 
-  const startStream = useCallback(async (task: string, extraContext?: Record<string, any>) => {
+  const startStream = useCallback(async (task: string, extraContext?: Record<string, unknown>) => {
     // Reset state
     setEvents([]);
     setFinalResult(null);
@@ -133,9 +141,13 @@ export function useAgentStream(options?: {
 
       const decoder = new TextDecoder();
 
-      while (true) {
+      let streamEnded = false;
+      while (!streamEnded) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          streamEnded = true;
+          break;
+        }
 
         bufferRef.current += decoder.decode(value, { stream: true });
 
@@ -178,8 +190,9 @@ export function useAgentStream(options?: {
 
       // Stream ended without explicit completion
       setIsStreaming(false);
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
+    } catch (err) {
+      // AbortController.abort() rejects with a DOMException named 'AbortError'.
+      if (err instanceof Error && err.name === 'AbortError') {
         setIsStreaming(false);
         return;
       }

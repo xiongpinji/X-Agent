@@ -34,7 +34,8 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    if (!imgRef.current) return;
+    const imgEl = imgRef.current;
+    if (!imgEl) return;
 
     // Use Intersection Observer for lazy loading
     if (!priority && 'IntersectionObserver' in window) {
@@ -50,15 +51,13 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
         { rootMargin: '50px' }
       );
 
-      observer.observe(imgRef.current);
+      observer.observe(imgEl);
 
       return () => {
-        if (imgRef.current) {
-          observer.unobserve(imgRef.current);
-        }
+        observer.unobserve(imgEl);
       };
     } else if (priority) {
-      imgRef.current.src = src;
+      imgEl.src = src;
     }
   }, [src, priority]);
 

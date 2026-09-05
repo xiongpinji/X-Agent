@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components --
+ * Context module: the Provider component intentionally lives alongside its
+ * useI18n consumer hook, the standard React context pattern. */
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import enTranslations from './translations/en.json';
 import zhTranslations from './translations/zh.json';
@@ -10,7 +13,7 @@ interface I18nContextType {
   region: string;
   setLanguage: (lang: string) => void;
   setRegion: (region: string) => void;
-  t: (key: string, params?: Record<string, any>) => string;
+  t: (key: string, params?: Record<string, unknown>) => string;
   formatDate: (date: Date, format?: string) => string;
   formatCurrency: (amount: number, currency?: string) => string;
   formatNumber: (num: number, decimals?: number) => string;
@@ -21,7 +24,7 @@ interface I18nContextType {
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
 interface Translations {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 const translations: Record<string, Translations> = {
@@ -89,16 +92,16 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [language, setLanguage] = useState('en');
   const [region, setRegion] = useState('US');
 
-  const getNestedValue = (obj: any, path: string): string => {
+  const getNestedValue = (obj: Translations | undefined, path: string): string => {
     const keys = path.split('.');
-    let value = obj;
+    let value: unknown = obj;
     for (const key of keys) {
-      value = value?.[key];
+      value = (value as Translations | undefined)?.[key];
     }
-    return value || path;
+    return (value as string) || path;
   };
 
-  const t = useCallback((key: string, params?: Record<string, any>): string => {
+  const t = useCallback((key: string, params?: Record<string, unknown>): string => {
     let translation = getNestedValue(translations[language] || translations.en, key);
 
     if (params) {

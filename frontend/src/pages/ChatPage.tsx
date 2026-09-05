@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { Agent, apiClient, ChatMessage, ChatRunResponse } from '@/services/api'
-import { SSEClient, AnyStreamEvent } from '@/services/sseClient'
+import { SSEClient, AnyStreamEvent, SSEMessageEvent, CompletionEvent } from '@/services/sseClient'
 import { useI18n } from '@/i18n/context'
 import { AlertTriangle, CheckCircle2, Paperclip } from 'lucide-react'
 import clsx from 'clsx'
@@ -37,14 +37,6 @@ export const ChatPage: React.FC = () => {
   const sseClientRef = useRef<SSEClient | null>(null)
 
   useEffect(() => {
-    loadAgents()
-    loadHistory()
-    return () => {
-      sseClientRef.current?.disconnect()
-    }
-  }, [])
-
-  useEffect(() => {
     scrollToBottom()
   }, [messages])
 
@@ -55,7 +47,7 @@ export const ChatPage: React.FC = () => {
   // ── Chat history persistence (backend /api/v1/chat/history) ──────────────
 
   /** Load the most recent persisted session into the message list. */
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     try {
       const sessions = await apiClient.listChatSessions(1)
       if (!sessions.length) return
@@ -74,10 +66,10 @@ export const ChatPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to load chat history:', error)
     }
-  }
+  }, [clearMessages, addMessage])
 
   /** Best-effort persistence of one message; never blocks or breaks the chat. */
-  const persistChatMessage = async (role: string, content: string, metadata?: Record<string, any>) => {
+  const persistChatMessage = async (role: string, content: string, metadata?: Record<string, unknown>) => {
     try {
       if (!sessionIdRef.current) {
         const session = await apiClient.createChatSession({ agent_id: selectedAgent || 'default' })
@@ -89,7 +81,7 @@ export const ChatPage: React.FC = () => {
     }
   }
 
-  const loadAgents = async () => {
+  const loadAgents = useCallback(async () => {
     const fallbackAgent = (agentId: string = 'default-agent'): Agent => ({
       id: agentId,
       name: 'Default Agent',
@@ -110,7 +102,15 @@ export const ChatPage: React.FC = () => {
       setSelectedAgent(agent.id)
       console.error('Failed to load workbench bootstrap:', error)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadAgents()
+    loadHistory()
+    return () => {
+      sseClientRef.current?.disconnect()
+    }
+  }, [loadAgents, loadHistory])
 
   const handleUltraSend = async (messageText: string) => {
     setParallelRunning(true)
@@ -121,15 +121,15 @@ export const ChatPage: React.FC = () => {
         4
       )
       const results = resp?.results || resp?.agent_results || []
-      setParallelTasks(results.map((r: any) => ({
+      setParallelTasks(results.map((r) => ({
         agent_id: r.agent_id || `agent-${Math.random().toString(36).slice(2, 8)}`,
         task: messageText,
-        status: r.status || 'completed',
+        status: (r.status || 'completed') as ParallelTaskCard['status'],
         output: r.output,
         error: r.error,
       })))
       // Add summary message
-      const summary = results.map((r: any, i: number) => `Agent ${i + 1}: ${r.status}${r.output ? ' - ' + String(r.output).slice(0, 100) : ''}`).join('\n')
+      const summary = results.map((r, i: number) => `Agent ${i + 1}: ${r.status}${r.output ? ' - ' + String(r.output).slice(0, 100) : ''}`).join('\n')
       const summaryContent = `⚡ Ultra Mode (${results.length} agents):\n${summary}`
       addMessage({
         id: `parallel-${Date.now()}`,
@@ -204,21 +204,26 @@ export const ChatPage: React.FC = () => {
           response.run_id,
           (event: AnyStreamEvent) => {
             if (event.event_type === 'message' && 'content' in event) {
-              accumulated += (event as any).content || ''
+              accumulated += (event as SSEMessageEvent).content || ''
               setStreamContent(accumulated)
             } else if (event.event_type === 'completion') {
-              const result = (event as any).result
+              const result = (event as CompletionEvent).result
               if (result && typeof result === 'string') {
                 accumulated = result
               } else if (result && typeof result === 'object') {
                 // Extract token usage from execution_summary
-                const summary = result.execution_summary || {}
+                const resultObj = result as {
+                  execution_summary?: { tokens_used?: number; total_tokens?: number; model?: string };
+                  iterations?: number;
+                  answer?: string;
+                };
+                const summary = resultObj.execution_summary || {}
                 setTokenUsage({
-                  tokens: summary.tokens_used || summary.total_tokens || result.iterations,
-                  iterations: result.iterations,
+                  tokens: summary.tokens_used || summary.total_tokens || resultObj.iterations,
+                  iterations: resultObj.iterations,
                   model: summary.model || undefined,
                 })
-                if (result.answer) accumulated = result.answer
+                if (resultObj.answer) accumulated = resultObj.answer
               }
             }
           },

@@ -18,6 +18,17 @@ interface PerformanceReport {
   userAgent: string;
 }
 
+
+/** PerformanceEntry extensions for layout-shift / first-input entries (not in the TS DOM lib). */
+interface LayoutShiftEntry extends PerformanceEntry {
+  value: number;
+  hadRecentInput: boolean;
+}
+
+interface FirstInputEntry extends PerformanceEntry {
+  processingDuration: number;
+}
+
 class PerformanceMonitor {
   private metrics: Map<string, PerformanceMetric> = new Map();
   private observers: PerformanceObserver[] = [];
@@ -63,7 +74,7 @@ class PerformanceMonitor {
       });
       observer.observe({ entryTypes: ['paint'] });
       this.observers.push(observer);
-    } catch (e) {
+    } catch {
       console.warn('Paint timing not supported');
     }
   }
@@ -77,7 +88,7 @@ class PerformanceMonitor {
       });
       observer.observe({ entryTypes: ['largest-contentful-paint'] });
       this.observers.push(observer);
-    } catch (e) {
+    } catch {
       console.warn('LCP not supported');
     }
   }
@@ -87,15 +98,15 @@ class PerformanceMonitor {
       let clsValue = 0;
       const observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
-          if (!(entry as any).hadRecentInput) {
-            clsValue += (entry as any).value;
+          if (!(entry as LayoutShiftEntry).hadRecentInput) {
+            clsValue += (entry as LayoutShiftEntry).value;
             this.recordMetric('CLS', clsValue, 0.1);
           }
         }
       });
       observer.observe({ entryTypes: ['layout-shift'] });
       this.observers.push(observer);
-    } catch (e) {
+    } catch {
       console.warn('CLS not supported');
     }
   }
@@ -104,12 +115,12 @@ class PerformanceMonitor {
     try {
       const observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
-          this.recordMetric('FID', (entry as any).processingDuration, 100);
+          this.recordMetric('FID', (entry as FirstInputEntry).processingDuration, 100);
         }
       });
       observer.observe({ entryTypes: ['first-input'] });
       this.observers.push(observer);
-    } catch (e) {
+    } catch {
       console.warn('FID not supported');
     }
   }
@@ -126,7 +137,7 @@ class PerformanceMonitor {
       });
       observer.observe({ entryTypes: ['navigation'] });
       this.observers.push(observer);
-    } catch (e) {
+    } catch {
       console.warn('TTFB not supported');
     }
   }
@@ -135,12 +146,12 @@ class PerformanceMonitor {
     try {
       const observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
-          console.warn(`Long task detected: ${(entry as any).duration}ms`);
+          console.warn(`Long task detected: ${entry.duration}ms`);
         }
       });
       observer.observe({ entryTypes: ['longtask'] });
       this.observers.push(observer);
-    } catch (e) {
+    } catch {
       console.warn('Long task API not supported');
     }
   }

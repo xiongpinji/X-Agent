@@ -263,7 +263,11 @@ export const useScreenLock = () => {
   const lock = async () => {
     try {
       if ('wakeLock' in navigator) {
-        await (navigator as any).wakeLock.request('screen');
+        // Screen Wake Lock API — not yet in the TS DOM lib version we target.
+        const wakeLockNavigator = navigator as Navigator & {
+          wakeLock: { request: (type: 'screen') => Promise<unknown> };
+        };
+        await wakeLockNavigator.wakeLock.request('screen');
         setIsLocked(true);
       }
     } catch (error) {

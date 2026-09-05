@@ -28,7 +28,7 @@ export interface SandboxTaskSubmitResponse {
 
 export interface SandboxTaskStep {
   name?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface SandboxTaskStatusResponse {

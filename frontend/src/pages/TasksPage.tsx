@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { apiClient, Task } from '@/services/api'
 import { useI18n } from '@/i18n/context'
@@ -12,11 +12,7 @@ export const TasksPage: React.FC = () => {
   const [showModal, setShowModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
 
-  useEffect(() => {
-    loadTasks()
-  }, [])
-
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     try {
       setLoading(true)
       const response = await apiClient.listTasks()
@@ -26,7 +22,11 @@ export const TasksPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [setTasks, setLoading, setError])
+
+  useEffect(() => {
+    loadTasks()
+  }, [loadTasks])
 
   const handleDeleteTask = async (id: string) => {
     if (!confirm(t('tasks.deleteTask', 'Delete this task?'))) return

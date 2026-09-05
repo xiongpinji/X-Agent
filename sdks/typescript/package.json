@@ -1,0 +1,47 @@
+{
+  "name": "@xagent/sdk",
+  "version": "0.3.0-alpha",
+  "description": "X-Agent unified TypeScript SDK — shared contract client for extension / frontend / mobile (五端一核的契约钉子)",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/xagent-sdk.umd.cjs",
+  "module": "./dist/xagent-sdk.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/xagent-sdk.js",
+      "require": "./dist/xagent-sdk.umd.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "vite build && tsc -p tsconfig.build.json --emitDeclarationOnly",
+    "prepack": "npm run build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "x-agent",
+    "xagent",
+    "sdk",
+    "agent",
+    "sse",
+    "api-client"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.3.0",
+    "vitest": "^3.2.0"
+  }
+}

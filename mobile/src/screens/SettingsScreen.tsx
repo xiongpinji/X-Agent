@@ -1,7 +1,7 @@
 // mobile/src/screens/SettingsScreen.tsx
 // 设置界面
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,17 @@ import {
   Switch,
   SafeAreaView,
   Alert,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme, ThemeMode } from '../theme';
 import { useAuthStore } from '../store/authStore';
+import {
+  getApiConfig,
+  saveApiConfig,
+  DEFAULT_API_BASE_URL,
+} from '../config/env';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -58,6 +65,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             Settings
           </Text>
         </View>
+
+        {/* Server Connection Section (base URL + API key + 连接测试) */}
+        <ConnectionSection theme={theme} />
 
         {/* Account Section */}
         <View style={styles.section}>
@@ -203,12 +213,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             onValueChange={setBiometricEnabled}
             theme={theme}
           />
-          <SettingItem
-            icon="key-outline"
-            label="API Keys"
-            onPress={() => navigation.navigate('APIKeys')}
-            theme={theme}
-          />
         </View>
 
         {/* About Section */}
@@ -262,6 +266,191 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
         <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
+  );
+};
+
+// Server Connection Section: 配置后端地址与 x-api-key 并测试连通性
+interface ConnectionSectionProps {
+  theme: any;
+}
+
+const ConnectionSection: React.FC<ConnectionSectionProps> = ({ theme }) => {
+  const [baseUrl, setBaseUrl] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(
+    null
+  );
+
+  useEffect(() => {
+    let mounted = true;
+    getApiConfig()
+      .then((cfg) => {
+        if (!mounted) return;
+        setBaseUrl(cfg.baseUrl);
+        setApiKey(cfg.apiKey ?? '');
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setStatus(null);
+    try {
+      // 保存到 SecureStore（base URL 为运行时覆盖，优先级高于 app.json/环境变量）
+      await saveApiConfig({ baseUrl, apiKey });
+      setStatus({ ok: true, message: 'Connection settings saved.' });
+    } catch (error) {
+      setStatus({ ok: false, message: `Save failed: ${String(error)}` });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setTesting(true);
+    setStatus(null);
+    try {
+      // 后端契约: GET /health 公开端点（backend/app/main.py），返回 {status:"ok", service:"x-agent"}
+      const target = (baseUrl.trim() || DEFAULT_API_BASE_URL).replace(/\/+$/, '');
+      const response = await fetch(`${target}/health`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const body = await response.json().catch(() => ({}));
+      if (body.status === 'ok') {
+        setStatus({
+          ok: true,
+          message: `Connected (service: ${body.service ?? 'unknown'})`,
+        });
+      } else {
+        setStatus({
+          ok: false,
+          message: `Reachable but unhealthy: ${JSON.stringify(body).slice(0, 120)}`,
+        });
+      }
+    } catch (error: any) {
+      setStatus({
+        ok: false,
+        message: `Connection failed: ${error?.message ?? String(error)}`,
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+        Server Connection
+      </Text>
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
+        ]}
+      >
+        <Text style={[styles.label, { color: theme.colors.text }]}>
+          Base URL
+        </Text>
+        <TextInput
+          style={[
+            styles.textInput,
+            {
+              color: theme.colors.text,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.background,
+            },
+          ]}
+          value={baseUrl}
+          onChangeText={setBaseUrl}
+          placeholder={`e.g. ${DEFAULT_API_BASE_URL}`}
+          placeholderTextColor={theme.colors.textTertiary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          editable={loaded}
+        />
+        <Text style={[styles.label, { color: theme.colors.text, marginTop: 12 }]}>
+          API Key (x-api-key)
+        </Text>
+        <TextInput
+          style={[
+            styles.textInput,
+            {
+              color: theme.colors.text,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.background,
+            },
+          ]}
+          value={apiKey}
+          onChangeText={setApiKey}
+          placeholder="Paste your API key"
+          placeholderTextColor={theme.colors.textTertiary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+          editable={loaded}
+        />
+        <View style={styles.connectionButtons}>
+          <TouchableOpacity
+            style={[
+              styles.secondaryButton,
+              { borderColor: theme.colors.primary },
+            ]}
+            onPress={handleTestConnection}
+            disabled={testing || !loaded}
+          >
+            {testing ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : (
+              <Text
+                style={[styles.secondaryButtonText, { color: theme.colors.primary }]}
+              >
+                Test Connection
+              </Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              { backgroundColor: theme.colors.primary },
+            ]}
+            onPress={handleSave}
+            disabled={saving || !loaded}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={theme.colors.textInverse} />
+            ) : (
+              <Text
+                style={[
+                  styles.primaryButtonText,
+                  { color: theme.colors.textInverse },
+                ]}
+              >
+                Save
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+        {status && (
+          <Text
+            style={[
+              styles.connectionStatus,
+              { color: status.ok ? '#2e7d32' : theme.colors.error },
+            ]}
+          >
+            {status.message}
+          </Text>
+        )}
+      </View>
+    </View>
   );
 };
 
@@ -373,6 +562,54 @@ const ToggleItem: React.FC<ToggleItemProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  card: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 6,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    height: 44,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    marginTop: 4,
+  },
+  connectionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  primaryButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  primaryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  secondaryButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  connectionStatus: {
+    fontSize: 12,
+    marginTop: 10,
   },
   header: {
     paddingHorizontal: 16,

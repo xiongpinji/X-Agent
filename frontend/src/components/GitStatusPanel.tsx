@@ -57,8 +57,8 @@ export const GitStatusPanel: React.FC<GitStatusPanelProps> = ({
       const json = await resp.json();
       setData(json);
       setError(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch git status');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch git status');
     } finally {
       setLoading(false);
     }

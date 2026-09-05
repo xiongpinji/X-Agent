@@ -827,6 +827,10 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     "skill_sediment", # P2-11 技能自沉淀（stats/promote/reject/prune/events）
     "memory_advanced",# 情节/跨会话/程序性记忆 API（含 FTS5 检索）
     "scheduler",      # 定时任务 CRUD/队列（B3：到点投递 agent.run）
+    # 2026-09-06 统一任务层：/api/v1/agent/tasks（Codex "submit and come back" 异步任务实体，
+    # agent_run 后台执行 + JSONL 持久化；sandbox/stream 既有端点不动，source 字段预留聚合。
+    # 注：规划时的 /api/v1/tasks 前缀已被 tasks_ui 占用（前端在用），与 owner 确认后改用 agent/tasks）
+    "tasks",
 )
 
 

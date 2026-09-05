@@ -36,8 +36,8 @@ jobs:
         run: npm ci
 
       - name: Run ESLint
-        # Advisory：当前存量 33 errors/248 warnings（技术债），清零后转 blocking
-        run: npm run lint -- --max-warnings=0 || true
+        # 2026-09-06 存量清零（0 errors/0 warnings）后转 blocking
+        run: npm run lint -- --max-warnings=0
 
       - name: Type check
         run: npm run type-check

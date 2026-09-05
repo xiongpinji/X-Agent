@@ -18,8 +18,8 @@ import RunHistoryPanel from '../components/RunHistoryPanel';
 import './AgentWorkspace.css';
 
 interface AgentWorkspaceProps {
-  onRunComplete?: (result: any) => void;
-  onError?: (error: any) => void;
+  onRunComplete?: (result: unknown) => void;
+  onError?: (error: Error) => void;
 }
 
 export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({

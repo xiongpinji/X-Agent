@@ -21,6 +21,18 @@ interface ResourceTiming {
   type: string;
 }
 
+
+/** PerformanceEntry extension exposing transferSize on resource entries. */
+interface ResourceTimingEntry extends PerformanceEntry {
+  transferSize?: number;
+}
+
+/** PerformanceEntry extension for layout-shift entries (not in the TS DOM lib). */
+interface LayoutShiftEntry extends PerformanceEntry {
+  value: number;
+  hadRecentInput: boolean;
+}
+
 class PerformanceOptimizer {
   private metrics: Partial<PerformanceMetrics> = {};
   private resourceTimings: ResourceTiming[] = [];
@@ -138,8 +150,8 @@ class PerformanceOptimizer {
 
       const observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
-          if (!(entry as any).hadRecentInput) {
-            cls += (entry as any).value;
+          if (!(entry as LayoutShiftEntry).hadRecentInput) {
+            cls += (entry as LayoutShiftEntry).value;
             this.metrics.cumulativeLayoutShift = cls;
 
             if (cls > 0.1) {
@@ -172,7 +184,7 @@ class PerformanceOptimizer {
           const resource: ResourceTiming = {
             name: entry.name,
             duration: entry.duration,
-            size: (entry as any).transferSize || 0,
+            size: (entry as ResourceTimingEntry).transferSize || 0,
             type: entry.initiatorType,
           };
 
@@ -366,7 +378,7 @@ ${this.generateRecommendations()}
   /**
    * Emit event
    */
-  private emit(event: string, data?: any): void {
+  private emit(event: string, data?: unknown): void {
     this.listeners.get(event)?.forEach((callback) => {
       callback(data);
     });

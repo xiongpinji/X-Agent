@@ -152,11 +152,41 @@ class TestTraceToStreamMapping:
         assert ev.data["risk_level"] == "high"
 
 
+class _ScriptedEchoRouter:
+    """确定性 router：首轮 chat 返回 echo 工具调用，之后返回 final 计划。
+
+    端到端流式事件断言依赖工具步骤真实发生；此前该依赖由（当时有效的）
+    真实 LLM key 隐式满足，密闭化后由本脚本化 router 显式保证。
+    """
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def chat(self, messages, tools, **kwargs):
+        from backend.app.core.llm.backends import LLMResponse
+
+        self.calls += 1
+        if self.calls == 1:
+            return LLMResponse(
+                tool_calls=[{"name": "echo", "arguments": {"text": "stream-e2e"}}],
+                tokens_used={"input": 1, "output": 1},
+            )
+        return LLMResponse(
+            content='[{"kind":"final","instruction":"done"}]',
+            tokens_used={"input": 1, "output": 1},
+        )
+
+
 class TestStreamingRunEvents:
     """End-to-end: run/stream produces a fine-grained event sequence."""
 
     def setup_method(self):
         _reset_event_store()
+        from backend.app.dependencies import get_agent
+
+        self._agent = get_agent()
+        self._original_llm = self._agent.llm
+        self._agent.llm = _ScriptedEchoRouter()
         # Context-managed TestClient keeps one portal/event loop alive for
         # the whole test, so the background agent task keeps running
         # between the POST and the polling GETs.
@@ -165,6 +195,7 @@ class TestStreamingRunEvents:
 
     def teardown_method(self):
         self._client_cm.__exit__(None, None, None)
+        self._agent.llm = self._original_llm
         _reset_event_store()
 
     def test_run_stream_event_sequence(self):
@@ -249,11 +280,17 @@ class TestApprovalRequiredEvents:
 
     def setup_method(self):
         _reset_event_store()
+        from backend.app.dependencies import get_agent
+
+        self._agent = get_agent()
+        self._original_llm = self._agent.llm
+        self._agent.llm = _ScriptedEchoRouter()
         self._client_cm = TestClient(app, headers={"x-api-key": "bootstrap"})
         self.client = self._client_cm.__enter__()
 
     def teardown_method(self):
         self._client_cm.__exit__(None, None, None)
+        self._agent.llm = self._original_llm
         _reset_event_store()
 
     def test_pending_approval_emits_event(self, monkeypatch):

@@ -1,6 +1,9 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
+
+pytestmark = pytest.mark.contracts
 
 
 def test_observability_contract_fields_are_present() -> None:

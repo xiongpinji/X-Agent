@@ -9,7 +9,7 @@
   },
   "metadata": {
     "display_name": "数据库助手",
-    "description": "Database integration for X-Agent. Query, analyze, and manage PostgreSQL and MySQL databases directly from X-Agent.",
+    "description": "Database integration for X-Agent. Query and manage PostgreSQL, MySQL and local SQLite databases directly from X-Agent (lazy connection: missing DB/driver is a tool-level error, missing configuration fails closed at startup).",
     "description_zh": "数据库集成插件。直接在X-Agent中查询、分析和管理PostgreSQL和MySQL数据库。",
     "author": "X-Agent Team",
     "author_email": "team@x-agent.com",
@@ -23,7 +23,11 @@
     "name": "数据库助手",
     "description": "这个插件让你可以在X-Agent中直接查询和管理数据库，支持PostgreSQL和MySQL，无需离开X-Agent。",
     "usage": "1. 安装插件\n2. 配置数据库连接信息\n3. 在对话中使用数据库命令\n4. 查看查询结果",
-    "适合谁用": ["数据分析师", "数据库管理员", "开发者"],
+    "适合谁用": [
+      "数据分析师",
+      "数据库管理员",
+      "开发者"
+    ],
     "常见问题": [
       {
         "question": "支持哪些数据库？",
@@ -42,13 +46,16 @@
   },
   "capabilities": {
     "tools": true,
-    "resources": true,
+    "resources": false,
     "prompts": false
   },
   "permissions": {
     "network": {
       "required": true,
-      "domains": ["localhost", "127.0.0.1"]
+      "domains": [
+        "localhost",
+        "127.0.0.1"
+      ]
     },
     "filesystem": {
       "required": false,
@@ -67,10 +74,9 @@
   "dependencies": {
     "python": ">=3.11",
     "packages": {
-      "psycopg2-binary": ">=2.9.0",
-      "mysql-connector-python": ">=8.0.0",
-      "pandas": ">=2.0.0",
-      "pydantic": ">=2.0.0"
+      "mcp": ">=1.28.0",
+      "psycopg2-binary": ">=2.9.0 (optional, postgresql)",
+      "mysql-connector-python": ">=8.0.0 (optional, mysql)"
     }
   },
   "configuration": {
@@ -78,14 +84,14 @@
       "type": "string",
       "required": true,
       "default": "postgresql",
-      "description": "Database type (postgresql or mysql)",
-      "description_zh": "数据库类型（postgresql或mysql）"
+      "description": "Database type (postgresql, mysql, or sqlite for local files)",
+      "description_zh": "数据库类型（postgresql、mysql 或本地文件 sqlite）"
     },
     "db_host": {
       "type": "string",
-      "required": true,
-      "description": "Database host",
-      "description_zh": "数据库主机"
+      "required": false,
+      "description": "Database host (required for postgresql/mysql)",
+      "description_zh": "数据库主机（postgresql/mysql 必填）"
     },
     "db_port": {
       "type": "integer",
@@ -96,22 +102,22 @@
     },
     "db_user": {
       "type": "string",
-      "required": true,
-      "description": "Database user",
-      "description_zh": "数据库用户"
+      "required": false,
+      "description": "Database user (required for postgresql/mysql)",
+      "description_zh": "数据库用户（postgresql/mysql 必填）"
     },
     "db_password": {
       "type": "string",
-      "required": true,
-      "description": "Database password",
-      "description_zh": "数据库密码",
+      "required": false,
+      "description": "Database password (required for postgresql/mysql)",
+      "description_zh": "数据库密码（postgresql/mysql 必填）",
       "secret": true
     },
     "db_name": {
       "type": "string",
       "required": true,
-      "description": "Database name",
-      "description_zh": "数据库名"
+      "description": "Database name (sqlite: path to the database file)",
+      "description_zh": "数据库名（sqlite 时为库文件路径）"
     },
     "timeout": {
       "type": "integer",
@@ -139,7 +145,9 @@
             "description": "Maximum number of rows to return"
           }
         },
-        "required": ["query"]
+        "required": [
+          "query"
+        ]
       }
     },
     {
@@ -163,7 +171,9 @@
             "description": "Table name"
           }
         },
-        "required": ["table_name"]
+        "required": [
+          "table_name"
+        ]
       }
     },
     {
@@ -187,7 +197,10 @@
             "description": "Output filename"
           }
         },
-        "required": ["query", "filename"]
+        "required": [
+          "query",
+          "filename"
+        ]
       }
     },
     {
@@ -202,33 +215,26 @@
             "description": "Table name"
           }
         },
-        "required": ["table_name"]
+        "required": [
+          "table_name"
+        ]
       }
     }
   ],
-  "resources": [
-    {
-      "uri": "database://tables",
-      "name": "Tables",
-      "description": "Database tables",
-      "description_zh": "数据库表",
-      "mime_type": "application/json"
-    },
-    {
-      "uri": "database://schema",
-      "name": "Schema",
-      "description": "Database schema",
-      "description_zh": "数据库架构",
-      "mime_type": "application/json"
-    }
-  ],
+  "resources": [],
   "security": {
     "sandbox": true,
     "max_memory_mb": 1024,
     "max_cpu_percent": 50,
     "timeout_seconds": 300,
-    "allowed_protocols": ["tcp"],
-    "blocked_paths": ["/etc", "/root", "/sys"]
+    "allowed_protocols": [
+      "tcp"
+    ],
+    "blocked_paths": [
+      "/etc",
+      "/root",
+      "/sys"
+    ]
   },
   "quality_metrics": {
     "code_quality_score": 8.0,

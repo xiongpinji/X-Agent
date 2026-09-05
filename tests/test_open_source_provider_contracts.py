@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from backend.app.core.open_source_api import OpenSourceCandidateRecord
 from backend.app.core.open_source_forge_providers import BitbucketOpenSourceProvider, CodebergOpenSourceProvider, GiteaOpenSourceProvider, GitLabOpenSourceProvider
 from backend.app.core.open_source_registry import CratesIoOpenSourceProvider, MavenCentralOpenSourceProvider, NpmRegistryOpenSourceProvider, PackageRegistryOpenSourceProvider, RubyGemsOpenSourceProvider
 from backend.app.core.open_source_store import OpenSourceDiscoveryStore
+
+pytestmark = pytest.mark.contracts
 
 
 class StubProvider:

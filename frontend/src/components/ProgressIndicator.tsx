@@ -20,6 +20,16 @@ interface ProgressIndicatorProps {
   refreshInterval?: number;
 }
 
+/** Shape of a 'progress' event as returned by the stream events endpoint. */
+interface ProgressStreamEvent {
+  event_type: string;
+  overall_progress?: number;
+  current_step?: string;
+  total_steps?: number;
+  completed_steps?: number;
+  estimated_remaining_seconds?: number;
+}
+
 const formatTime = (seconds: number): string => {
   if (seconds < 60) return `${Math.round(seconds)}s`;
   if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
@@ -51,7 +61,9 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
         const events = data.events || [];
 
         // Find the latest progress event
-        const progressEvents = events.filter((e: any) => e.event_type === 'progress');
+        const progressEvents = (events as ProgressStreamEvent[]).filter(
+          (e) => e.event_type === 'progress'
+        );
         if (progressEvents.length > 0) {
           const latestProgress = progressEvents[progressEvents.length - 1];
           const progressData: ProgressData = {

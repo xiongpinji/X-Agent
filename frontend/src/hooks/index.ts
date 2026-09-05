@@ -61,14 +61,14 @@ export const useDebounce = <T,>(value: T, delay: number): T => {
 /**
  * Hook for throttling functions
  */
-export const useThrottle = <T extends (...args: any[]) => any>(
+export const useThrottle = <T extends (...args: never[]) => unknown>(
   callback: T,
   delay: number
 ): T => {
   const lastRun = useRef(Date.now())
 
   return useCallback(
-    (...args: any[]) => {
+    (...args: Parameters<T>) => {
       const now = Date.now()
       if (now - lastRun.current >= delay) {
         callback(...args)
@@ -95,13 +95,14 @@ export const useInfiniteScroll = (callback: () => void, threshold = 0.1) => {
       { threshold }
     )
 
-    if (ref.current) {
-      observer.observe(ref.current)
+    const element = ref.current
+    if (element) {
+      observer.observe(element)
     }
 
     return () => {
-      if (ref.current) {
-        observer.unobserve(ref.current)
+      if (element) {
+        observer.unobserve(element)
       }
     }
   }, [callback, threshold])

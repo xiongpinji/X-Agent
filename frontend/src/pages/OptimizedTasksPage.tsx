@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import clsx from 'clsx'
 import { useAppStore } from '@/store/appStore'
 import { apiClient } from '@/services/api'
@@ -7,13 +7,9 @@ import { Plus, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 
 export const OptimizedTasksPage: React.FC = () => {
   const { theme, tasks, setTasks, isLoading, setLoading, setError } = useAppStore()
-  const [_selectedTask, setSelectedTask] = useState<any>(null)
+  const [_selectedTask, setSelectedTask] = useState<unknown>(null)
 
-  useEffect(() => {
-    loadTasks()
-  }, [])
-
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     try {
       setLoading(true)
       const response = await apiClient.listTasks()
@@ -23,7 +19,11 @@ export const OptimizedTasksPage: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [setTasks, setLoading, setError])
+
+  useEffect(() => {
+    loadTasks()
+  }, [loadTasks])
 
   const _handleDeleteTask = async (id: string) => {
     if (!confirm('Are you sure?')) return
