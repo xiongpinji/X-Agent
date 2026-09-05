@@ -300,6 +300,10 @@ class TestPluginRuntimeMcpLifecycle:
         assert plugin.server_info["server_name"] == "demo-plugin"
         assert sorted(result["tools"]) == ["echo", "fail"]
 
+        # --- 幂等：已在运行时重复 start 直接成功（不重复拉起进程） ---
+        assert runtime.start("demo-plugin", timeout=20)["ok"] is True
+        assert plugin.session is not None and plugin.session.is_alive
+
         # --- tools/call：成功路径（structuredContent 优先，与 MCPClient 契约一致） ---
         output = runtime.call_plugin_tool("demo-plugin", "echo", {"text": "hello"})
         assert "echo:hello" in str(output)

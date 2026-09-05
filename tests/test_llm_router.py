@@ -12,14 +12,14 @@ from backend.app.core.llm import (
 class FailingBackend(BaseLLMBackend):
     name = "failing"
 
-    async def chat(self, messages, tools):
+    async def chat(self, messages, tools, *, response_format=None):
         raise LLMBackendError("boom")
 
 
 class StaticBackend(BaseLLMBackend):
     name = "static"
 
-    async def chat(self, messages, tools):
+    async def chat(self, messages, tools, *, response_format=None):
         return LLMResponse(content="static-ok", model="static")
 
 

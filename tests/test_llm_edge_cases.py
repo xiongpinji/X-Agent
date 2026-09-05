@@ -17,7 +17,7 @@ class TimeoutBackend(BaseLLMBackend):
     """Backend that simulates timeout."""
     name = "timeout"
 
-    async def chat(self, messages, tools):
+    async def chat(self, messages, tools, *, response_format=None):
         raise LLMBackendError("Request timeout after 30s")
 
 
@@ -26,7 +26,7 @@ class PartialFailureBackend(BaseLLMBackend):
     name = "partial"
     call_count = 0
 
-    async def chat(self, messages, tools):
+    async def chat(self, messages, tools, *, response_format=None):
         self.call_count += 1
         if self.call_count == 1:
             raise LLMBackendError("Temporary failure")
@@ -303,18 +303,21 @@ class TestBuildLLMRouter:
         assert isinstance(router._backends[0], MockLLMBackend)
 
     def test_build_router_with_empty_fallback_order(self):
-        """Test building router with empty fallback order."""
-        router = build_llm_router(
-            llm_backend="auto",
-            fallback_order="",
-            openai_api_key=None,
-            openai_model="gpt-4",
-            deepseek_api_key=None,
-            deepseek_model="deepseek-chat",
-            deepseek_base_url="https://api.deepseek.com/v1",
-        )
-        assert len(router._backends) == 1
-        assert isinstance(router._backends[0], MockLLMBackend)
+        """auto + 空 fallback_order + 无任何 API key → fail-fast 拒绝静默 mock。
+
+        d17b7e8 商用加固：无凭证时不再静默降级为 MockLLMBackend——
+        生产误配必须报错，显式 mock 需写明 llm_backend="mock"。
+        """
+        with pytest.raises(RuntimeError, match="No LLM API key configured"):
+            build_llm_router(
+                llm_backend="auto",
+                fallback_order="",
+                openai_api_key=None,
+                openai_model="gpt-4",
+                deepseek_api_key=None,
+                deepseek_model="deepseek-chat",
+                deepseek_base_url="https://api.deepseek.com/v1",
+            )
 
     def test_build_router_with_whitespace_fallback_order(self):
         """Test building router with whitespace in fallback order."""
@@ -331,10 +334,27 @@ class TestBuildLLMRouter:
         assert isinstance(router._backends[0], MockLLMBackend)
 
     def test_build_router_with_unknown_backend(self):
-        """Test building router with unknown backend name."""
+        """未知后端名 → fail-fast 报错（不再静默换成 mock）。
+
+        d17b7e8 商用加固：配置拼错必须当场暴露，静默 mock 会掩盖错误配置。
+        显式 mock 走 test_build_router_explicit_mock（llm_backend="mock"）。
+        """
+        with pytest.raises(RuntimeError, match="No LLM API key configured"):
+            build_llm_router(
+                llm_backend="unknown",
+                fallback_order="unknown,mock",
+                openai_api_key=None,
+                openai_model="gpt-4",
+                deepseek_api_key=None,
+                deepseek_model="deepseek-chat",
+                deepseek_base_url="https://api.deepseek.com/v1",
+            )
+
+    def test_build_router_explicit_mock(self):
+        """显式 llm_backend="mock" 仍然可用（测试/冒烟路径）。"""
         router = build_llm_router(
-            llm_backend="unknown",
-            fallback_order="unknown,mock",
+            llm_backend="mock",
+            fallback_order="",
             openai_api_key=None,
             openai_model="gpt-4",
             deepseek_api_key=None,

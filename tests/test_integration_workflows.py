@@ -284,7 +284,7 @@ class TestCompleteWorkflow:
 
             name = "timeout"
 
-            async def chat(self, messages, tools):
+            async def chat(self, messages, tools, *, response_format=None):
                 raise LLMBackendError("Request timeout after 30s")
 
         # Create router with fallback

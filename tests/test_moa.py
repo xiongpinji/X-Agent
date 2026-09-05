@@ -32,7 +32,7 @@ class FakeBackend(BaseLLMBackend):
         self._model = model
         self._fail = fail
 
-    async def chat(self, messages, tools) -> LLMResponse:
+    async def chat(self, messages, tools, *, response_format=None) -> LLMResponse:
         if self._fail:
             from backend.app.core.llm.backends import LLMBackendError
             raise LLMBackendError("simulated failure")

@@ -264,7 +264,13 @@ def test_owner_gate_runner_loads_non_placeholder_env_file_values(tmp_path: Path,
     assert calls[0]["env"].get("XAGENT_GITHUB_TOKEN") != "<set-in-owner-secret-store>"
 
 
-def test_owner_gate_runner_reports_selected_gate_placeholder_env_values(tmp_path: Path) -> None:
+def test_owner_gate_runner_reports_selected_gate_placeholder_env_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 宿主机若真实设置了 XAGENT_GITHUB_TOKEN / GITHUB_TOKEN（OS 环境优先于
+    # env 文件），占位符会被当作已解析——测试必须与宿主环境隔离。
+    for _var in ("XAGENT_GITHUB_TOKEN", "GITHUB_TOKEN"):
+        monkeypatch.delenv(_var, raising=False)
     plan = _write_plan(tmp_path / "rc-owner-gate-plan.json")
     env_file = tmp_path / "owner.env"
     env_file.write_text(
