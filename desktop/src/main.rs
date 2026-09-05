@@ -29,7 +29,7 @@ fn main() {
     let app_state = Arc::new(AppState::new(db, app_config));
 
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
             setup_app(app, app_state.clone())?;
             Ok(())
         })
@@ -72,7 +72,7 @@ fn setup_app(app: &mut App, state: Arc<AppState>) -> Result<(), Box<dyn std::err
     setup_global_shortcuts(&app_handle)?;
 
     // Initialize database
-    state.db.init().expect("Failed to initialize database");
+    tauri::async_runtime::block_on(state.db.init()).expect("Failed to initialize database");
 
     // Start backend connection
     let app_handle_clone = app_handle.clone();

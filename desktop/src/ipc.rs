@@ -1,5 +1,6 @@
+use futures::StreamExt;
 use serde_json::json;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 pub async fn connect_to_backend(app_handle: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let config = app_handle.state::<std::sync::Arc<crate::state::AppState>>();

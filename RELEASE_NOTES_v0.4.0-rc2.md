@@ -42,10 +42,10 @@ rc1 之后的两个大批次收口：**商用交付冲刺**（21 个测试失败
 
 ## 已知边界（沿用 rc1 口径并更新）
 
-1. **桌面端 Tauri**：结构可构建但未做本机 Rust 工具链冒烟（下个独立任务）；Rust 命令层与主 React 前端的适配层未接
+1. **桌面端 Tauri**：`cargo check` 编译级冒烟通过（本版首次可编译，修复 8 处 schema/源码错误并收窄 shell 权限）；完整 `tauri build` 打包与 Rust 命令层↔主前端适配层仍待联调
 2. **移动端**：仍是占位 API 域名的完整壳，未联调
 3. **Cloud Tasks 完整形态**：统一任务实体（DB 状态机 + 取消 + 通知）未做，本版仅落地结果持久化
-4. **CI blocking 首验**：门禁转 blocking 随本 tag 落地，托管运行需 push 后首个 Actions run 验证
+4. **CI blocking 首验**：门禁转 blocking 随本 tag 落地，托管运行需 push 后首个 Actions run 验证（本地 -n 4 blocking 选择集 0 失败；-n 8 的崩溃确认为本机内存耗尽，非测试回归）
 5. **ESLint 存量**：前端 33 错误/248 警告未清零（advisory 债务）
 
 ## 升级与部署

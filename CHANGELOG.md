@@ -27,6 +27,7 @@ All notable changes to X-Agent are documented in this file.
 - /api/scheduler/queue/enqueue 调用签名 TypeError (从未可用)
 - Qdrant 空 API key 误告警; memory_fts bm25 列权重错位; ReflectionRecord 字段错配空壳
 - spike 压测并发超连接池容量 (50 线程 vs QueuePool 5+10) 导致 sqlalchemy 超时
+- 桌面端 Tauri 首次可编译: tauri.conf.json 8 处 schema 错误 (shell scope 通配→禁用并收窄权限/无效 window/bundle/macOS 字段)、Cargo.toml feature 与 allowlist 不匹配、db.rs SqlitePool 构造错误 (init 建的池从未存回)、ipc.rs StreamExt/Manager 导入缺失、main.rs setup 闭包借用与 async init 未 block_on
 
 ### Changed
 - CI 门禁转 blocking: unit/integration 去 continue-on-error, vitest 去 || true; 纯计时/压测 (~72 用例) 挂 performance 标记拆入 advisory job (CI 阈值放宽 2x)
