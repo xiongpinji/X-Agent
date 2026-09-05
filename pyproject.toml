@@ -25,6 +25,8 @@ dependencies = [
     "pydantic>=2.7.0",
     "pydantic-settings>=2.2.0",
     "python-multipart>=0.0.28",
+    # streaming_enhanced 模块级导入（CI 只装 pyproject 依赖，缺它 ModuleNotFoundError）
+    "orjson>=3.10.0",
     "qdrant-client>=1.11.0",
     "scikit-learn>=1.5.0",
     "sqlalchemy>=2.0.0",
@@ -81,6 +83,7 @@ dev = [
     "pre-commit>=3.0.0",
 ]
 test = [
+    "prometheus-client>=0.20.0",  # metrics 测试需要（此前只在 prod extras，CI 装不到）
     "pytest>=8.2.0",
     "pytest-cov>=4.0.0",
     "pytest-timeout>=2.3.0",

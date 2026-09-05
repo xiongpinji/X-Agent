@@ -266,12 +266,15 @@ class LifecycleManager:
             logger.info("Received signal %s — initiating graceful shutdown", signal.Signals(sig).name)
             self._shutdown_event.set()
 
-        # SIGTERM — standard container/orchestrator stop signal
-        with suppress(NotImplementedError, OSError):
+        # SIGTERM — standard container/orchestrator stop signal。
+        # RuntimeError: Linux 非主线程（TestClient portal / xdist worker）调用
+        # add_signal_handler 会抛 "set_wakeup_fd only works in main thread"——
+        # 测试进程没有信号治理权，静默跳过即可。
+        with suppress(NotImplementedError, OSError, RuntimeError):
             loop.add_signal_handler(signal.SIGTERM, _signal_handler, signal.SIGTERM)
 
         # SIGINT — Ctrl+C
-        with suppress(NotImplementedError, OSError):
+        with suppress(NotImplementedError, OSError, RuntimeError):
             loop.add_signal_handler(signal.SIGINT, _signal_handler, signal.SIGINT)
 
 

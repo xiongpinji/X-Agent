@@ -324,7 +324,8 @@ class TestRouteHandlers:
 
     def test_console_page(self):
         resp = self.client.get("/console")
-        assert resp.status_code in (200, 500)
+        # CI 不构建前端时 dist 缺失 → 404（与 spa_fallback 同理）
+        assert resp.status_code in (200, 404, 500)
 
     def test_spa_fallback_known_prefix(self):
         resp = self.client.get("/memory/some/path")
