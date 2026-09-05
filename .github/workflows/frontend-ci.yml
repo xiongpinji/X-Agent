@@ -36,6 +36,7 @@ jobs:
         run: npm ci
 
       - name: Run ESLint
+        # Advisory：当前存量 33 errors/248 warnings（技术债），清零后转 blocking
         run: npm run lint -- --max-warnings=0 || true
 
       - name: Type check
@@ -96,7 +97,8 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm run test -- --run --coverage || true
+        # 2026-09-05 转 blocking：vitest 90 用例本地全绿（此前 || true 掩盖失败）
+        run: npm run test -- --run --coverage
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3

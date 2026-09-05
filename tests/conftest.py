@@ -8,6 +8,10 @@ os.environ.setdefault("APP_MODE", "development")
 os.environ.setdefault("XAGENT_AUDIT_HMAC_SECRET", "test-audit-secret")
 os.environ.setdefault("XAGENT_BOOTSTRAP_API_KEY", "bootstrap")
 os.environ.setdefault("XAGENT_QDRANT_URL", "")
+# 单测密闭性：默认关闭 B3 调度常驻循环（cron/workflow run_due/task worker）。
+# TestClient 每次启动都会跑 startup_event，后台循环在测试事件循环间漂移且
+# 引入不确定计时；需要测调度接线本身的用例自行 monkeypatch 为 true。
+os.environ.setdefault("XAGENT_SCHEDULER_ENABLED", "false")
 # P0-15：测试会话属开发环境，显式 opt-in 宿主机降级写（agent_fix_runner 在无
 # Docker sandbox 时默认 fail-closed；test_agent_fix_runner 走 sandbox=None 路径）
 os.environ.setdefault("XAGENT_ALLOW_DEGRADED_HOST_WRITE", "1")

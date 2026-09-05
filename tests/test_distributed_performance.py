@@ -13,6 +13,11 @@ from backend.app.models.api_key_store import get_api_key_store
 from backend.app.models.rate_limiter import get_rate_limiter
 
 
+# 纯计时/压测阈值受机器负载影响天然抖动：挂 performance 标记，
+# CI 中从 blocking 的 unit job 排除、由 advisory 的 performance job 单独跑。
+pytestmark = pytest.mark.performance
+
+
 class TestPerformance:
     """性能测试"""
 

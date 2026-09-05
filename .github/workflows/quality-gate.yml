@@ -36,9 +36,10 @@ jobs:
             --tb=short 2>&1 | tail -20
 
       - name: Run core tests
+        # 2026-09-05 转 blocking（此前 || true 掩盖失败）
         run: |
           pytest tests/test_new_agent_tools.py tests/unit/test_memory_system.py \
-            -x -q --timeout=60 --tb=short || true
+            -x -q --timeout=60 --tb=short
 
   frontend-checks:
     runs-on: ubuntu-latest

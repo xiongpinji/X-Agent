@@ -10,6 +10,11 @@ from fastapi.testclient import TestClient
 from backend.app.main import app
 
 
+# 纯计时/压测阈值受机器负载影响天然抖动：挂 performance 标记，
+# CI 中从 blocking 的 unit job 排除、由 advisory 的 performance job 单独跑。
+pytestmark = pytest.mark.performance
+
+
 class PerformanceMetrics:
     """Collect and analyze performance metrics."""
 

@@ -14,7 +14,9 @@ jobs:
   unit-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    continue-on-error: true  # Advisory: pytest-xdist + pytest-asyncio incompatibility in CI (6680+ tests pass)
+    # 2026-09-05 门禁转 blocking（此前 continue-on-error 导致失败不挡合并，
+    # 21 个测试失败积累数周的根因）。纯计时/压测已挂 performance 标记，
+    # 在此排除、由 advisory 的 performance-tests job 单独跑。
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
@@ -69,8 +71,10 @@ jobs:
         DATABASE_URL: postgresql://xagent:xagent@localhost:5432/xagent_test
         REDIS_URL: redis://localhost:6379
         QDRANT_URL: http://localhost:6333
+        # 单测密闭性：不启动调度常驻循环（生产由 startup 默认开启）
+        XAGENT_SCHEDULER_ENABLED: "false"
       run: |
-        pytest tests/ -m "not e2e" -n auto -v --tb=short --timeout=300
+        pytest tests/ -m "not e2e and not performance" -n auto -v --tb=short --timeout=300
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
@@ -149,9 +153,9 @@ jobs:
         DATABASE_URL: postgresql://xagent:xagent@localhost:5432/xagent_test
         REDIS_URL: redis://localhost:6379
         QDRANT_URL: http://localhost:6333
+        XAGENT_SCHEDULER_ENABLED: "false"
       run: |
         pytest tests/ -m "integration" -v --tb=short
-      continue-on-error: true
 
   contract-tests:
     runs-on: ubuntu-latest
@@ -265,6 +269,10 @@ jobs:
         DATABASE_URL: postgresql://xagent:xagent@localhost:5432/xagent_test
         REDIS_URL: redis://localhost:6379
         QDRANT_URL: http://localhost:6333
+        # 共享 runner 负载抖动：阈值统一放宽 2 倍（计时类测试的既定逃生口）
+        XAGENT_PERF_THRESHOLD_MULTIPLIER: "2.0"
+      # Advisory by design：计时/压测阈值天然受同机负载影响，不挡合并。
+      # 2026-09-05 起该 job 通过 performance 标记收集正确的测试集合。
       run: |
         pytest tests/ -m "performance" -v --tb=short || true
 

@@ -475,6 +475,7 @@ class TestHybridMemorySystem:
         # Note: May or may not find duplicates depending on store implementation
 
 
+@pytest.mark.performance
 class TestPerformance:
     """Performance tests for hybrid memory system."""
 

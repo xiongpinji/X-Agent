@@ -11,6 +11,11 @@ from fastapi.testclient import TestClient
 from backend.app.main import app
 
 
+# 纯计时/压测阈值受机器负载影响天然抖动：挂 performance 标记，
+# CI 中从 blocking 的 unit job 排除、由 advisory 的 performance job 单独跑。
+pytestmark = pytest.mark.performance
+
+
 class TestAPIResponseTime:
     """Test API response time performance."""
 
@@ -357,8 +362,11 @@ class TestCachePerformance:
 
         # Second request might be faster due to caching
         # (not guaranteed, but we check both complete quickly)
-        assert duration1 < 1.0
-        assert duration2 < 1.0
+        # pytest -n 并行下受同机负载影响，阈值可经
+        # XAGENT_PERF_THRESHOLD_MULTIPLIER 放宽（与同文件其他性能测试一致）。
+        multiplier = float(os.environ.get("XAGENT_PERF_THRESHOLD_MULTIPLIER", "1.0"))
+        assert duration1 < 1.0 * multiplier
+        assert duration2 < 1.0 * multiplier
 
 
 class TestLoadTesting:

@@ -5,6 +5,33 @@ All notable changes to X-Agent are documented in this file.
 > **版本单一事实源**: 全仓版本号以 `pyproject.toml` 的 `project.version` 为准, 当前为 **0.4.0-alpha** (Codex 能力对齐 + 前端完善)。
 > 本文件历史中出现过的一切高于 0.2.0-alpha 的版本标签 (含 1.x 系列与 0.7.x-0.9.x 标记) 均为 2026-07-19 商用审计 (`commercial_audit/00_商用交付差距审计报告.md`) 之前遗留的过程性标记, 从未对应任何实际对外发布的版本; 仓库 git 历史于 2026-07-19 fresh init, 不存在已发布 tag。
 
+## [v0.4.0-rc2] - 2026-09-05
+
+完整清单见 `RELEASE_NOTES_v0.4.0-rc2.md`。rc1 → rc2 两大批次：商用交付冲刺（测试门禁清零）+ A/B 双方向（多端入口 + 学习闭环）。
+
+### Added
+- MCP 插件真协议握手 (官方 SDK stdio: initialize→tools/list→tools/call, fail-closed 错误分层, 超时可配)
+- CLI 真流式: SSE 细粒度事件 (plan/iteration/tool_call/tool_result/approval_required) + @文件引用 + 斜杠命令 + 内联审批
+- 浏览器扩展直连后端 (设置存储/popup 对话/右键分析此页/系统通知), native messaging 静默降级
+- skill 学习闭环: 轨迹沉淀→custom-skills/ 落盘→热加载→usage 统计→低成功率自动改写新版本
+- 记忆 FTS5 全文索引 (BM25 top-50 候选 + 三层降级, 3000 条 65ms→4.7ms)
+- 调度器常驻化: cron 循环 + workflow run_due + task_queue agent.run handler; 挂载 skill_sediment/memory_advanced/scheduler 路由 (439→471)
+- 沙盒任务结果 JSONL 持久化 (重启可查)
+- 前端 vitest 测试基础设施 (90 用例) + 扩展 jest 修复 (115 用例)
+- B3 调度接线/沙盒持久化/skill 闭环/FTS/流式事件/CLI 输入 共 6 个新测试文件
+
+### Fixed
+- AGENTS.md 指令链被 fast-path 绕过 (项目规则对简单问题不生效, 产品级回归)
+- 21 个测试失败清零: 测试假件缺 response_format 参数 (9 处)、build_router 对齐商用 fail-fast、宿主环境渗入 (CORS/GITHUB_TOKEN)、todo_app Todo 模型缺默认值
+- checkpoint: 撕裂行容错加载 (此前一行损坏废掉整个 run 的崩溃恢复)、append fsync、mark_completed 不落盘、磁盘无限增长
+- /api/scheduler/queue/enqueue 调用签名 TypeError (从未可用)
+- Qdrant 空 API key 误告警; memory_fts bm25 列权重错位; ReflectionRecord 字段错配空壳
+- spike 压测并发超连接池容量 (50 线程 vs QueuePool 5+10) 导致 sqlalchemy 超时
+
+### Changed
+- CI 门禁转 blocking: unit/integration 去 continue-on-error, vitest 去 || true; 纯计时/压测 (~72 用例) 挂 performance 标记拆入 advisory job (CI 阈值放宽 2x)
+- conftest 默认关闭调度常驻循环 (单测密闭性); 仓库根目录 158 个临时产物归档/删除
+
 ## [0.4.0-alpha] - 2026-07-30
 
 ### Added
