@@ -669,8 +669,13 @@ async function api(path, opts={}) {
   const key = sessionKey || localStorage.getItem('xa_session_key') || '';
   const h = {'Content-Type':'application/json'};
   if (key) h['x-api-key'] = key;
+  // Bearer 登录会话（email/密码登录路径）：CSRF 中间件豁免 Bearer 头；
+  // 缺它则无凭证 POST 全被 403 CSRF 拦截（曾致登录用户聊天全瘫）
+  const bearer = localStorage.getItem('auth_token') || '';
+  if (!key && bearer) h['Authorization'] = 'Bearer ' + bearer;
   const r = await fetch(path, {headers:h, ...opts});
   if (!r.ok) {
+    if (r.status === 401 && !key && bearer) { localStorage.removeItem('auth_token'); location.href = '/login'; }
     let msg = r.statusText;
     try { const e = await r.json(); msg = e?.error?.message || e?.detail || msg; } catch{}
     throw new Error(msg);
