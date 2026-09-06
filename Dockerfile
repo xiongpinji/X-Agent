@@ -32,11 +32,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages into /install (isolated prefix)
-COPY requirements-lock.txt pyproject.toml ./
+# 运行时用宽松 requirements.txt（pip 按平台自解析合适版本）——requirements-lock
+# 是 Windows 环境生成的锁（pywin32/hpack 等 Linux 解析冲突，CI Docker 曾三连红），
+# 保留用于安全审计/SBOM 与本地复现，不作为跨平台安装源。
+COPY requirements.txt pyproject.toml ./
 COPY backend/ ./backend/
 COPY cli/ ./cli/
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir --prefix=/install -r requirements-lock.txt \
+    && pip install --no-cache-dir --prefix=/install -r requirements.txt \
     && pip install --no-cache-dir --prefix=/install --no-deps .
 
 # ------------------------------------------------------------------------------
