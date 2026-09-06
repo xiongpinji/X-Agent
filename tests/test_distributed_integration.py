@@ -2,6 +2,8 @@
 集成测试 - 多实例部署、重启恢复、并发访问
 """
 import pytest
+
+from tests._redis_guard import require_redis
 import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -140,6 +142,7 @@ class TestRestartRecovery:
 
     @pytest.mark.asyncio
     async def test_redis_session_recovery(self):
+        require_redis()
         """测试Redis会话恢复"""
         from backend.app.models.rate_limiter import get_rate_limiter
 

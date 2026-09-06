@@ -2,6 +2,8 @@
 单元测试 - Store类的CRUD操作
 """
 import pytest
+
+from tests._redis_guard import require_redis
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -328,6 +330,7 @@ class TestRateLimiter:
 
     @pytest.fixture
     async def rate_limiter(self):
+        require_redis()
         return RateLimiterRedis()
 
     @pytest.mark.asyncio
@@ -405,6 +408,7 @@ class TestCSRFTokenStore:
 
     @pytest.fixture
     async def csrf_token_store(self):
+        require_redis()
         return CSRFTokenStoreRedis()
 
     @pytest.mark.asyncio
