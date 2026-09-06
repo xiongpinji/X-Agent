@@ -243,8 +243,8 @@ const TenantsBillingPage: React.FC = () => {
   }
 
   const inputCls = clsx(
-    'w-full px-3 py-2 rounded-lg border text-sm',
-    isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
+    'w-full px-3 py-2 border border-[var(--divider)] bg-transparent text-sm outline-none transition-colors focus:border-[var(--fg)]',
+    isDark ? 'placeholder:text-slate-500' : 'placeholder:text-slate-400'
   )
 
   // 403 — graceful permission notice instead of a broken page
@@ -306,7 +306,7 @@ const TenantsBillingPage: React.FC = () => {
 
         {message && (
           <div className={clsx(
-            'mb-4 px-3 py-2 rounded-lg text-sm border',
+            'mb-4 px-3 py-2 border text-sm',
             message.type === 'success'
               ? 'border-[#16a34a]/30 text-[#16a34a]'
               : 'border-[#dc2626]/30 text-[#dc2626]'
@@ -363,7 +363,7 @@ const TenantsBillingPage: React.FC = () => {
                 <button
                   onClick={handleCreateTenant}
                   disabled={!newTenantName.trim()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   {t('common.create', 'Create')}
                 </button>
@@ -441,10 +441,10 @@ const TenantsBillingPage: React.FC = () => {
                   key={p}
                   onClick={() => setUsagePeriod(p)}
                   className={clsx(
-                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                    'px-3 py-1.5 border border-[var(--divider)] bg-transparent text-xs font-medium transition-colors',
                     usagePeriod === p
                       ? 'bg-blue-600 text-white'
-                      : isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                      : 'opacity-60 hover:opacity-100'
                   )}
                 >
                   {p}
@@ -677,7 +677,7 @@ const TenantsBillingPage: React.FC = () => {
               <button
                 disabled
                 className={clsx(
-                  'px-4 py-2 rounded-lg text-sm font-medium cursor-not-allowed opacity-50',
+                  'px-4 py-2 border border-[var(--divider)] bg-transparent text-sm font-medium cursor-not-allowed opacity-50',
                   isDark ? 'bg-slate-800 text-slate-400' : 'bg-white border border-slate-200 text-slate-500'
                 )}
               >
@@ -721,7 +721,7 @@ const TenantsBillingPage: React.FC = () => {
             <button
               onClick={handleSaveQuota}
               disabled={savingQuota}
-              className="mt-5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+              className="mt-5 px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
               {savingQuota ? t('common.saving', 'Saving...') : t('common.save', 'Save Changes')}
             </button>

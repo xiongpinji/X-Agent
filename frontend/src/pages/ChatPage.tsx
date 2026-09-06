@@ -511,7 +511,7 @@ export const ChatPage: React.FC = () => {
       <div className="border-t px-8 py-4" style={{ borderColor: DIVIDER }}>
         <form onSubmit={handleSendMessage} className="max-w-3xl">
           <div className={clsx(
-            'flex items-end gap-3 rounded-2xl px-4 py-3',
+            'flex items-end gap-3 px-4 py-3',
             theme === 'dark' ? 'bg-slate-900' : 'bg-[#f5f5f5]'
           )}>
             {/* File upload has no backend endpoint yet — disabled and labelled. */}

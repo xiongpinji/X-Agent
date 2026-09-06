@@ -136,7 +136,7 @@ const AgentsPage: React.FC = () => {
             </div>
             <button
               onClick={() => { resetForm(); setShowCreateModal(true) }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm font-medium"
               aria-label={t('agents.create', 'Create Agent')}
             >
               + {t('agents.create', 'Create Agent')}
@@ -146,7 +146,7 @@ const AgentsPage: React.FC = () => {
 
         {/* Error */}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm" role="alert">
+          <div className="mb-4 px-3 py-2.5 border text-[#dc2626] text-sm" role="alert" style={{ borderColor: 'rgba(220,38,38,.3)' }}>
             {error}
             <button onClick={() => setError(null)} className="ml-2 underline">{t('common.dismiss', 'Dismiss')}</button>
           </div>
@@ -219,60 +219,62 @@ const AgentsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Create/Edit Modal */}
+      {/* Create/Edit Modal — square, hairline border, no shadow */}
       {(showCreateModal || editingAgent) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
-          <div className={clsx(
-            'w-full max-w-md p-6 rounded-xl shadow-xl',
-            isDark ? 'bg-slate-900' : 'bg-white'
-          )}>
-            <h2 className="text-lg font-bold mb-4">
+          <div
+            className={clsx(
+              'w-full max-w-md p-6 border',
+              isDark ? 'bg-slate-900' : 'bg-white'
+            )}
+            style={{ borderColor: 'var(--divider)' }}
+          >
+            <h2 className="text-lg font-medium mb-4 pb-4 border-b" style={{ borderColor: 'var(--divider)' }}>
               {editingAgent ? t('agents.editTitle', 'Edit Agent') : t('agents.createTitle', 'Create Agent')}
             </h2>
 
             {/* Name */}
             <label className="block mb-4">
-              <span className="text-sm font-medium">{t('agents.name', 'Name')}</span>
+              <span className="text-[11px] uppercase tracking-[0.06em] opacity-50">{t('agents.name', 'Name')}</span>
               <input
                 type="text"
                 value={formData.name}
                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 className={clsx(
-                  'mt-1 w-full px-3 py-2 rounded-lg border text-sm',
-                  isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
+                  'mt-1.5 w-full px-3 py-2 border text-sm bg-transparent',
+                  isDark ? 'text-white' : 'text-[#333333]'
                 )}
+                style={{ borderColor: 'var(--divider)' }}
                 placeholder={t('agents.namePlaceholder', 'e.g. Research Assistant')}
               />
             </label>
 
             {/* Capabilities */}
             <label className="block mb-4">
-              <span className="text-sm font-medium">{t('agents.capabilities', 'Capabilities')}</span>
-              <div className="flex gap-2 mt-1">
+              <span className="text-[11px] uppercase tracking-[0.06em] opacity-50">{t('agents.capabilities', 'Capabilities')}</span>
+              <div className="flex gap-2 mt-1.5">
                 <input
                   type="text"
                   value={capabilityInput}
                   onChange={e => setCapabilityInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCapability() } }}
                   className={clsx(
-                    'flex-1 px-3 py-2 rounded-lg border text-sm',
-                    isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
+                    'flex-1 px-3 py-2 border text-sm bg-transparent',
+                    isDark ? 'text-white' : 'text-[#333333]'
                   )}
+                  style={{ borderColor: 'var(--divider)' }}
                   placeholder={t('agents.capabilityPlaceholder', 'e.g. web_search, code_gen')}
                 />
                 <button
                   onClick={addCapability}
-                  className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                  className="px-3 py-2 bg-blue-600 text-white text-sm hover:bg-blue-700"
                 >
                   +
                 </button>
               </div>
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 {formData.capabilities.map(cap => (
-                  <span key={cap} className={clsx(
-                    'inline-flex items-center gap-1 text-xs px-2 py-1 rounded',
-                    isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'
-                  )}>
+                  <span key={cap} className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 border" style={{ borderColor: 'var(--divider)' }}>
                     {cap}
                     <button onClick={() => removeCapability(cap)} className="hover:text-red-500" aria-label={`Remove ${cap}`}>×</button>
                   </span>
@@ -282,14 +284,15 @@ const AgentsPage: React.FC = () => {
 
             {/* Status */}
             <label className="block mb-6">
-              <span className="text-sm font-medium">{t('agents.status', 'Status')}</span>
+              <span className="text-[11px] uppercase tracking-[0.06em] opacity-50">{t('agents.status', 'Status')}</span>
               <select
                 value={formData.status}
                 onChange={e => setFormData(prev => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))}
                 className={clsx(
-                  'mt-1 w-full px-3 py-2 rounded-lg border text-sm',
-                  isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
+                  'mt-1.5 w-full px-3 py-2 border text-sm bg-transparent',
+                  isDark ? 'text-white' : 'text-[#333333]'
                 )}
+                style={{ borderColor: 'var(--divider)' }}
               >
                 <option value="active">{t('agents.active', 'Active')}</option>
                 <option value="inactive">{t('agents.inactive', 'Inactive')}</option>
@@ -297,20 +300,21 @@ const AgentsPage: React.FC = () => {
             </label>
 
             {/* Actions */}
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2 pt-4 border-t" style={{ borderColor: 'var(--divider)' }}>
               <button
                 onClick={() => { setShowCreateModal(false); setEditingAgent(null); resetForm() }}
                 className={clsx(
-                  'px-4 py-2 rounded-lg text-sm font-medium',
-                  isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  'px-4 py-2 border text-sm font-medium',
+                  isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-100'
                 )}
+                style={{ borderColor: 'var(--divider)' }}
               >
                 {t('common.cancel', 'Cancel')}
               </button>
               <button
                 onClick={editingAgent ? handleUpdate : handleCreate}
                 disabled={!formData.name.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {editingAgent ? t('common.save', 'Save') : t('agents.create', 'Create Agent')}
               </button>

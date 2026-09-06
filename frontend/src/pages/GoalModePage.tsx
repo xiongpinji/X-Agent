@@ -61,78 +61,82 @@ const GoalModePage: React.FC = () => {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">🎯 Goal Mode</h1>
-      <p className={clsx('text-sm mb-6', isDark ? 'text-slate-400' : 'text-slate-500')}>
-        {t('goals.subtitle', 'Set long-term objectives and let agents work autonomously toward them')}
-      </p>
+    <div className="min-h-full px-8 py-10">
+      <div className={clsx('max-w-4xl', isDark ? 'text-slate-200' : 'text-[#333333]')}>
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[#333333]')}
+            aria-hidden="true"
+          />
+          <h1 className="page-title">Goal Mode</h1>
+          <p className="page-subtitle">
+            {t('goals.subtitle', 'Set long-term objectives and let agents work autonomously toward them')}
+          </p>
+        </header>
 
-      {/* Create Goal */}
-      <div className="flex gap-2 mb-6">
-        <input
-          type="text"
-          value={newGoal}
-          onChange={e => setNewGoal(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && createGoal()}
-          placeholder={t('goals.placeholder', 'Describe your goal (e.g. "Refactor auth module to use JWT")')}
-          className={clsx(
-            'flex-1 px-4 py-2.5 rounded-lg border text-sm',
-            isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
-          )}
-        />
-        <button
-          onClick={createGoal}
-          disabled={!newGoal.trim() || loading}
-          className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? '...' : t('goals.create', 'Create Goal')}
-        </button>
-      </div>
+        {/* Create Goal — single input row, hairline-bordered */}
+        <div className="flex gap-2 mb-10 pb-8 border-b" style={{ borderColor: 'var(--divider)' }}>
+          <input
+            type="text"
+            value={newGoal}
+            onChange={e => setNewGoal(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && createGoal()}
+            placeholder={t('goals.placeholder', 'Describe your goal (e.g. "Refactor auth module to use JWT")')}
+            className={clsx(
+              'flex-1 px-3 py-2 border text-sm bg-transparent',
+              isDark ? 'text-white' : 'text-[#333333]'
+            )}
+            style={{ borderColor: 'var(--divider)' }}
+          />
+          <button
+            onClick={createGoal}
+            disabled={!newGoal.trim() || loading}
+            className="px-5 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {loading ? '...' : t('goals.create', 'Create Goal')}
+          </button>
+        </div>
 
-      {/* Goals List */}
-      {goals.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-4xl mb-3">🎯</p>
-          <p className={clsx('text-sm', isDark ? 'text-slate-500' : 'text-slate-400')}>
+        {/* Goals List — hairline rows, no cards */}
+        {goals.length === 0 ? (
+          <p className="empty-state">
             {t('goals.empty', 'No goals yet. Create one to start autonomous execution.')}
           </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {goals.map(goal => (
-            <div key={goal.id} className={clsx(
-              'p-4 rounded-xl border',
-              isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-            )}>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-sm">{goal.objective}</h3>
-                <span className={clsx(
-                  'text-xs px-2 py-0.5 rounded-full',
-                  goal.status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                  goal.status === 'completed' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                  'bg-slate-100 text-slate-500 dark:bg-slate-800'
-                )}>
-                  {goal.status}
-                </span>
+        ) : (
+          <div>
+            {goals.map(goal => (
+              <div key={goal.id} className="row-line">
+                <div className="flex items-center justify-between gap-4 mb-1.5">
+                  <h3 className="font-medium text-sm">{goal.objective}</h3>
+                  <span className={clsx(
+                    'badge-status whitespace-nowrap',
+                    goal.status === 'active' ? 'badge-success' :
+                    goal.status === 'completed' ? 'badge-muted' :
+                    'badge-muted'
+                  )}>
+                    {goal.status}
+                  </span>
+                </div>
+                {/* Checkpoints — text checklist */}
+                <div className="space-y-1">
+                  {(goal.checkpoints || []).map((cp, i: number) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span className={cp.done ? 'text-[#16a34a]' : 'opacity-40'}>{cp.done ? '✓' : '○'}</span>
+                      <span className="opacity-60">{cp.label}</span>
+                    </div>
+                  ))}
+                  {(!goal.checkpoints || goal.checkpoints.length === 0) && (
+                    <p className="text-xs opacity-40 italic">
+                      Decomposing goal into checkpoints...
+                    </p>
+                  )}
+                </div>
               </div>
-              {/* Checkpoints timeline */}
-              <div className="ml-2 border-l-2 border-slate-200 dark:border-slate-700 pl-3 space-y-1">
-                {(goal.checkpoints || []).map((cp, i: number) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    <span className={cp.done ? 'text-green-500' : 'text-slate-400'}>{cp.done ? '✓' : '○'}</span>
-                    <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>{cp.label}</span>
-                  </div>
-                ))}
-                {(!goal.checkpoints || goal.checkpoints.length === 0) && (
-                  <p className={clsx('text-xs italic', isDark ? 'text-slate-600' : 'text-slate-400')}>
-                    Decomposing goal into checkpoints...
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

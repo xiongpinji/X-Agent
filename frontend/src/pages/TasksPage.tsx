@@ -67,7 +67,7 @@ export const TasksPage: React.FC = () => {
             </div>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
             >
               <Plus size={16} />
               {t('tasks.newTask', 'New Task')}
@@ -196,79 +196,68 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
       aria-modal="true"
       aria-label={task.name}
     >
-      <div className={clsx(
-        'rounded-lg p-6 max-w-md w-full mx-4',
-        theme === 'dark' ? 'bg-slate-900' : 'bg-white'
-      )}>
+      <div
+        className={clsx(
+          'p-6 max-w-md w-full mx-4 border',
+          theme === 'dark' ? 'bg-slate-900' : 'bg-white'
+        )}
+        style={{ borderColor: 'var(--divider)' }}
+      >
         <h2 className={clsx(
-          'text-2xl font-bold mb-4',
+          'text-lg font-medium mb-4 pb-4 border-b',
           theme === 'dark' ? 'text-white' : 'text-slate-900'
-        )}>
+        )}
+        style={{ borderColor: 'var(--divider)' }}
+        >
           {task.name}
         </h2>
 
-        <div className="space-y-4 mb-6">
-          <div>
-            <p className={clsx(
-              'text-sm font-medium mb-1',
-              theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-            )}>
-              {t('tasks.status', 'Status')}
-            </p>
-            <p className={clsx(
-              'text-lg font-semibold capitalize',
-              task.status === 'completed' ? 'text-green-600' :
-              task.status === 'in_progress' ? 'text-blue-600' :
-              task.status === 'failed' ? 'text-red-600' :
-              'text-slate-600'
-            )}>
+        <div className="font-data text-[13px] mb-6">
+          <div className="flex items-baseline justify-between gap-4 py-2.5 border-b" style={{ borderColor: 'var(--divider)' }}>
+            <span className="opacity-50">{t('tasks.status', 'Status')}</span>
+            <span
+              className={clsx(
+                'capitalize',
+                task.status === 'completed' ? 'text-[#16a34a]' :
+                task.status === 'in_progress' ? 'text-[#2563eb]' :
+                task.status === 'failed' ? 'text-[#dc2626]' : ''
+              )}
+            >
               {task.status}
-            </p>
+            </span>
           </div>
 
-          <div>
-            <p className={clsx(
-              'text-sm font-medium mb-1',
-              theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-            )}>
-              {t('workflows.progress', 'Progress')}
-            </p>
+          <div className="py-2.5 border-b" style={{ borderColor: 'var(--divider)' }}>
+            <div className="flex items-baseline justify-between gap-4 mb-1.5">
+              <span className="opacity-50">{t('workflows.progress', 'Progress')}</span>
+              <span className="tabular-nums">{percent}%</span>
+            </div>
             <div
-              className="w-full bg-slate-200 rounded-full h-2"
+              className="w-full h-[3px]"
+              style={{ backgroundColor: 'rgba(163,169,177,.25)' }}
               role="progressbar"
               aria-valuenow={percent}
               aria-valuemin={0}
               aria-valuemax={100}
             >
               <div
-                className="bg-blue-600 h-2 rounded-full"
+                className={clsx('h-[3px]', theme === 'dark' ? 'bg-slate-300' : 'bg-[#333333]')}
                 style={{ width: `${percent}%` }}
               />
             </div>
-            <p className={clsx(
-              'text-sm mt-1',
-              theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-            )}>
-              {percent}%
-            </p>
           </div>
 
           {task.error && (
-            <div>
-              <p className={clsx(
-                'text-sm font-medium mb-1',
-                theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-              )}>
-                {t('common.error', 'Error')}
-              </p>
-              <p className="text-sm text-red-600">{task.error}</p>
+            <div className="py-2.5 border-b" style={{ borderColor: 'var(--divider)' }}>
+              <span className="opacity-50">{t('common.error', 'Error')}</span>
+              <p className="text-sm text-[#dc2626] mt-1">{task.error}</p>
             </div>
           )}
         </div>
 
         <button
           onClick={onClose}
-          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm transition-colors"
         >
           {t('common.close', 'Close')}
         </button>
@@ -307,14 +296,19 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ onClose, onCreated })
       aria-modal="true"
       aria-label={t('tasks.newTask', 'New Task')}
     >
-      <div className={clsx(
-        'rounded-lg p-6 max-w-md w-full mx-4',
-        theme === 'dark' ? 'bg-slate-900' : 'bg-white'
-      )}>
+      <div
+        className={clsx(
+          'p-6 max-w-md w-full mx-4 border',
+          theme === 'dark' ? 'bg-slate-900' : 'bg-white'
+        )}
+        style={{ borderColor: 'var(--divider)' }}
+      >
         <h2 className={clsx(
-          'text-2xl font-bold mb-4',
+          'text-lg font-medium mb-4 pb-4 border-b',
           theme === 'dark' ? 'text-white' : 'text-slate-900'
-        )}>
+        )}
+        style={{ borderColor: 'var(--divider)' }}
+        >
           {t('tasks.newTask', 'New Task')}
         </h2>
 
@@ -322,10 +316,7 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ onClose, onCreated })
           <div>
             <label
               htmlFor="task-title"
-              className={clsx(
-                'block text-sm font-medium mb-2',
-                theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-              )}
+              className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1.5"
             >
               {t('tasks.taskName', 'Task name')}
             </label>
@@ -335,21 +326,19 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ onClose, onCreated })
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className={clsx(
-                'w-full px-3 py-2 rounded-lg text-sm',
+                'w-full px-3 py-2 text-sm border',
                 theme === 'dark'
-                  ? 'bg-slate-800 text-white border border-slate-700'
-                  : 'bg-slate-50 text-slate-900 border border-slate-300'
+                  ? 'bg-transparent text-white'
+                  : 'bg-transparent text-slate-900'
               )}
+              style={{ borderColor: 'var(--divider)' }}
             />
           </div>
 
           <div>
             <label
               htmlFor="task-description"
-              className={clsx(
-                'block text-sm font-medium mb-2',
-                theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-              )}
+              className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1.5"
             >
               {t('tasks.description', 'Description')}
             </label>
@@ -358,11 +347,12 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ onClose, onCreated })
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className={clsx(
-                'w-full px-3 py-2 rounded-lg text-sm',
+                'w-full px-3 py-2 text-sm border',
                 theme === 'dark'
-                  ? 'bg-slate-800 text-white border border-slate-700'
-                  : 'bg-slate-50 text-slate-900 border border-slate-300'
+                  ? 'bg-transparent text-white'
+                  : 'bg-transparent text-slate-900'
               )}
+              style={{ borderColor: 'var(--divider)' }}
               rows={4}
             />
           </div>
@@ -372,18 +362,19 @@ const CreateTaskModal: React.FC<CreateTaskModalProps> = ({ onClose, onCreated })
           <button
             onClick={onClose}
             className={clsx(
-              'flex-1 px-4 py-2 rounded-lg font-medium transition-colors',
+              'flex-1 px-4 py-2 border font-medium text-sm transition-colors',
               theme === 'dark'
-                ? 'bg-slate-700 hover:bg-slate-600 text-white'
-                : 'bg-slate-200 hover:bg-slate-300 text-slate-900'
+                ? 'text-slate-300 hover:bg-slate-800'
+                : 'text-slate-700 hover:bg-slate-100'
             )}
+            style={{ borderColor: 'var(--divider)' }}
           >
             {t('common.cancel', 'Cancel')}
           </button>
           <button
             onClick={handleCreate}
             disabled={isLoading || !title.trim()}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm transition-colors disabled:opacity-50"
           >
             {isLoading ? t('common.loading', 'Loading...') : t('common.create', 'Create')}
           </button>

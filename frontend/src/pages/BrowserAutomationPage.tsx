@@ -71,7 +71,7 @@ export const BrowserAutomationPage: React.FC = () => {
         {backendUnavailable && (
           <div
             role="alert"
-            className="mb-6 rounded-lg border border-[#d97706]/30 px-4 py-3 text-sm text-[#d97706] flex items-start justify-between gap-4"
+            className="mb-6 border border-[#d97706]/30 px-4 py-3 text-sm text-[#d97706] flex items-start justify-between gap-4"
           >
             <span>
               <strong>{t('automation.unavailable', 'Browser backend unavailable')}</strong>
@@ -142,21 +142,16 @@ const ActionButton: React.FC<{
   danger?: boolean
   primary?: boolean
 }> = ({ onClick, busy, disabled, icon, children, danger, primary }) => {
-  const { theme } = useAppStore()
   const { t } = useI18n()
   return (
     <button
       onClick={onClick}
       disabled={busy || disabled}
       className={clsx(
-        'flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
+        'flex items-center justify-center gap-2 px-3 py-2 border text-sm font-medium transition-colors disabled:opacity-50',
         primary
-          ? 'bg-blue-600 hover:bg-blue-700 text-white'
-          : danger
-            ? 'text-[#dc2626] ' + (theme === 'dark' ? 'bg-slate-800 hover:bg-slate-700' : 'bg-white border border-slate-200 hover:bg-slate-100')
-            : theme === 'dark'
-              ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-              : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+          ? 'bg-blue-600 hover:bg-blue-700 text-white border-transparent'
+          : clsx('border-[var(--divider)] bg-transparent hover:bg-[var(--hover)]', danger && 'text-[#dc2626]')
       )}
     >
       {icon}
@@ -179,10 +174,8 @@ const TextInput: React.FC<{
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       className={clsx(
-        'w-full px-3 py-2 rounded-lg text-sm border outline-none',
-        theme === 'dark'
-          ? 'bg-slate-800 border-slate-700 text-slate-100 placeholder-slate-500'
-          : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+        'w-full px-3 py-2 border border-[var(--divider)] bg-transparent text-sm outline-none transition-colors focus:border-[var(--fg)]',
+        theme === 'dark' ? 'placeholder:text-slate-500' : 'placeholder:text-slate-400'
       )}
     />
   )
@@ -194,7 +187,7 @@ const ResultBox: React.FC<{ result: string | null; error?: boolean }> = ({ resul
     <pre
       role="status"
       className={clsx(
-        'mt-3 rounded-lg border px-3 py-2 text-xs whitespace-pre-wrap break-words max-h-64 overflow-auto cell-data',
+        'mt-3 border px-3 py-2 text-xs whitespace-pre-wrap break-words max-h-64 overflow-auto cell-data',
         error
           ? 'border-[#dc2626]/30 text-[#dc2626]'
           : 'border-[rgba(163,169,177,.25)] opacity-80'
@@ -372,7 +365,7 @@ const SessionsTab: React.FC<{ on503: (e: unknown) => boolean; unavailable: boole
               <img
                 src={screenshotSrc}
                 alt={t('automation.screenshot', 'Screenshot')}
-                className="rounded-lg border max-w-full"
+                className="border max-w-full"
                 style={{ borderColor: DIVIDER }}
               />
             )}

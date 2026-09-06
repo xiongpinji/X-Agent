@@ -34,7 +34,7 @@ export function NavigationOverviewPage(props: NavigationOverviewPageProps) {
         <div className="console-summary-line">快捷摘要：{props.linkedShortcutsSummary?.summary?.title ?? "quick shortcuts"} · {String((props.linkedShortcutsSummary?.data && Object.keys(props.linkedShortcutsSummary.data).length) || 0)} 个快捷项</div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="console-kpi-row">
         <StatCard label="最近访问" value={String(recentPages.length)} />
         <StatCard label="常用入口" value={String(favoritePages.length)} />
         <StatCard label="搜索可用" value={searchEnabled ? "是" : "否"} />
@@ -46,7 +46,7 @@ export function NavigationOverviewPage(props: NavigationOverviewPageProps) {
         <Panel title="最近访问">
           <div className="space-y-2 text-sm text-gray-600">
             {recentPages.map((page) => (
-              <button key={page} className="w-full rounded-lg border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenPage?.(page)}>{page}</button>
+              <button key={page} className="w-full border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenPage?.(page)}>{page}</button>
             ))}
           </div>
         </Panel>
@@ -54,7 +54,7 @@ export function NavigationOverviewPage(props: NavigationOverviewPageProps) {
         <Panel title="常用入口">
           <div className="space-y-2 text-sm text-gray-600">
             {favoritePages.map((page) => (
-              <button key={page} className="w-full rounded-lg border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenPage?.(page)}>{page}</button>
+              <button key={page} className="w-full border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenPage?.(page)}>{page}</button>
             ))}
           </div>
         </Panel>
@@ -65,16 +65,13 @@ export function NavigationOverviewPage(props: NavigationOverviewPageProps) {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="text-sm text-gray-500">{label}</div>
-      <div className="mt-2 text-2xl font-bold text-gray-900">{value}</div>
-    </div>
+    <div className="console-kpi"><span className="kpi-label">{label}</span><span className="kpi-value">{value}</span></div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-white p-4 shadow-sm">
+    <section className="console-section">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>

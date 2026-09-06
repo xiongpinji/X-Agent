@@ -128,8 +128,7 @@ export const ObservabilityPage: React.FC = () => {
   }, [metrics, t])
 
   const ghostBtnCls = clsx(
-    'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+    'flex items-center gap-2 px-3 py-2 border border-[var(--divider)] bg-transparent text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50'
   )
 
   return (

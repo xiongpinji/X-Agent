@@ -79,10 +79,7 @@ export const ApprovalsPage: React.FC = () => {
             <button
               onClick={loadApprovals}
               disabled={isLoading}
-              className={clsx(
-                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-              )}
+              className="flex items-center gap-2 px-3 py-2 border border-[var(--divider)] text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50"
               aria-label={t('common.refresh', 'Refresh')}
             >
               <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
@@ -94,10 +91,7 @@ export const ApprovalsPage: React.FC = () => {
         {loadError && (
           <div
             role="alert"
-            className={clsx(
-              'mb-6 rounded-lg border px-4 py-3 text-sm',
-              theme === 'dark' ? 'border-red-900 bg-red-950/40 text-red-300' : 'border-red-200 bg-red-50 text-red-700'
-            )}
+            className="mb-6 border px-4 py-3 text-sm border-[#dc2626]/40 text-[#dc2626]"
           >
             {loadError}
           </div>
@@ -178,7 +172,6 @@ function formatTime(value: string | null | undefined): string {
 }
 
 const PendingCard: React.FC<{ record: ApprovalRecord; onDecided: () => void }> = ({ record, onDecided }) => {
-  const { theme } = useAppStore()
   const { t } = useI18n()
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -238,7 +231,7 @@ const PendingCard: React.FC<{ record: ApprovalRecord; onDecided: () => void }> =
         </div>
         <button
           onClick={() => setExpanded((v) => !v)}
-          className={clsx('p-1.5 rounded-md transition-colors', theme === 'dark' ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-100')}
+          className="p-1.5 opacity-50 hover:opacity-100 hover:bg-[var(--hover)] transition-colors"
           aria-label={t('approvals.toggleDetail', 'Toggle details')}
         >
           {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -246,21 +239,18 @@ const PendingCard: React.FC<{ record: ApprovalRecord; onDecided: () => void }> =
       </div>
 
       {expanded && (
-        <pre className={clsx(
-          'mb-3 rounded-md p-3 text-xs overflow-auto max-h-48',
-          theme === 'dark' ? 'bg-slate-950 text-slate-300 border border-slate-800' : 'bg-slate-50 text-slate-700 border border-slate-200'
-        )}>
+        <pre className="mb-3 p-3 border border-[var(--divider)] text-xs overflow-auto max-h-48">
           {JSON.stringify({ arguments_preview: record.arguments_preview, trace_id: record.trace_id }, null, 2)}
         </pre>
       )}
 
       {actionError && (
-        <div role="alert" className={clsx('mb-3 rounded-md border px-3 py-2 text-xs', theme === 'dark' ? 'border-red-900 bg-red-950/40 text-red-300' : 'border-red-200 bg-red-50 text-red-700')}>
+        <div role="alert" className="mb-3 border px-3 py-2 text-xs border-[#dc2626]/40 text-[#dc2626]">
           {actionError}
         </div>
       )}
       {actionResult && (
-        <div role="status" className={clsx('mb-3 rounded-md border px-3 py-2 text-xs', theme === 'dark' ? 'border-green-900 bg-green-950/40 text-green-300' : 'border-green-200 bg-green-50 text-green-700')}>
+        <div role="status" className="mb-3 border px-3 py-2 text-xs border-[#16a34a]/40 text-[#16a34a]">
           {actionResult}
         </div>
       )}
@@ -272,17 +262,14 @@ const PendingCard: React.FC<{ record: ApprovalRecord; onDecided: () => void }> =
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder={t('approvals.reasonPlaceholder', 'Decision reason (optional)')}
-          className={clsx(
-            'flex-1 px-3 py-2 rounded-lg text-sm border outline-none',
-            theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
-          )}
+          className="flex-1 px-3 py-2 text-sm border border-[var(--divider)] bg-transparent"
           aria-label={t('approvals.decisionReason', 'Decision reason')}
         />
         <div className="flex gap-2">
           <button
             onClick={() => decide('approve')}
             disabled={busy}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#16a34a] border border-current hover:bg-[var(--hover)] transition-colors disabled:opacity-50"
             aria-label={t('approvals.approve', 'Approve')}
           >
             <Check size={16} />
@@ -291,7 +278,7 @@ const PendingCard: React.FC<{ record: ApprovalRecord; onDecided: () => void }> =
           <button
             onClick={() => decide('reject')}
             disabled={busy}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#dc2626] border border-current hover:bg-[var(--hover)] transition-colors disabled:opacity-50"
             aria-label={t('approvals.reject', 'Reject')}
           >
             <X size={16} />
@@ -302,10 +289,7 @@ const PendingCard: React.FC<{ record: ApprovalRecord; onDecided: () => void }> =
             disabled
             title={`${t('approvals.execute', 'Execute')} (${t('approvals.executeAfterApprove', 'available after approval')})`}
             aria-label={t('approvals.execute', 'Execute')}
-            className={clsx(
-              'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed',
-              theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
-            )}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-[var(--divider)] opacity-50 cursor-not-allowed"
           >
             <Play size={16} />
             {t('approvals.execute', 'Execute')}

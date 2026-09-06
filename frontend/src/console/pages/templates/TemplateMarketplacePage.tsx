@@ -35,7 +35,7 @@ export function TemplateMarketplacePage({ onSelectTemplate: _onSelectTemplate }:
   return (
     <div className="space-y-6">
       {/* Header */}
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+      <section className="console-section">
         <h1 className="text-3xl font-bold mb-2">模板市场</h1>
         <p className="text-gray-600">
           发现和使用预构建的工作流模板，加速自动化落地
@@ -52,19 +52,19 @@ export function TemplateMarketplacePage({ onSelectTemplate: _onSelectTemplate }:
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             disabled={TEMPLATE_MARKET_OFFLINE}
-            className="flex-1 rounded-lg border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+            className="flex-1 border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
           />
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             disabled={TEMPLATE_MARKET_OFFLINE}
-            className="rounded-lg border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+            className="border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
           >
             <option value="">全部分类</option>
           </select>
           <button
             disabled={TEMPLATE_MARKET_OFFLINE}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            className="border border-gray-300 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             切换视图
           </button>
@@ -73,11 +73,11 @@ export function TemplateMarketplacePage({ onSelectTemplate: _onSelectTemplate }:
 
       {/* Templates（离线空态） */}
       <section>
-        <div className="rounded-2xl border border-dashed bg-white py-16 text-center">
+        <div className="empty-state text-center">
           <p className="text-gray-600">模板市场暂未上线，暂无可用模板。</p>
           <button
             disabled={TEMPLATE_MARKET_OFFLINE}
-            className="mt-4 rounded-lg bg-blue-600 px-6 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-4 bg-blue-600 px-6 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             使用模板
           </button>

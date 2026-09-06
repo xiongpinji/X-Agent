@@ -207,7 +207,7 @@ export const FeedbackList: React.FC<FeedbackListProps> = ({
               role="button"
               tabIndex={0}
               className={clsx(
-                'p-4 rounded-lg border transition-all hover:shadow-md cursor-pointer',
+                'p-4 border-b transition-colors hover:bg-[var(--hover)] cursor-pointer',
                 theme === 'dark'
                   ? 'bg-slate-800 border-slate-700 hover:border-slate-600'
                   : 'bg-white border-slate-200 hover:border-slate-300'

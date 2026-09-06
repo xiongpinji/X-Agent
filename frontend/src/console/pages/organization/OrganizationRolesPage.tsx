@@ -55,11 +55,11 @@ export function OrganizationRolesPage(props: OrganizationRolesPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+      <section className="console-section">
         <h2 className="text-lg font-semibold">角色与权限</h2>
         <p className="text-sm text-gray-500">查看角色模板、权限绑定和启用状态。</p>
       </section>
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="console-kpi-row">
         <StatCard label="角色总数" value={String(totalRoles)} />
         <StatCard label="活跃角色" value={String(activeRoles)} />
         <StatCard label="待审核" value={String(pendingRoles)} />
@@ -77,5 +77,5 @@ export function OrganizationRolesPage(props: OrganizationRolesPageProps) {
     </div>
   );
 }
-function StatCard({ label, value }: { label: string; value: string }) { return <div className="rounded-2xl border bg-white p-4 shadow-sm"><div className="text-sm text-gray-500">{label}</div><div className="mt-2 text-xl font-bold">{value}</div></div>; }
-function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <section className="rounded-2xl border bg-white p-4 shadow-sm"><h3 className="font-semibold">{title}</h3><div className="mt-3">{children}</div></section>; }
+function StatCard({ label, value }: { label: string; value: string }) { return <div className="console-kpi"><span className="kpi-label">{label}</span><span className="kpi-value">{value}</span></div>; }
+function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <section className="console-section"><h3 className="font-semibold">{title}</h3><div className="mt-3">{children}</div></section>; }

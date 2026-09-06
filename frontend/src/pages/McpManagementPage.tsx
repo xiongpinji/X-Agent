@@ -29,14 +29,11 @@ export const McpManagementPage: React.FC = () => {
   const [tab, setTab] = useState<TabKey>('servers')
 
   const input = clsx(
-    'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors',
-    theme === 'dark'
-      ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-500 focus:border-blue-500'
-      : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-500'
+    'w-full px-3 py-2 border text-sm bg-transparent border-[var(--divider)]'
   )
   const errBox = clsx(
-    'mb-6 rounded-lg border px-4 py-3 text-sm',
-    'border-[#dc2626]/30 text-[#dc2626]'
+    'mb-6 border px-4 py-3 text-sm',
+    'border-[#dc2626]/40 text-[#dc2626]'
   )
 
   const tabs: Array<{ key: TabKey; label: string }> = [
@@ -109,9 +106,8 @@ interface TabProps {
   setError: (e: string | null) => void
 }
 
-const ghostBtn = (theme: 'light' | 'dark') => clsx(
-  'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-  theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+const ghostBtn = clsx(
+  'flex items-center gap-2 px-3 py-2 border border-[var(--divider)] text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50'
 )
 
 // ─── Servers tab ─────────────────────────────────────────────────────────────
@@ -238,7 +234,7 @@ const ServersTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
           <button
             onClick={load}
             disabled={loading}
-            className={ghostBtn(theme)}
+            className={ghostBtn}
             aria-label={t('common.refresh', 'Refresh')}
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -246,7 +242,7 @@ const ServersTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
           </button>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
           >
             <Plus size={16} />
             {t('mcp.addServer', 'Add Server')}
@@ -255,7 +251,7 @@ const ServersTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
       </div>
 
       {!mcpEnabled && (
-        <div className="mb-4 rounded-lg border border-[#d97706]/30 px-4 py-3 text-sm text-[#d97706]">
+        <div className="mb-4 border border-[#d97706]/40 px-4 py-3 text-sm text-[#d97706]">
           {t('mcp.disabled', 'MCP manager not initialized (XAGENT_MCP_ENABLED=false or no config)')}
         </div>
       )}
@@ -279,7 +275,7 @@ const ServersTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
               disabled
               title={`${t('mcp.removeServer', 'Remove')} (${comingSoon})`}
               aria-label={`${t('mcp.removeServer', 'Remove')} (${comingSoon})`}
-              className={clsx(ghostBtn(theme), 'opacity-50 cursor-not-allowed shrink-0')}
+              className={clsx(ghostBtn, 'opacity-50 cursor-not-allowed shrink-0')}
             >
               <Trash2 size={16} />
               {t('mcp.removeServer', 'Remove')} ({comingSoon})
@@ -336,10 +332,13 @@ const ServersTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
       {/* Add server modal */}
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-          <div className={clsx(
-            'rounded-lg p-6 border w-full max-w-lg max-h-[90vh] overflow-y-auto',
-            theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-          )}>
+          <div
+            className={clsx(
+              'p-6 border w-full max-w-lg max-h-[90vh] overflow-y-auto',
+              theme === 'dark' ? 'bg-slate-900' : 'bg-white'
+            )}
+            style={{ borderColor: 'var(--divider)' }}
+          >
             <h3 className="text-lg font-medium mb-4">{t('mcp.addServer', 'Add Server')}</h3>
             <div className="space-y-3">
               <div>
@@ -389,17 +388,14 @@ const ServersTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
               <button
                 onClick={() => setShowAdd(false)}
                 disabled={busy}
-                className={clsx(
-                  'flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                  theme === 'dark' ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                )}
+                className="flex-1 px-4 py-2 border border-[var(--divider)] text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
               <button
                 onClick={handleConnect}
                 disabled={busy || !form.name.trim()}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
               >
                 {busy ? t('common.loading', 'Loading...') : t('mcp.connect', 'Connect')}
               </button>
@@ -413,7 +409,7 @@ const ServersTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
 
 // ─── Tools tab ───────────────────────────────────────────────────────────────
 
-const ToolsTab: React.FC<TabProps> = ({ theme, errBox, setError }) => {
+const ToolsTab: React.FC<TabProps> = ({ errBox, setError }) => {
   const { t } = useI18n()
   const [legacyTools, setLegacyTools] = useState<McpLegacyTool[]>([])
   const [discovered, setDiscovered] = useState<McpDiscoveredTool[]>([])
@@ -469,7 +465,7 @@ const ToolsTab: React.FC<TabProps> = ({ theme, errBox, setError }) => {
         <button
           onClick={load}
           disabled={loading}
-          className={ghostBtn(theme)}
+          className={ghostBtn}
           aria-label={t('common.refresh', 'Refresh')}
         >
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -507,10 +503,10 @@ const ToolsTab: React.FC<TabProps> = ({ theme, errBox, setError }) => {
                   </p>
                   {invokeResult?.key === key && (
                     <pre className={clsx(
-                      'mb-3 rounded-lg border px-3 py-2 text-xs overflow-x-auto whitespace-pre-wrap break-all',
+                      'mb-3 border px-3 py-2 text-xs overflow-x-auto whitespace-pre-wrap break-all',
                       invokeResult.ok
-                        ? 'border-[#16a34a]/30 text-[#16a34a]'
-                        : 'border-[#dc2626]/30 text-[#dc2626]'
+                        ? 'border-[#16a34a]/40 text-[#16a34a]'
+                        : 'border-[#dc2626]/40 text-[#dc2626]'
                     )} role="status">
                       {invokeResult.text}
                     </pre>
@@ -518,7 +514,7 @@ const ToolsTab: React.FC<TabProps> = ({ theme, errBox, setError }) => {
                   <button
                     onClick={() => handleInvoke(tool)}
                     disabled={busyKey === key}
-                    className={ghostBtn(theme)}
+                    className={ghostBtn}
                   >
                     <PlugZap size={16} />
                     {busyKey === key ? t('common.loading', 'Loading...') : t('mcp.invoke', 'Invoke (no args)')}
@@ -566,7 +562,7 @@ const ToolsTab: React.FC<TabProps> = ({ theme, errBox, setError }) => {
 
 // ─── Health & Audit tab ──────────────────────────────────────────────────────
 
-const HealthTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
+const HealthTab: React.FC<TabProps> = ({ input, errBox, setError }) => {
   const { t } = useI18n()
   const [health, setHealth] = useState<McpHealthResponse | null>(null)
   const [status, setStatus] = useState<McpStatusResponse | null>(null)
@@ -668,7 +664,7 @@ const HealthTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
         <button
           onClick={loadHealth}
           disabled={loading}
-          className={ghostBtn(theme)}
+          className={ghostBtn}
           aria-label={t('common.refresh', 'Refresh')}
         >
           <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />

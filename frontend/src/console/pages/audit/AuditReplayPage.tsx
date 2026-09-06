@@ -67,16 +67,16 @@ export function AuditReplayPage(props: AuditReplayPageProps) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <main className="rounded-2xl border bg-white p-4 shadow-sm">
+      <main className="console-section">
         <header className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">统一审计面板</h2>
             <p className="text-sm text-gray-500">查看关键事件、风险提示、恢复建议与消息回放。</p>
           </div>
-          <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onSelectMessage?.(props.selectedMessageId ?? props.realtime.messages[0]?.message_id ?? "")}>返回当前</button>
+          <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onSelectMessage?.(props.selectedMessageId ?? props.realtime.messages[0]?.message_id ?? "")}>返回当前</button>
         </header>
 
-        <section className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <section className="console-kpi-row mt-4">
           <StatCard label="总消息数" value={String(props.realtime.messages.length)} />
           <StatCard label="对话数" value={String(props.realtime.conversations.length)} />
           <StatCard label="在线智能体" value={String(props.realtime.online_agents.length)} />
@@ -86,16 +86,16 @@ export function AuditReplayPage(props: AuditReplayPageProps) {
 
         <section className="mt-4">
           <Panel title="风险告警列表">
-            <div className="grid gap-2 md:grid-cols-2">
+            <div>
               {alerts.map((alert) => (
-                <div key={`${alert.source}-${alert.title}`} className="rounded-xl border p-3">
+                <div key={`${alert.source}-${alert.title}`} className="border-b px-3 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-medium">{alert.title}</div>
                     <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] text-gray-600">{alert.level}</span>
                   </div>
                   <div className="mt-2 text-sm text-gray-600">{alert.description}</div>
                   <div className="mt-3 text-xs text-gray-500">来源：{alert.source}</div>
-                  <button className="mt-3 rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenAction?.(alert.actionKey)}>{alert.actionLabel}</button>
+                  <button className="mt-3 border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenAction?.(alert.actionKey)}>{alert.actionLabel}</button>
                 </div>
               ))}
             </div>
@@ -108,7 +108,7 @@ export function AuditReplayPage(props: AuditReplayPageProps) {
         <section className="mt-4"><AuditTrailPanel envelope={props.envelope ?? null} auditSummary={auditSummary} realtime={props.realtime} /></section>
       </main>
 
-      <aside className="space-y-4 rounded-2xl border bg-white p-4 shadow-sm">
+      <aside className="console-section space-y-4">
         <RecoveryPanel memory={props.memory} />
         <RelatedSystemsPanel />
         <EventDetailDrawer selectedMessage={selectedMessage} selectedMessageId={props.selectedMessageId} />
@@ -119,16 +119,13 @@ export function AuditReplayPage(props: AuditReplayPageProps) {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="text-sm text-gray-500">{label}</div>
-      <div className="mt-2 text-2xl font-bold text-gray-900">{value}</div>
-    </div>
+    <div className="console-kpi"><span className="kpi-label">{label}</span><span className="kpi-value">{value}</span></div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border p-4">
+    <section className="console-section">
       <h3 className="font-semibold">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>
@@ -143,7 +140,7 @@ function TraceSummaryCard({ envelope, traceSummary, dispatch }: { envelope: Link
     task?: string;
   } | null;
   return (
-    <section className="rounded-2xl border p-4">
+    <section className="console-section">
       <h3 className="font-semibold">Trace 概览</h3>
       {summary ? (
         <div className="mt-3 space-y-2 text-sm text-gray-600">
@@ -169,7 +166,7 @@ function TraceSummaryCard({ envelope, traceSummary, dispatch }: { envelope: Link
 
 function ReplayTimeline({ envelope: _envelope, traceSummary: _traceSummary, messages, selectedMessageId, onSelectMessage }: { envelope: LinkedSummaryEnvelope | null; traceSummary: { trace_id?: string; event_count?: number; last_event?: string; task?: string } | null; messages: RealtimeMessage[]; selectedMessageId?: string | null; onSelectMessage?: (messageId: string) => void; }) {
   return (
-    <section className="rounded-2xl border p-4">
+    <section className="console-section">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">消息回放</h3>
         <div className="text-xs text-gray-500">共 {messages.length} 条</div>
@@ -180,7 +177,7 @@ function ReplayTimeline({ envelope: _envelope, traceSummary: _traceSummary, mess
           return (
             <button
               key={msg.message_id}
-              className={`w-full rounded-xl border px-3 py-2 text-left transition hover:bg-gray-50 ${isSelected ? "border-blue-500 bg-blue-50" : ""}`}
+              className={`w-full border-b px-3 py-2 text-left transition hover:bg-gray-50 ${isSelected ? "border-blue-500 bg-blue-50" : ""}`}
               onClick={() => onSelectMessage?.(msg.message_id)}
             >
               <div className="flex items-center justify-between text-xs text-gray-500">
@@ -206,11 +203,11 @@ function ReplayTimeline({ envelope: _envelope, traceSummary: _traceSummary, mess
 function DecisionPathPanel({ envelope: _envelope, auditSummary, dispatch }: { envelope: LinkedSummaryEnvelope | null; auditSummary: { count?: number; by_action?: Record<string, number>; by_resource_type?: Record<string, number>; by_outcome?: Record<string, number> } | null; dispatch: DispatchResult | null }) {
   const actionSummary = auditSummary?.by_action ? Object.entries(auditSummary.by_action).slice(0, 4) : [];
   return (
-    <section className="rounded-2xl border p-4">
+    <section className="console-section">
       <h3 className="font-semibold">决策路径</h3>
       <div className="mt-3 space-y-2">
         {dispatch?.suggestion.decision_path?.length ? dispatch.suggestion.decision_path.map((step) => (
-          <div key={`${step.step}-${step.name}`} className="rounded-xl border px-3 py-2 text-sm">
+          <div key={`${step.step}-${step.name}`} className="border-b px-3 py-2 text-sm">
             <div className="font-medium">{step.name}</div>
             <div className="text-xs text-gray-500">{step.reason}</div>
             <div className="mt-1 text-xs text-gray-400">置信度：{step.confidence}</div>
@@ -219,7 +216,7 @@ function DecisionPathPanel({ envelope: _envelope, auditSummary, dispatch }: { en
           <div className="text-sm text-gray-500">暂无决策路径</div>
         )}
         {actionSummary.length ? (
-          <div className="mt-3 rounded-xl border bg-gray-50 p-3 text-xs text-gray-600">
+          <div className="mt-3 border bg-gray-50 p-3 text-xs text-gray-600">
             <div className="font-medium text-gray-700">审计动作分布</div>
             <div className="mt-2 space-y-1">
               {actionSummary.map(([action, count]) => (
@@ -238,12 +235,12 @@ function DecisionPathPanel({ envelope: _envelope, auditSummary, dispatch }: { en
 
 function AuditTrailPanel({ envelope: _envelope, auditSummary: _auditSummary, realtime }: { envelope: LinkedSummaryEnvelope | null; auditSummary: { count?: number; by_action?: Record<string, number>; by_resource_type?: Record<string, number>; by_outcome?: Record<string, number> } | null; realtime: RealtimeSnapshot }) {
   return (
-    <section className="rounded-2xl border p-4">
+    <section className="console-section">
       <h3 className="font-semibold">审计轨迹</h3>
-      <div className="mt-3 grid gap-2 md:grid-cols-3 text-sm text-gray-600">
-        <div className="rounded-xl border px-3 py-2">会话数：{realtime.conversations.length}</div>
-        <div className="rounded-xl border px-3 py-2">消息数：{realtime.messages.length}</div>
-        <div className="rounded-xl border px-3 py-2">在线智能体：{realtime.online_agents.length}</div>
+      <div className="console-kpi-row mt-3 text-sm text-gray-600">
+        <div className="console-kpi"><span className="kpi-label">会话数</span><span className="kpi-value">{realtime.conversations.length}</span></div>
+        <div className="console-kpi"><span className="kpi-label">消息数</span><span className="kpi-value">{realtime.messages.length}</span></div>
+        <div className="console-kpi"><span className="kpi-label">在线智能体</span><span className="kpi-value">{realtime.online_agents.length}</span></div>
       </div>
     </section>
   );
@@ -253,7 +250,7 @@ function RecoveryPanel({ memory }: { memory: MemorySnapshot }) {
   return (
     <section>
       <h3 className="font-semibold">恢复建议</h3>
-      <div className="mt-3 rounded-xl border p-3 text-sm text-gray-600">
+      <div className="mt-3 border p-3 text-sm text-gray-600">
         记忆引用数：{memory.memory_refs.length}
         <br />
         层级统计：{Object.keys(memory.layer_totals).length}
@@ -269,7 +266,7 @@ function RelatedSystemsPanel() {
       <h3 className="font-semibold">关联系统</h3>
       <div className="mt-3 space-y-2">
         {systems.map((item) => (
-          <div key={item} className="rounded-xl border px-3 py-2 text-sm text-gray-600">
+          <div key={item} className="border-b px-3 py-2 text-sm text-gray-600">
             {item}
           </div>
         ))}
@@ -282,7 +279,7 @@ function EventDetailDrawer({ selectedMessageId, selectedMessage }: { selectedMes
   return (
     <section>
       <h3 className="font-semibold">事件详情</h3>
-      <div className="mt-3 rounded-xl border p-3 text-sm text-gray-600">
+      <div className="mt-3 border p-3 text-sm text-gray-600">
         {selectedMessage ? (
           <div className="space-y-2">
             <div className="font-medium">{selectedMessage.sender_name}</div>

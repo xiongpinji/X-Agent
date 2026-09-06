@@ -55,12 +55,12 @@ export function MarketplaceManagementPage(props: MarketplaceManagementPageProps)
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+      <section className="console-section">
         <h2 className="text-lg font-semibold">安装 / 启用管理</h2>
         <p className="text-sm text-gray-500">管理能力条目的安装、启用和审核流程。</p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="console-kpi-row">
         <StatCard label="待变更" value={String(pendingChanges)} />
         <StatCard label="已发布变更" value={String(publishedChanges)} />
         <StatCard label="已安装变更" value={String(installedChanges)} />
@@ -82,16 +82,13 @@ export function MarketplaceManagementPage(props: MarketplaceManagementPageProps)
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="text-sm text-gray-500">{label}</div>
-      <div className="mt-2 text-2xl font-bold text-gray-900">{value}</div>
-    </div>
+    <div className="console-kpi"><span className="kpi-label">{label}</span><span className="kpi-value">{value}</span></div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-white p-4 shadow-sm">
+    <section className="console-section">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>

@@ -149,9 +149,9 @@ const PluginMarket: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gray-50">
       {/* 头部 */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
+      <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">插件市场</h1>
           <p className="text-gray-600">发现和安装强大的插件，扩展X-Agent的功能</p>
@@ -168,7 +168,7 @@ const PluginMarket: React.FC = () => {
               placeholder="搜索插件..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -176,12 +176,12 @@ const PluginMarket: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* 左侧边栏 - 分类（前端聚合） */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-sm p-6 sticky top-4">
+            <div className="sticky top-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">分类</h2>
               <div className="space-y-2">
                 <button
                   onClick={() => setSelectedCategory(null)}
-                  className={`w-full text-left px-4 py-2 rounded-lg transition ${
+                  className={`w-full text-left px-4 py-2 transition ${
                     selectedCategory === null
                       ? 'bg-blue-100 text-blue-900 font-semibold'
                       : 'text-gray-700 hover:bg-gray-100'
@@ -193,7 +193,7 @@ const PluginMarket: React.FC = () => {
                   <button
                     key={cat.id}
                     onClick={() => setSelectedCategory(cat.id)}
-                    className={`w-full text-left px-4 py-2 rounded-lg transition flex items-center justify-between ${
+                    className={`w-full text-left px-4 py-2 transition flex items-center justify-between${
                       selectedCategory === cat.id
                         ? 'bg-blue-100 text-blue-900 font-semibold'
                         : 'text-gray-700 hover:bg-gray-100'
@@ -211,7 +211,7 @@ const PluginMarket: React.FC = () => {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="rating">评分最高</option>
                   <option value="downloads">下载最多</option>
@@ -243,7 +243,7 @@ const PluginMarket: React.FC = () => {
                     <p className="text-gray-600">未找到插件</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="divide-y">
                     {plugins.map((plugin) => (
                       <PluginCard
                         key={plugin.plugin_id}
@@ -281,7 +281,7 @@ const PluginCard: React.FC<PluginCardProps> = ({
   installing,
 }) => {
   return (
-    <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition overflow-hidden">
+    <div className="transition">
       {/* 卡片头部 */}
       <div
         role="button"
@@ -323,17 +323,17 @@ const PluginCard: React.FC<PluginCardProps> = ({
       </div>
 
       {/* 卡片底部 - 操作按钮 */}
-      <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex gap-2">
+      <div className="px-6 py-4 border-t border-gray-200 flex gap-2">
         <button
           onClick={onSelect}
-          className="flex-1 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition text-sm font-medium"
+          className="flex-1 px-4 py-2 text-blue-600 hover:bg-blue-50 transition text-sm font-medium"
         >
           查看详情
         </button>
         {plugin.is_installed ? (
           <button
             onClick={() => onUninstall(plugin.plugin_id)}
-            className="flex-1 px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition text-sm font-medium"
+            className="flex-1 px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 transition text-sm font-medium"
           >
             卸载
           </button>
@@ -341,7 +341,7 @@ const PluginCard: React.FC<PluginCardProps> = ({
           <button
             onClick={() => onInstall(plugin.plugin_id)}
             disabled={installing}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 transition text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {installing ? (
               <>
@@ -379,7 +379,7 @@ const PluginDetail: React.FC<PluginDetailProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'permissions' | 'reviews'>('overview');
 
   return (
-    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+    <div className="border-y">
       {/* 头部 */}
       <div className="p-6 border-b border-gray-200">
         <button
@@ -404,7 +404,7 @@ const PluginDetail: React.FC<PluginDetailProps> = ({
           {plugin.is_installed ? (
             <button
               onClick={() => onUninstall(plugin.plugin_id)}
-              className="px-6 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition font-medium"
+              className="px-6 py-2 bg-red-50 text-red-600 hover:bg-red-100 transition font-medium"
             >
               卸载
             </button>
@@ -412,7 +412,7 @@ const PluginDetail: React.FC<PluginDetailProps> = ({
             <button
               onClick={() => onInstall(plugin.plugin_id)}
               disabled={installing}
-              className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition font-medium disabled:opacity-50 flex items-center gap-2"
+              className="px-6 py-2 bg-blue-600 text-white hover:bg-blue-700 transition font-medium disabled:opacity-50 flex items-center gap-2"
             >
               {installing ? (
                 <>
@@ -460,7 +460,7 @@ const PluginDetail: React.FC<PluginDetailProps> = ({
               <p className="text-gray-700 whitespace-pre-wrap">{plugin.description || '暂无描述'}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg text-sm">
+            <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 text-sm">
               <div>分类：{CATEGORY_LABELS[plugin.category] ?? plugin.category}</div>
               <div>状态：{plugin.status}</div>
               <div>风险等级：{plugin.risk_level ?? '-'}</div>
@@ -501,7 +501,7 @@ const PluginDetail: React.FC<PluginDetailProps> = ({
         {activeTab === 'reviews' && (
           <div className="space-y-4">
             {plugin.reviews?.length ? plugin.reviews.map((review, index) => (
-              <div key={index} className="border border-gray-200 rounded-lg p-4">
+              <div key={index} className="border-b py-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Star size={16} className="text-yellow-400" />
                   <span className="font-semibold text-gray-900">{review.rating}/5</span>

@@ -108,7 +108,7 @@ export const GdprCompliancePage: React.FC = () => {
         {pageError && (
           <div
             role="alert"
-            className="mb-6 rounded-lg border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626] flex items-start justify-between gap-4"
+            className="mb-6 border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626] flex items-start justify-between gap-4"
           >
             <span>{pageError}</span>
             <button onClick={() => setPageError(null)} className="text-xs underline shrink-0" aria-label={t('common.dismiss', 'Dismiss')}>
@@ -153,21 +153,18 @@ type ErrorReporter = (error: unknown, fallback: string) => void
 const useStyles = () => {
   const { theme } = useAppStore()
   const input = clsx(
-    'px-3 py-2 rounded-lg text-sm border outline-none w-full',
-    theme === 'dark'
-      ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-500'
-      : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400',
+    'px-3 py-2 border border-[var(--divider)] bg-transparent text-sm outline-none w-full transition-colors focus:border-[var(--fg)]',
+    theme === 'dark' ? 'placeholder:text-slate-500' : 'placeholder:text-slate-400',
   )
   const label = 'block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1'
   const primaryBtn = clsx(
-    'flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50',
+    'flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50',
   )
   const ghostBtn = clsx(
-    'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100',
+    'flex items-center justify-center gap-1.5 px-3 py-2 border border-[var(--divider)] bg-transparent text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50',
   )
   const dangerBtn = clsx(
-    'flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-[#dc2626]/40 text-[#dc2626] hover:bg-[#dc2626]/5 transition-colors disabled:opacity-50',
+    'flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium border border-[#dc2626]/40 text-[#dc2626] hover:bg-[#dc2626]/5 transition-colors disabled:opacity-50',
   )
   const sectionTitle = 'text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2'
   return { theme, input, label, primaryBtn, ghostBtn, dangerBtn, sectionTitle }
@@ -253,7 +250,7 @@ const DataRightsTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }
         </div>
 
         {/* Art.17 删除权 — 二次确认 */}
-        <div className="rounded-lg border border-[#dc2626]/30 p-3 mb-4">
+        <div className="border border-[#dc2626]/30 p-3 mb-4">
           <div className="text-sm font-medium mb-2 flex items-center gap-1.5 text-[#dc2626]">
             <Trash2 size={14} />
             {t('compliance.rights.erase', 'Right to Erasure (Art. 17)')}
@@ -285,7 +282,7 @@ const DataRightsTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }
           <div
             role="status"
             className={clsx(
-              'rounded-lg border px-4 py-3 text-sm',
+              'border px-4 py-3 text-sm',
               eraseResult.success
                 ? 'border-[#16a34a]/30 text-[#16a34a]'
                 : 'border-[#d97706]/30 text-[#d97706]',
@@ -456,7 +453,7 @@ const PiiTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }) => {
           </div>
           {highlighted && (
             <div
-              className="rounded-lg p-3 text-sm font-mono whitespace-pre-wrap break-all mb-3 border"
+              className="p-3 text-sm font-mono whitespace-pre-wrap break-all mb-3 border"
               style={{ borderColor: DIVIDER }}
             >
               {highlighted.map((part, i) =>
@@ -492,7 +489,7 @@ const PiiTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }) => {
           <h3 className={s.sectionTitle}>
             {t('compliance.pii.maskResult', 'Masked output')} · {strategy} · {t('compliance.pii.count', 'Matches')}: {maskResult.pii_count} · {t('compliance.pii.origLen', 'Original length')}: {maskResult.original_length}
           </h3>
-          <pre className="rounded-lg p-3 text-sm whitespace-pre-wrap break-all border border-[#16a34a]/30 text-[#16a34a]">
+          <pre className="p-3 text-sm whitespace-pre-wrap break-all border border-[#16a34a]/30 text-[#16a34a]">
             {maskResult.masked_text}
           </pre>
         </section>

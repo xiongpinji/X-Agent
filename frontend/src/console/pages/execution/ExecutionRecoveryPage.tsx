@@ -91,15 +91,15 @@ export function ExecutionRecoveryPage(props: ExecutionRecoveryPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+      <section className="console-section">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">失败恢复</h2>
             <p className="text-sm text-gray-500">任务 {runId} 的恢复与重试决策。</p>
           </div>
           <div className="flex gap-2">
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={props.onBack}>返回总览</button>
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenDetail?.(runId)}>查看详情</button>
+            <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={props.onBack}>返回总览</button>
+            <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenDetail?.(runId)}>查看详情</button>
           </div>
         </div>
       </section>
@@ -120,7 +120,7 @@ export function ExecutionRecoveryPage(props: ExecutionRecoveryPageProps) {
           <Panel title="失败原因">
             <div className="space-y-3">
               {reasons.map((item) => (
-                <div key={item.title} className="rounded-xl border px-3 py-3">
+                <div key={item.title} className="border-b px-3 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="font-medium">{item.title}</div>
                     <div className="text-xs text-gray-500">等级 {item.level}</div>
@@ -151,9 +151,9 @@ export function ExecutionRecoveryPage(props: ExecutionRecoveryPageProps) {
 
           <Panel title="可执行动作">
             <div className="grid gap-2">
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50">重新执行</button>
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50">回滚到上一节点</button>
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenAudit?.(runId)}>打开审计</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50">重新执行</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50">回滚到上一节点</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenAudit?.(runId)}>打开审计</button>
             </div>
           </Panel>
         </aside>
@@ -164,16 +164,16 @@ export function ExecutionRecoveryPage(props: ExecutionRecoveryPageProps) {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border bg-gray-50 p-3">
+    <div className="flex items-baseline justify-between gap-3 border-b py-2">
       <div className="text-xs text-gray-500">{label}</div>
-      <div className="mt-1 font-medium text-gray-900">{value}</div>
+      <div className="font-data font-medium text-gray-900">{value}</div>
     </div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-white p-4 shadow-sm">
+    <section className="console-section">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>

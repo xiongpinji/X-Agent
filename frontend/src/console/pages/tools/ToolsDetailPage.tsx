@@ -64,12 +64,12 @@ export function ToolsDetailPage(props: ToolsDetailPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+      <section className="console-section">
         <h2 className="text-lg font-semibold">工具详情</h2>
         <p className="text-sm text-gray-500">查看单个工具的状态、版本和归属信息。</p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="console-kpi-row">
         <StatCard label="工具 ID" value={toolId} />
         <StatCard label="工具名称" value={toolName} />
         <StatCard label="状态" value={status} />
@@ -90,9 +90,9 @@ export function ToolsDetailPage(props: ToolsDetailPageProps) {
 
         <Panel title="快捷操作">
           <div className="grid gap-2">
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenHistory?.()}>查看调用历史</button>
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenPlugins?.()}>查看绑定插件</button>
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenResources?.()}>查看资源依赖</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenHistory?.()}>查看调用历史</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenPlugins?.()}>查看绑定插件</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenResources?.()}>查看资源依赖</button>
           </div>
         </Panel>
       </section>
@@ -102,25 +102,22 @@ export function ToolsDetailPage(props: ToolsDetailPageProps) {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="text-sm text-gray-500">{label}</div>
-      <div className="mt-2 text-xl font-bold text-gray-900">{value}</div>
-    </div>
+    <div className="console-kpi"><span className="kpi-label">{label}</span><span className="kpi-value">{value}</span></div>
   );
 }
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border bg-gray-50 p-3">
+    <div className="flex items-baseline justify-between gap-3 border-b py-2">
       <div className="text-xs text-gray-500">{label}</div>
-      <div className="mt-1 font-medium text-gray-900">{value}</div>
+      <div className="font-data font-medium text-gray-900">{value}</div>
     </div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-white p-4 shadow-sm">
+    <section className="console-section">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>

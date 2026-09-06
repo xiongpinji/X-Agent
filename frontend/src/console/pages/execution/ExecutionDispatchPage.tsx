@@ -98,15 +98,15 @@ export function ExecutionDispatchPage(props: ExecutionDispatchPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+      <section className="console-section">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">调度建议</h2>
             <p className="text-sm text-gray-500">任务 {runId} 当前的下一步动作建议。</p>
           </div>
           <div className="flex gap-2">
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={props.onBack}>返回总览</button>
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenDetail?.(runId)}>查看详情</button>
+            <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={props.onBack}>返回总览</button>
+            <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenDetail?.(runId)}>查看详情</button>
           </div>
         </div>
       </section>
@@ -127,7 +127,7 @@ export function ExecutionDispatchPage(props: ExecutionDispatchPageProps) {
           <Panel title="建议列表">
             <div className="space-y-3">
               {recommendations.map((item) => (
-                <button key={item.action} className="w-full rounded-xl border px-3 py-3 text-left hover:bg-gray-50" onClick={() => props.onOpenRecovery?.(runId)}>
+                <button key={item.action} className="w-full border-b px-3 py-3 text-left hover:bg-gray-50" onClick={() => props.onOpenRecovery?.(runId)}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="font-medium text-gray-900">{item.action}</div>
                     <div className="text-xs text-gray-500">{item.risk}</div>
@@ -151,10 +151,10 @@ export function ExecutionDispatchPage(props: ExecutionDispatchPageProps) {
         <aside className="space-y-4">
           <Panel title="可执行动作">
             <div className="grid gap-2">
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50">立即执行</button>
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50">进入确认</button>
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50">调整参数</button>
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenRecovery?.(runId)}>进入恢复页</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50">立即执行</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50">进入确认</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50">调整参数</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenRecovery?.(runId)}>进入恢复页</button>
             </div>
           </Panel>
 
@@ -173,16 +173,16 @@ export function ExecutionDispatchPage(props: ExecutionDispatchPageProps) {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border bg-gray-50 p-3">
+    <div className="flex items-baseline justify-between gap-3 border-b py-2">
       <div className="text-xs text-gray-500">{label}</div>
-      <div className="mt-1 font-medium text-gray-900">{value}</div>
+      <div className="font-data font-medium text-gray-900">{value}</div>
     </div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-white p-4 shadow-sm">
+    <section className="console-section">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>

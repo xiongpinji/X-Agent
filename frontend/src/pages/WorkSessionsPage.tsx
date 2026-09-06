@@ -108,9 +108,10 @@ const WorkSessionsPage: React.FC = () => {
               <button
                 onClick={loadSessions}
                 className={clsx(
-                  'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200',
+                  'flex items-center gap-2 px-3 py-2 border text-sm font-medium transition-colors',
+                  isDark ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-100',
                 )}
+                style={{ borderColor: DIVIDER }}
                 aria-label={t('common.refresh', 'Refresh')}
               >
                 <RefreshCw size={16} />
@@ -118,7 +119,7 @@ const WorkSessionsPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setShowCreate(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
               >
                 <Plus size={16} />
                 {t('workSessions.newSession', 'New Session')}
@@ -128,7 +129,7 @@ const WorkSessionsPage: React.FC = () => {
         </header>
 
         {loadError && (
-          <div role="alert" className="mb-6 rounded-lg border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626]">
+          <div role="alert" className="mb-6 border px-4 py-3 text-sm text-[#dc2626]" style={{ borderColor: 'rgba(220,38,38,.3)' }}>
             {loadError}
           </div>
         )}
@@ -227,9 +228,10 @@ const WorkSessionsPage: React.FC = () => {
               disabled
               title={t('common.comingSoon', 'coming soon')}
               className={clsx(
-                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed',
-                isDark ? 'bg-slate-800 text-slate-400' : 'bg-white border border-slate-200 text-slate-500',
+                'flex items-center gap-2 px-3 py-2 border text-sm font-medium opacity-50 cursor-not-allowed',
+                isDark ? 'text-slate-400' : 'text-slate-500',
               )}
+              style={{ borderColor: DIVIDER }}
             >
               <ArchiveRestore size={16} />
               {t('workSessions.restore', 'Restore Session')}
@@ -306,15 +308,19 @@ const CreateSessionModal: React.FC<CreateSessionModalProps> = ({ dark, onClose, 
   }
 
   const inputCls = clsx(
-    'w-full px-3 py-2 rounded-lg text-sm',
-    dark ? 'bg-slate-800 text-white border border-slate-700' : 'bg-slate-50 text-slate-900 border border-slate-300',
+    'w-full px-3 py-2 border text-sm',
+    dark ? 'bg-transparent text-white' : 'bg-transparent text-slate-900',
   )
-  const labelCls = 'block text-[13px] opacity-60 mb-1'
+  const inputStyle = { borderColor: DIVIDER }
+  const labelCls = 'block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1.5'
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
-      <div className={clsx('rounded-lg p-6 max-w-md w-full mx-4 border', dark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
-        <div className="flex items-center justify-between mb-4">
+      <div
+        className={clsx('p-6 max-w-md w-full mx-4 border', dark ? 'bg-slate-900' : 'bg-white')}
+        style={inputStyle}
+      >
+        <div className="flex items-center justify-between mb-4 pb-4 border-b" style={{ borderColor: DIVIDER }}>
           <h2 className="text-lg font-medium">
             {t('workSessions.newSession', 'New Work Session')}
           </h2>
@@ -326,32 +332,32 @@ const CreateSessionModal: React.FC<CreateSessionModalProps> = ({ dark, onClose, 
         <div className="space-y-4 mb-6">
           <div>
             <label htmlFor="ws-goal" className={labelCls}>{t('workSessions.goal', 'Goal')}</label>
-            <textarea id="ws-goal" className={inputCls} rows={3} value={goal}
+            <textarea id="ws-goal" className={inputCls} style={inputStyle} rows={3} value={goal}
               onChange={(e) => setGoal(e.target.value)}
               placeholder={t('workSessions.goalPlaceholder', 'Describe the long-running goal...')} />
           </div>
           <div>
             <label htmlFor="ws-hours" className={labelCls}>{t('workSessions.maxHours', 'Max hours (0.5–72)')}</label>
-            <input id="ws-hours" type="number" min={0.5} max={72} step={0.5} className={inputCls}
+            <input id="ws-hours" type="number" min={0.5} max={72} step={0.5} className={inputCls} style={inputStyle}
               value={maxHours} onChange={(e) => setMaxHours(Number(e.target.value))} />
           </div>
           <div>
             <label htmlFor="ws-milestones" className={labelCls}>{t('workSessions.maxMilestones', 'Max milestones (1–20)')}</label>
-            <input id="ws-milestones" type="number" min={1} max={20} className={inputCls}
+            <input id="ws-milestones" type="number" min={1} max={20} className={inputCls} style={inputStyle}
               value={maxMilestones} onChange={(e) => setMaxMilestones(Number(e.target.value))} />
           </div>
         </div>
         <div className="flex gap-2">
           <button onClick={onClose} className={clsx(
-            'flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-            dark ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-900',
-          )}>
+            'flex-1 px-4 py-2 border text-sm font-medium transition-colors',
+            dark ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-100',
+          )} style={inputStyle}>
             {t('common.cancel', 'Cancel')}
           </button>
           <button
             onClick={handleCreate}
             disabled={submitting || !goal.trim()}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
           >
             {submitting ? t('common.loading', 'Loading...') : t('common.create', 'Create')}
           </button>
@@ -372,11 +378,14 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({ dark, session, 
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
-      <div className={clsx(
-        'rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto border',
-        dark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200',
-      )}>
-        <div className="flex items-center justify-between mb-4">
+      <div
+        className={clsx(
+          'p-6 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto border',
+          dark ? 'bg-slate-900' : 'bg-white',
+        )}
+        style={{ borderColor: DIVIDER }}
+      >
+        <div className="flex items-center justify-between mb-4 pb-4 border-b" style={{ borderColor: DIVIDER }}>
           <h2 className="text-lg font-medium">
             {t('workSessions.detail', 'Session Detail')}
           </h2>
@@ -456,9 +465,9 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({ dark, session, 
               {t('workSessions.contextSnapshot', 'Context Snapshot')}
             </p>
             <pre className={clsx(
-              'cell-data text-xs p-3 rounded-lg overflow-auto max-h-48',
+              'cell-data text-xs p-3 border overflow-auto max-h-48',
               dark ? 'bg-slate-800' : 'bg-slate-50',
-            )}>
+            )} style={{ borderColor: DIVIDER }}>
               {JSON.stringify(session, null, 2)}
             </pre>
           </div>
@@ -466,7 +475,7 @@ const SessionDetailModal: React.FC<SessionDetailModalProps> = ({ dark, session, 
 
         <button
           onClick={onClose}
-          className="mt-6 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          className="mt-6 w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
         >
           {t('common.close', 'Close')}
         </button>

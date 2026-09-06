@@ -85,7 +85,7 @@ export function ExecutionOverviewPage(props: ExecutionOverviewPageProps) {
         {props.linkedMessagesSummary?.summary?.title ? <div className="console-summary-line">消息摘要：{props.linkedMessagesSummary.summary.title} · {pendingRuns} 个待处理</div> : null}
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+      <section className="console-kpi-row">
         <StatCard label="活跃执行" value={String(activeRuns)} />
         <StatCard label="待处理任务" value={String(pendingRuns)} />
         <StatCard label="失败任务" value={String(failedRuns)} />
@@ -99,7 +99,7 @@ export function ExecutionOverviewPage(props: ExecutionOverviewPageProps) {
           <Panel title="活跃执行">
             <div className="space-y-3">
               {demoActiveRuns.map((run) => (
-                <button key={run.runId} className="w-full rounded-xl border px-3 py-3 text-left hover:bg-gray-50" onClick={() => props.onOpenDetail?.(run.runId)}>
+                <button key={run.runId} className="w-full border-b px-3 py-3 text-left hover:bg-gray-50" onClick={() => props.onOpenDetail?.(run.runId)}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="font-medium text-gray-900">{run.name}</div>
@@ -118,7 +118,7 @@ export function ExecutionOverviewPage(props: ExecutionOverviewPageProps) {
           <Panel title="失败任务">
             <div className="space-y-3">
               {demoFailedRuns.map((run) => (
-                <button key={run.runId} className="w-full rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-left hover:bg-red-100" onClick={() => props.onOpenRecovery?.(run.runId)}>
+                <button key={run.runId} className="w-full border-b border-red-200 bg-red-50 px-3 py-3 text-left hover:bg-red-100" onClick={() => props.onOpenRecovery?.(run.runId)}>
                   <div className="font-medium text-gray-900">{run.name}</div>
                   <div className="mt-1 text-xs text-gray-600">失败步骤：{run.step} · 原因：{run.reason}</div>
                   <div className="mt-2 text-xs text-red-700">恢复状态：{run.recovery}</div>
@@ -132,7 +132,7 @@ export function ExecutionOverviewPage(props: ExecutionOverviewPageProps) {
           <Panel title="风险建议">
             <div className="space-y-3">
               {demoRecommendations.map((item) => (
-                <button key={item.action} className="w-full rounded-xl border px-3 py-3 text-left hover:bg-gray-50" onClick={() => props.onOpenDispatch?.("execution-control") }>
+                <button key={item.action} className="w-full border-b px-3 py-3 text-left hover:bg-gray-50" onClick={() => props.onOpenDispatch?.("execution-control") }>
                   <div className="font-medium">{item.action}</div>
                   <div className="mt-1 text-xs text-gray-500">{item.reason}</div>
                   <div className="mt-2 text-xs text-blue-600">置信度 {item.confidence}</div>
@@ -144,9 +144,9 @@ export function ExecutionOverviewPage(props: ExecutionOverviewPageProps) {
 
           <Panel title="快捷入口">
             <div className="grid gap-2">
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenDetail?.("run-001")}>打开执行详情</button>
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenRecovery?.("run-003")}>打开失败恢复</button>
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenDispatch?.("execution-control")}>打开调度建议</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenDetail?.("run-001")}>打开执行详情</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenRecovery?.("run-003")}>打开失败恢复</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenDispatch?.("execution-control")}>打开调度建议</button>
             </div>
           </Panel>
         </aside>
@@ -157,16 +157,13 @@ export function ExecutionOverviewPage(props: ExecutionOverviewPageProps) {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="text-sm text-gray-500">{label}</div>
-      <div className="mt-2 text-2xl font-bold text-gray-900">{value}</div>
-    </div>
+    <div className="console-kpi"><span className="kpi-label">{label}</span><span className="kpi-value">{value}</span></div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-white p-4 shadow-sm">
+    <section className="console-section">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>

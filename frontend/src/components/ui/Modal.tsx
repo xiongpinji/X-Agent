@@ -46,7 +46,7 @@ export const Modal = React.forwardRef<HTMLDivElement, ModalProps>(
         <div
           ref={ref}
           className={clsx(
-            'relative bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full mx-4',
+            'relative bg-white dark:bg-slate-900 w-full mx-4 border border-slate-200 dark:border-slate-700',
             sizeStyles[size],
             className
           )}

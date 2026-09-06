@@ -20,19 +20,19 @@ export function WorkflowPage(props: WorkflowPageProps) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)_320px]">
-      <aside className="rounded-2xl border bg-white p-4 shadow-sm">
+      <aside className="console-section">
         <header className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">工作流库</h2>
             <p className="text-sm text-gray-500">先选岗位模板，再看对应工作流。</p>
           </div>
-          <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onSelectWorkflow?.(activeWorkflow?.workflow_name ?? workflows[0]?.workflow_name ?? "")}>返回当前</button>
+          <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onSelectWorkflow?.(activeWorkflow?.workflow_name ?? workflows[0]?.workflow_name ?? "")}>返回当前</button>
         </header>
         <div className="mt-4 space-y-2">
           {props.roleCatalog.templates.map((template) => (
             <button
               key={template.role_id}
-              className={`w-full rounded-xl border px-3 py-3 text-left transition ${selectedTemplate?.role_id === template.role_id ? "border-blue-500 bg-blue-50" : "hover:bg-gray-50"}`}
+              className={`w-full border-b px-3 py-3 text-left transition ${selectedTemplate?.role_id === template.role_id ? "border-blue-500 bg-blue-50" : "hover:bg-gray-50"}`}
               onClick={() => {
                 props.onSelectRoleTemplate(template.role_id);
                 setSelectedStepIndex(0);
@@ -45,7 +45,7 @@ export function WorkflowPage(props: WorkflowPageProps) {
         </div>
       </aside>
 
-      <main className="rounded-2xl border bg-white p-4 shadow-sm">
+      <main className="console-section">
         {activeWorkflow ? (
           <>
             <header className="border-b pb-4">
@@ -54,7 +54,7 @@ export function WorkflowPage(props: WorkflowPageProps) {
                   <h2 className="text-lg font-semibold">{activeWorkflow.workflow_name}</h2>
                   <p className="mt-1 text-sm text-gray-500">角色：{selectedTemplate?.role_name ?? "-"}</p>
                 </div>
-                <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onSelectWorkflow?.(activeWorkflow.workflow_name)}>
+                <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onSelectWorkflow?.(activeWorkflow.workflow_name)}>
                   设为当前工作流
                 </button>
               </div>
@@ -77,10 +77,10 @@ export function WorkflowPage(props: WorkflowPageProps) {
         )}
       </main>
 
-      <aside className="space-y-4 rounded-2xl border bg-white p-4 shadow-sm">
+      <aside className="console-section space-y-4">
         <section>
           <h3 className="font-semibold">工作流摘要</h3>
-          <div className="mt-3 rounded-xl border p-3 text-sm text-gray-600">{selectedTemplate ? selectedTemplate.description : "请选择一个岗位模板"}</div>
+          <div className="mt-3 border p-3 text-sm text-gray-600">{selectedTemplate ? selectedTemplate.description : "请选择一个岗位模板"}</div>
         </section>
         <section>
           <h3 className="font-semibold">输入 / 输出</h3>
@@ -91,7 +91,7 @@ export function WorkflowPage(props: WorkflowPageProps) {
         </section>
         <section>
           <h3 className="font-semibold">当前步骤</h3>
-          <div className="mt-3 rounded-xl border p-3 text-sm text-gray-600">
+          <div className="mt-3 border p-3 text-sm text-gray-600">
             {selectedStep ?? "请选择步骤查看"}
           </div>
         </section>
@@ -102,13 +102,13 @@ export function WorkflowPage(props: WorkflowPageProps) {
 
 function WorkflowStepTimeline({ workflow, selectedStepIndex, onSelectStep }: { workflow: RoleWorkflowTemplate; selectedStepIndex: number; onSelectStep: (index: number) => void; }) {
   return (
-    <section className="rounded-2xl border p-4">
+    <section className="console-section">
       <h3 className="font-semibold">步骤时间线</h3>
       <div className="mt-3 space-y-2">
         {workflow.steps.map((step, index) => (
           <button
             key={step}
-            className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left hover:bg-gray-50 ${selectedStepIndex === index ? "border-blue-500 bg-blue-50" : ""}`}
+            className={`flex w-full items-center gap-3 border-b px-3 py-2 text-left hover:bg-gray-50 ${selectedStepIndex === index ? "border-blue-500 bg-blue-50" : ""}`}
             onClick={() => onSelectStep(index)}
           >
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-700">{index + 1}</div>
@@ -122,14 +122,14 @@ function WorkflowStepTimeline({ workflow, selectedStepIndex, onSelectStep }: { w
 
 function WorkflowExecutionPanel({ workflow, selectedStep }: { workflow: RoleWorkflowTemplate; selectedStep: string | null; }) {
   return (
-    <section className="rounded-2xl border p-4">
+    <section className="console-section">
       <h3 className="font-semibold">执行节点</h3>
       <div className="mt-3 space-y-2 text-sm text-gray-600">
         <InfoList title="复核节点" items={workflow.review_steps} />
         <InfoList title="交接节点" items={workflow.handoff_rules} />
         <InfoList title="升级规则" items={workflow.escalation_rules} />
       </div>
-      <div className="mt-4 rounded-xl border bg-gray-50 p-3 text-sm text-gray-700">
+      <div className="mt-4 border bg-gray-50 p-3 text-sm text-gray-700">
         {selectedStep ? `当前步骤：${selectedStep}` : "暂无选中步骤"}
       </div>
     </section>
@@ -138,10 +138,10 @@ function WorkflowExecutionPanel({ workflow, selectedStep }: { workflow: RoleWork
 
 function WorkflowApprovalPanel({ workflow }: { workflow: RoleWorkflowTemplate }) {
   return (
-    <section className="rounded-2xl border p-4">
+    <section className="console-section">
       <h3 className="font-semibold">审批节点</h3>
       <div className="mt-3 space-y-2">
-        {workflow.approval_steps.length ? workflow.approval_steps.map((step) => <div key={step} className="rounded-xl border px-3 py-2 text-sm">{step}</div>) : <div className="text-sm text-gray-500">无审批节点</div>}
+        {workflow.approval_steps.length ? workflow.approval_steps.map((step) => <div key={step} className="border px-3 py-2 text-sm">{step}</div>) : <div className="text-sm text-gray-500">无审批节点</div>}
       </div>
     </section>
   );
@@ -149,7 +149,7 @@ function WorkflowApprovalPanel({ workflow }: { workflow: RoleWorkflowTemplate })
 
 function WorkflowArtifactPanel({ workflow }: { workflow: RoleWorkflowTemplate }) {
   return (
-    <section className="rounded-2xl border p-4">
+    <section className="console-section">
       <h3 className="font-semibold">产出物</h3>
       <div className="mt-3 flex flex-wrap gap-2">
         {workflow.artifacts.length ? workflow.artifacts.map((artifact) => <span key={artifact} className="rounded-full bg-gray-100 px-3 py-1 text-xs">{artifact}</span>) : <span className="text-sm text-gray-500">暂无产出物</span>}
@@ -160,10 +160,10 @@ function WorkflowArtifactPanel({ workflow }: { workflow: RoleWorkflowTemplate })
 
 function WorkflowTracePanel({ workflow }: { workflow: RoleWorkflowTemplate }) {
   return (
-    <section className="rounded-2xl border p-4">
+    <section className="console-section">
       <h3 className="font-semibold">Trace / 审计路径</h3>
-      <div className="mt-3 grid gap-2 md:grid-cols-2">
-        {workflow.validation_rules.map((rule) => <div key={rule} className="rounded-xl border px-3 py-2 text-sm">{rule}</div>)}
+      <div className="mt-3">
+        {workflow.validation_rules.map((rule) => <div key={rule} className="border-b px-3 py-2 text-sm">{rule}</div>)}
       </div>
     </section>
   );

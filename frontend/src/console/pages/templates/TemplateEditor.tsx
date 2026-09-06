@@ -76,7 +76,7 @@ export function TemplateEditor({ templateId: _templateId, onSave: _onSave, onCan
     <div className="space-y-6">
       <TemplateMarketOfflineNotice />
 
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+      <section className="console-section">
         <h2 className="text-lg font-semibold">模板编辑器</h2>
         <p className="mt-1 text-sm text-gray-500">后端模板市场未上线，编辑功能暂不可用。</p>
 
@@ -89,7 +89,7 @@ export function TemplateEditor({ templateId: _templateId, onSave: _onSave, onCan
               onChange={(e) => setTemplate({ ...template, name: e.target.value })}
               placeholder="输入模板名称"
               disabled={TEMPLATE_MARKET_OFFLINE}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+              className="w-full border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
             />
           </div>
 
@@ -102,7 +102,7 @@ export function TemplateEditor({ templateId: _templateId, onSave: _onSave, onCan
               placeholder="输入模板描述"
               rows={4}
               disabled={TEMPLATE_MARKET_OFFLINE}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+              className="w-full border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
             />
           </div>
 
@@ -114,7 +114,7 @@ export function TemplateEditor({ templateId: _templateId, onSave: _onSave, onCan
                 value={template.category || "custom"}
                 onChange={(e) => setTemplate({ ...template, category: e.target.value })}
                 disabled={TEMPLATE_MARKET_OFFLINE}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+                className="w-full border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
               >
                 <option value="data_processing">数据处理</option>
                 <option value="web_scraping">网页采集</option>
@@ -132,7 +132,7 @@ export function TemplateEditor({ templateId: _templateId, onSave: _onSave, onCan
                 onChange={(e) => setTemplate({ ...template, version: e.target.value })}
                 placeholder="1.0.0"
                 disabled={TEMPLATE_MARKET_OFFLINE}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+                className="w-full border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
               />
             </div>
           </div>
@@ -142,13 +142,13 @@ export function TemplateEditor({ templateId: _templateId, onSave: _onSave, onCan
       <div className="flex justify-end gap-2">
         <button
           onClick={onCancel}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+          className="border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
         >
           返回
         </button>
         <button
           disabled={TEMPLATE_MARKET_OFFLINE}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="bg-blue-600 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           保存模板（未上线）
         </button>

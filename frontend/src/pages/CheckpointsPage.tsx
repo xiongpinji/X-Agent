@@ -116,9 +116,10 @@ export const CheckpointsPage: React.FC = () => {
             <button
               onClick={loadList}
               className={clsx(
-                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                'flex items-center gap-2 px-3 py-2 border text-sm font-medium transition-colors',
+                theme === 'dark' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-100'
               )}
+              style={{ borderColor: 'var(--divider)' }}
               aria-label={t('checkpoints.refresh', 'Refresh')}
             >
               <RefreshCw size={16} />
@@ -210,7 +211,7 @@ export const CheckpointsPage: React.FC = () => {
                     <button
                       onClick={() => handleResume(selected.trace_id)}
                       disabled={acting || !selected.resumable}
-                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white transition-colors"
                     >
                       <Play size={14} />
                       {t('checkpoints.resume', 'Resume Execution')}
@@ -219,9 +220,10 @@ export const CheckpointsPage: React.FC = () => {
                       onClick={() => handleDelete(selected.trace_id)}
                       disabled={acting}
                       className={clsx(
-                        'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50',
-                        theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                        'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border transition-colors disabled:opacity-50',
+                        'text-[#dc2626]'
                       )}
+                      style={{ borderColor: 'rgba(220,38,38,.35)' }}
                     >
                       <Trash2 size={14} />
                       {t('checkpoints.delete', 'Clean Up')}

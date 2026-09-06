@@ -233,9 +233,9 @@ export const SkillMarket: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gray-50">
       {/* 头部 */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
+      <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">技能市场</h1>
           <p className="text-gray-600">发现和使用强大的AI技能，提高工作效率</p>
@@ -252,7 +252,7 @@ export const SkillMarket: React.FC = () => {
               placeholder="搜索技能... 例如：代码审查、数据分析"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
@@ -260,12 +260,12 @@ export const SkillMarket: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* 左侧：分类导航（按能力聚合） */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-sm p-6 sticky top-4">
+            <div className="sticky top-4">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">能力分类</h2>
               <div className="space-y-2">
                 <button
                   onClick={() => setSelectedCategory(null)}
-                  className={`w-full text-left px-4 py-2 rounded-lg transition ${
+                  className={`w-full text-left px-4 py-2 transition ${
                     selectedCategory === null
                       ? 'bg-blue-100 text-blue-700 font-semibold'
                       : 'text-gray-700 hover:bg-gray-100'
@@ -277,7 +277,7 @@ export const SkillMarket: React.FC = () => {
                   <button
                     key={cat.id}
                     onClick={() => setSelectedCategory(cat.id)}
-                    className={`w-full text-left px-4 py-2 rounded-lg transition flex items-center justify-between ${
+                    className={`w-full text-left px-4 py-2 transition flex items-center justify-between${
                       selectedCategory === cat.id
                         ? 'bg-blue-100 text-blue-700 font-semibold'
                         : 'text-gray-700 hover:bg-gray-100'
@@ -295,7 +295,7 @@ export const SkillMarket: React.FC = () => {
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="rating">评分最高</option>
                   <option value="downloads">下载最多</option>
@@ -325,28 +325,28 @@ export const SkillMarket: React.FC = () => {
                 <p className="mt-4 text-gray-600">加载中...</p>
               </div>
             ) : visibleSkills.length === 0 ? (
-              <div className="text-center py-12 bg-white rounded-lg">
+              <div className="empty-state text-center">
                 <p className="text-gray-600">暂无技能</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="divide-y">
                 {visibleSkills.map((skill) => (
                   <div
                     key={skill.id}
                     role="button"
                     tabIndex={0}
-                    className="bg-white rounded-lg shadow-sm hover:shadow-md transition cursor-pointer overflow-hidden"
+                    className="transition cursor-pointer py-4"
                     onClick={() => setSelectedSkill(skill)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedSkill(skill); }}
                   >
                     {/* 技能卡片头部 */}
-                    <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 text-white">
+                    <div className="border-b p-4">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 9v12" /></svg>
                           <div>
                             <h3 className="font-semibold text-lg">{skill.name}</h3>
-                            <p className="text-sm text-blue-100">v{skill.version}{skill.author ? ` · ${skill.author}` : ''}</p>
+                            <p className="text-sm text-gray-500">v{skill.version}{skill.author ? ` · ${skill.author}` : ''}</p>
                           </div>
                         </div>
                         {skill.is_installed && (
@@ -399,7 +399,7 @@ export const SkillMarket: React.FC = () => {
                               e.stopPropagation();
                               handleInstall(skill.id);
                             }}
-                            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg font-semibold transition"
+                            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 font-semibold transition"
                           >
                             安装
                           </button>
@@ -409,7 +409,7 @@ export const SkillMarket: React.FC = () => {
                               e.stopPropagation();
                               handleExecute(skill);
                             }}
-                            className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                            className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 font-semibold transition flex items-center justify-center gap-2"
                           >
                             <Zap size={16} />
                             一键使用
@@ -420,7 +420,7 @@ export const SkillMarket: React.FC = () => {
                             e.stopPropagation();
                             setSelectedSkill(skill);
                           }}
-                          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                          className="px-4 py-2 border border-gray-300 hover:bg-gray-50 transition"
                         >
                           <ChevronRight size={16} />
                         </button>
@@ -433,14 +433,14 @@ export const SkillMarket: React.FC = () => {
 
             {/* 技能沉淀草稿审核（B9：/api/v1/skill-sediment/skills） */}
             {sedimentDrafts.length > 0 && (
-              <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
+              <div className="mt-8">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">待审核的沉淀技能</h2>
                 <div className="space-y-3">
                   {sedimentDrafts.map((draft) => {
                     const name = String(draft.name ?? draft.skill_name ?? '');
                     if (!name) return null;
                     return (
-                      <div key={name} className="flex items-center justify-between rounded-xl border px-4 py-3">
+                      <div key={name} className="flex items-center justify-between border-b px-4 py-3">
                         <div>
                           <div className="font-medium text-gray-900">{name}</div>
                           <div className="text-xs text-gray-500">
@@ -486,22 +486,22 @@ export const SkillMarket: React.FC = () => {
           <div
             role="dialog"
             aria-label="Skill details"
-            className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* 详情头部 */}
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 text-white">
+            <div className="border-b p-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 9v12" /></svg>
                   <div>
                     <h2 className="text-2xl font-bold">{selectedSkill.name}</h2>
-                    <p className="text-blue-100">v{selectedSkill.version}</p>
+                    <p className="text-gray-500">v{selectedSkill.version}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedSkill(null)}
-                  className="text-white hover:text-blue-100 text-2xl"
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
                 >
                   ×
                 </button>
@@ -525,19 +525,10 @@ export const SkillMarket: React.FC = () => {
               </div>
 
               {/* 统计信息 */}
-              <div className="grid grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{selectedSkill.rating.toFixed(1)}</div>
-                  <div className="text-sm text-gray-600">评分</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{selectedSkill.downloads}</div>
-                  <div className="text-sm text-gray-600">下载</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{selectedSkill.tags.length}</div>
-                  <div className="text-sm text-gray-600">标签</div>
-                </div>
+              <div className="console-kpi-row">
+                <div className="console-kpi"><span className="kpi-label">评分</span><span className="kpi-value">{selectedSkill.rating.toFixed(1)}</span></div>
+                <div className="console-kpi"><span className="kpi-label">下载</span><span className="kpi-value">{selectedSkill.downloads}</span></div>
+                <div className="console-kpi"><span className="kpi-label">标签</span><span className="kpi-value">{selectedSkill.tags.length}</span></div>
               </div>
 
               {/* 按钮 */}
@@ -545,14 +536,14 @@ export const SkillMarket: React.FC = () => {
                 {!selectedSkill.is_installed ? (
                   <button
                     onClick={() => handleInstall(selectedSkill.id)}
-                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-semibold transition"
+                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3 font-semibold transition"
                   >
                     安装技能
                   </button>
                 ) : (
                   <button
                     onClick={() => handleExecute(selectedSkill)}
-                    className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                    className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 font-semibold transition flex items-center justify-center gap-2"
                   >
                     <Zap size={18} />
                     一键使用
@@ -560,7 +551,7 @@ export const SkillMarket: React.FC = () => {
                 )}
                 <button
                   onClick={() => setSelectedSkill(null)}
-                  className="flex-1 border border-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-50 transition"
+                  className="flex-1 border border-gray-300 text-gray-700 py-3 font-semibold hover:bg-gray-50 transition"
                 >
                   关闭
                 </button>

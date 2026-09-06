@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Button, Input, Textarea, Badge, Spinner } from './ui';
+import { Spinner } from './ui';
 
 interface ForumPost {
   id: string;
@@ -22,6 +22,11 @@ interface ForumComment {
   created_at: string;
   like_count: number;
 }
+
+const DIVIDER = 'var(--divider)';
+
+/* Hairline chip — thin border, no colored fill (spec: 状态标记 = 细边框小 chip) */
+const chipClass = 'inline-flex items-center px-1.5 py-0.5 text-[11px] border whitespace-nowrap';
 
 export const ForumHome: React.FC = () => {
   const [posts, setPosts] = useState<ForumPost[]>([]);
@@ -51,21 +56,24 @@ export const ForumHome: React.FC = () => {
     fetchPosts();
   }, [fetchPosts]);
 
+  const selectClass = 'px-2 py-1.5 text-[13px] border bg-transparent';
+
   return (
-    <div className="space-y-6">
+    <div>
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Community Forum</h1>
+      <div className="flex justify-between items-baseline pb-3 border-b" style={{ borderColor: DIVIDER }}>
+        <h1 className="text-[22px] font-medium tracking-tight">Community Forum</h1>
         {/* New Post action lives in ForumPage wrapper (internal state nav);
             hardcoded /forum/create route does not exist. */}
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4">
+      <div className="flex gap-3 py-3 border-b" style={{ borderColor: DIVIDER }}>
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="px-4 py-2 border rounded-lg"
+          className={selectClass}
+          style={{ borderColor: DIVIDER }}
         >
           <option value="">All Categories</option>
           <option value="general">General</option>
@@ -77,7 +85,8 @@ export const ForumHome: React.FC = () => {
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as 'created_at' | 'views' | 'likes' | 'comments')}
-          className="px-4 py-2 border rounded-lg"
+          className={selectClass}
+          style={{ borderColor: DIVIDER }}
         >
           <option value="created_at">Latest</option>
           <option value="views">Most Viewed</option>
@@ -86,37 +95,42 @@ export const ForumHome: React.FC = () => {
         </select>
       </div>
 
-      {/* Posts List */}
+      {/* Posts List — hairline rows, no cards */}
       {loading ? (
         <Spinner />
+      ) : posts.length === 0 ? (
+        <p className="empty-state">No posts yet</p>
       ) : (
-        <div className="space-y-4">
+        <div>
           {posts.map((post) => (
-            <Card key={post.id} className="p-4 hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => window.location.href = `/forum/posts/${post.id}`}>
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    {post.is_pinned && <Badge variant="warning">Pinned</Badge>}
-                    <h2 className="text-xl font-semibold">{post.title}</h2>
-                  </div>
-                  <p className="text-gray-600 mt-2 line-clamp-2">{post.content}</p>
-                  <div className="flex gap-2 mt-3">
-                    {post.tags.map((tag) => (
-                      <Badge key={tag} variant="default">{tag}</Badge>
-                    ))}
-                  </div>
+            <div
+              key={post.id}
+              role="button"
+              tabIndex={0}
+              className="row-line cursor-pointer hover:bg-[var(--hover)]"
+              onClick={() => window.location.href = `/forum/posts/${post.id}`}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') window.location.href = `/forum/posts/${post.id}`; }}
+            >
+              <div className="flex items-baseline justify-between gap-4">
+                <div className="flex items-center gap-2 min-w-0">
+                  {post.is_pinned && (
+                    <span className={chipClass} style={{ borderColor: DIVIDER }}>Pinned</span>
+                  )}
+                  <h2 className="text-[15px] font-medium truncate">{post.title}</h2>
                 </div>
-                <div className="text-right text-sm text-gray-500">
-                  <div>{post.view_count} views</div>
-                  <div>{post.like_count} likes</div>
-                  <div>{post.comment_count} comments</div>
-                </div>
+                <span className="font-data text-xs opacity-50 whitespace-nowrap">
+                  {post.view_count} views · {post.like_count} likes · {post.comment_count} comments
+                </span>
               </div>
-              <div className="mt-3 text-sm text-gray-500">
-                By {post.author_name} • {new Date(post.created_at).toLocaleDateString()}
+              <p className="text-[13px] opacity-60 mt-1 truncate-lines-1">{post.content}</p>
+              <div className="flex items-center gap-3 mt-1.5 text-xs opacity-50 flex-wrap">
+                <span>By {post.author_name}</span>
+                <span className="font-data">· {new Date(post.created_at).toLocaleDateString()}</span>
+                {post.tags.map((tag) => (
+                  <span key={tag} className={chipClass} style={{ borderColor: DIVIDER }}>{tag}</span>
+                ))}
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}
@@ -208,83 +222,87 @@ export const ForumPostDetail: React.FC<{ postId: string }> = ({ postId }) => {
   if (!post) return <div>Post not found</div>;
 
   return (
-    <div className="space-y-6">
-      {/* Post Header */}
-      <Card className="p-6">
-        <h1 className="text-3xl font-bold mb-4">{post.title}</h1>
-        <div className="flex justify-between items-center text-sm text-gray-600 mb-4">
+    <div>
+      {/* Post Header — transparent container, hairline bottom */}
+      <section className="py-4 border-b" style={{ borderColor: DIVIDER }}>
+        <h1 className="text-[22px] font-medium tracking-tight mb-2">{post.title}</h1>
+        <div className="flex justify-between items-center text-[13px] opacity-60 mb-3">
           <div>
-            By <strong>{post.author_name}</strong> • {new Date(post.created_at).toLocaleDateString()}
+            By <strong>{post.author_name}</strong> · <span className="font-data">{new Date(post.created_at).toLocaleDateString()}</span>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-4 font-data text-xs">
             <span>{post.view_count} views</span>
             <span>{post.comment_count} comments</span>
           </div>
         </div>
 
         {/* Tags */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-4 flex-wrap">
           {post.tags.map((tag) => (
-            <Badge key={tag} variant="default">{tag}</Badge>
+            <span key={tag} className={chipClass} style={{ borderColor: DIVIDER }}>{tag}</span>
           ))}
         </div>
 
         {/* Content */}
-        <div className="prose max-w-none mb-6">
+        <div className="text-[14px] leading-relaxed max-w-none mb-4">
           {post.content}
         </div>
 
-        {/* Actions */}
-        <div className="flex gap-4">
-          <Button
-            variant={liked ? 'primary' : 'secondary'}
+        {/* Actions — plain hairline buttons, no filled card chrome */}
+        <div className="flex gap-3">
+          <button
             onClick={handleLike}
+            className={liked ? 'text-[13px] px-3 py-1.5 border border-blue-600 text-blue-600' : 'text-[13px] px-3 py-1.5 border hover:bg-[var(--hover)]'}
+            style={liked ? undefined : { borderColor: DIVIDER }}
           >
             ❤️ Like ({post.like_count})
-          </Button>
-          <Button
-            variant={bookmarked ? 'primary' : 'secondary'}
+          </button>
+          <button
             onClick={handleBookmark}
+            className={bookmarked ? 'text-[13px] px-3 py-1.5 border border-blue-600 text-blue-600' : 'text-[13px] px-3 py-1.5 border hover:bg-[var(--hover)]'}
+            style={bookmarked ? undefined : { borderColor: DIVIDER }}
           >
             🔖 Bookmark
-          </Button>
+          </button>
         </div>
-      </Card>
+      </section>
 
       {/* Comments Section */}
-      <Card className="p-6">
-        <h2 className="text-2xl font-bold mb-4">Comments ({post.comment_count})</h2>
+      <section className="py-4">
+        <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-3">Comments ({post.comment_count})</h2>
 
         {/* Add Comment */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <Textarea
+        <div className="mb-6">
+          <textarea
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
             placeholder="Add a comment..."
             rows={4}
-            className="w-full mb-2"
+            className="w-full mb-2 px-3 py-2 text-sm border bg-transparent"
+            style={{ borderColor: DIVIDER }}
           />
-          <Button
-            variant="primary"
+          <button
             onClick={handleAddComment}
             disabled={!newComment.trim()}
+            className="text-[13px] px-3 py-1.5 border bg-blue-600 text-white disabled:opacity-50"
           >
             Post Comment
-          </Button>
+          </button>
         </div>
 
-        {/* Comments List */}
-        <div className="space-y-4">
+        {/* Comments List — hairline rows */}
+        <div>
+          {comments.length === 0 && <p className="empty-state">No comments yet</p>}
           {comments.map((comment) => (
-            <div key={comment.id} className="p-4 border rounded-lg">
-              <div className="flex justify-between items-start mb-2">
-                <strong>{comment.author_name}</strong>
-                <span className="text-sm text-gray-500">
+            <div key={comment.id} className="row-line">
+              <div className="flex justify-between items-baseline mb-1">
+                <strong className="text-[13px]">{comment.author_name}</strong>
+                <span className="font-data text-xs opacity-50">
                   {new Date(comment.created_at).toLocaleDateString()}
                 </span>
               </div>
-              <p className="text-gray-700 mb-2">{comment.content}</p>
-              <div className="flex gap-4 text-sm">
+              <p className="text-[13px] opacity-80 mb-1.5">{comment.content}</p>
+              <div className="flex gap-4 text-[13px]">
                 <button className="text-blue-600 hover:underline">
                   ❤️ Like ({comment.like_count})
                 </button>
@@ -293,7 +311,7 @@ export const ForumPostDetail: React.FC<{ postId: string }> = ({ postId }) => {
             </div>
           ))}
         </div>
-      </Card>
+      </section>
     </div>
   );
 };
@@ -338,78 +356,84 @@ export const ForumCreatePost: React.FC = () => {
     }
   };
 
+  const inputClass = 'w-full px-3 py-2 text-sm border bg-transparent';
+  const labelClass = 'block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1.5';
+
   return (
-    <div className="max-w-2xl mx-auto">
-      <Card className="p-6">
-        <h1 className="text-3xl font-bold mb-6">Create New Post</h1>
+    <div className="max-w-2xl">
+      <h1 className="text-[22px] font-medium tracking-tight mb-6 pb-3 border-b">Create New Post</h1>
 
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="post-title" className="block text-sm font-medium mb-2">Title</label>
-            <Input
-              id="post-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Post title (min 5 characters)"
-              className="w-full"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="post-category" className="block text-sm font-medium mb-2">Category</label>
-            <select
-              id="post-category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-4 py-2 border rounded-lg"
-            >
-              <option value="general">General</option>
-              <option value="bugs">Bugs</option>
-              <option value="features">Features</option>
-              <option value="showcase">Showcase</option>
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="post-content" className="block text-sm font-medium mb-2">Content</label>
-            <Textarea
-              id="post-content"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Post content (min 20 characters)"
-              rows={10}
-              className="w-full"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="post-tags" className="block text-sm font-medium mb-2">Tags (comma-separated)</label>
-            <Input
-              id="post-tags"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="e.g., bug, feature, help"
-              className="w-full"
-            />
-          </div>
-
-          <div className="flex gap-4">
-            <Button
-              variant="primary"
-              onClick={handleSubmit}
-              disabled={loading}
-            >
-              {loading ? 'Creating...' : 'Create Post'}
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => window.history.back()}
-            >
-              Cancel
-            </Button>
-          </div>
+      <div className="space-y-4 mb-6">
+        <div>
+          <label htmlFor="post-title" className={labelClass}>Title</label>
+          <input
+            id="post-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Post title (min 5 characters)"
+            className={inputClass}
+            style={{ borderColor: DIVIDER }}
+          />
         </div>
-      </Card>
+
+        <div>
+          <label htmlFor="post-category" className={labelClass}>Category</label>
+          <select
+            id="post-category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className={inputClass}
+            style={{ borderColor: DIVIDER }}
+          >
+            <option value="general">General</option>
+            <option value="bugs">Bugs</option>
+            <option value="features">Features</option>
+            <option value="showcase">Showcase</option>
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="post-content" className={labelClass}>Content</label>
+          <textarea
+            id="post-content"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Post content (min 20 characters)"
+            rows={10}
+            className={inputClass}
+            style={{ borderColor: DIVIDER }}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="post-tags" className={labelClass}>Tags (comma-separated)</label>
+          <input
+            id="post-tags"
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            placeholder="e.g., bug, feature, help"
+            className={inputClass}
+            style={{ borderColor: DIVIDER }}
+          />
+        </div>
+
+        <div className="flex gap-3 pt-3 border-t" style={{ borderColor: DIVIDER }}>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium disabled:opacity-50"
+          >
+            {loading ? 'Creating...' : 'Create Post'}
+          </button>
+          <button
+            onClick={() => window.history.back()}
+            className="px-4 py-2 border text-sm font-medium hover:bg-[var(--hover)]"
+            style={{ borderColor: DIVIDER }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -471,84 +495,90 @@ export const UserProfile: React.FC<{ userId: string }> = ({ userId }) => {
 
   if (loading) return <Spinner />;
 
+  const statItems = [
+    { label: 'Posts', value: reputation?.post_count || 0 },
+    { label: 'Comments', value: reputation?.comment_count || 0 },
+    { label: 'Followers', value: followers },
+    { label: 'Following', value: following },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* User Header */}
-      <Card className="p-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold">{userId}</h1>
-            {reputation && (
-              <div className="mt-2 space-y-1">
-                <div className="text-lg">
-                  <Badge variant="info">{reputation.level.toUpperCase()}</Badge>
-                </div>
-                <div className="text-gray-600">
-                  {reputation.reputation_points} reputation points
-                </div>
-              </div>
-            )}
-          </div>
-          <Button
-            variant={isFollowing ? 'secondary' : 'primary'}
-            onClick={handleFollow}
-          >
-            {isFollowing ? 'Following' : 'Follow'}
-          </Button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4 mt-6">
-          <div className="text-center">
-            <div className="text-2xl font-bold">{reputation?.post_count || 0}</div>
-            <div className="text-gray-600">Posts</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold">{reputation?.comment_count || 0}</div>
-            <div className="text-gray-600">Comments</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold">{followers}</div>
-            <div className="text-gray-600">Followers</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold">{following}</div>
-            <div className="text-gray-600">Following</div>
-          </div>
-        </div>
-
-        {/* Badges */}
-        {reputation?.badges && reputation.badges.length > 0 && (
-          <div className="mt-6">
-            <h3 className="font-semibold mb-2">Badges</h3>
-            <div className="flex gap-2">
-              {reputation.badges.map((badge: string) => (
-                <Badge key={badge} variant="warning">{badge}</Badge>
-              ))}
+    <div>
+      {/* User Header — editorial, hairline-separated */}
+      <section className="py-4 border-b flex justify-between items-start gap-4" style={{ borderColor: DIVIDER }}>
+        <div>
+          <h1 className="text-[22px] font-medium tracking-tight">{userId}</h1>
+          {reputation && (
+            <div className="mt-2 flex items-center gap-3">
+              <span className={chipClass} style={{ borderColor: DIVIDER }}>{reputation.level.toUpperCase()}</span>
+              <span className="font-data text-[13px] opacity-60">
+                {reputation.reputation_points} reputation points
+              </span>
             </div>
-          </div>
-        )}
-      </Card>
+          )}
+        </div>
+        <button
+          onClick={handleFollow}
+          className={isFollowing
+            ? 'text-[13px] px-3 py-1.5 border hover:bg-[var(--hover)]'
+            : 'text-[13px] px-3 py-1.5 border bg-blue-600 text-white'}
+          style={isFollowing ? { borderColor: DIVIDER } : undefined}
+        >
+          {isFollowing ? 'Following' : 'Follow'}
+        </button>
+      </section>
 
-      {/* User Posts */}
-      <Card className="p-6">
-        <h2 className="text-2xl font-bold mb-4">Recent Posts</h2>
-        <div className="space-y-4">
-          {userPosts.map((post) => (
+      {/* Stats — single-row horizontal, 1px dividers */}
+      <section className="py-4 border-b" style={{ borderColor: DIVIDER }}>
+        <dl className="flex flex-wrap gap-y-4">
+          {statItems.map((item, i) => (
             <div
-              key={post.id}
-              role="button"
-              tabIndex={0}
-              className="p-4 border rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => window.location.href = `/forum/posts/${post.id}`}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') window.location.href = `/forum/posts/${post.id}`; }}
+              key={item.label}
+              className={'flex flex-col gap-1.5 pr-6 mr-6' + (i < statItems.length - 1 ? ' border-r' : '')}
+              style={i < statItems.length - 1 ? { borderColor: DIVIDER } : undefined}
             >
-              <h3 className="font-semibold">{post.title}</h3>
-              <p className="text-gray-600 text-sm mt-1">{post.comment_count} comments</p>
+              <dd className="font-data text-[20px] leading-none order-2">{item.value}</dd>
+              <dt className="text-[11px] uppercase tracking-[0.06em] opacity-50 order-1">{item.label}</dt>
             </div>
           ))}
-        </div>
-      </Card>
+        </dl>
+      </section>
+
+      {/* Badges */}
+      {reputation?.badges && reputation.badges.length > 0 && (
+        <section className="py-4 border-b" style={{ borderColor: DIVIDER }}>
+          <h3 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">Badges</h3>
+          <div className="flex gap-2 flex-wrap">
+            {reputation.badges.map((badge: string) => (
+              <span key={badge} className={chipClass} style={{ borderColor: DIVIDER }}>{badge}</span>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* User Posts — hairline rows */}
+      <section className="py-4">
+        <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">Recent Posts</h2>
+        {userPosts.length === 0 ? (
+          <p className="empty-state">No posts yet</p>
+        ) : (
+          <div>
+            {userPosts.map((post) => (
+              <div
+                key={post.id}
+                role="button"
+                tabIndex={0}
+                className="row-line cursor-pointer hover:bg-[var(--hover)]"
+                onClick={() => window.location.href = `/forum/posts/${post.id}`}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') window.location.href = `/forum/posts/${post.id}`; }}
+              >
+                <h3 className="text-[14px] font-medium">{post.title}</h3>
+                <p className="font-data text-xs opacity-50 mt-1">{post.comment_count} comments</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 };

@@ -81,8 +81,7 @@ export const BackupPage: React.FC = () => {
   }
 
   const ghostBtnCls = clsx(
-    'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+    'flex items-center gap-1.5 px-3 py-2 border border-[var(--divider)] bg-transparent text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50'
   )
 
   const statusItems = [
@@ -118,7 +117,7 @@ export const BackupPage: React.FC = () => {
               <button
                 onClick={handleRun}
                 disabled={runBusy || status?.enabled === false}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
                 aria-label={t('backup.runNow', 'Run backup now')}
                 title={status?.enabled === false ? t('backup.disabled', 'Backup is disabled on the server') : undefined}
               >
@@ -155,12 +154,12 @@ export const BackupPage: React.FC = () => {
         </header>
 
         {loadError && (
-          <div role="alert" className="mb-6 rounded-lg border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626]">
+          <div role="alert" className="mb-6 border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626]">
             {loadError}
           </div>
         )}
         {notice && (
-          <div role="status" className="mb-6 rounded-lg border border-[#16a34a]/30 px-4 py-3 text-sm text-[#16a34a]">
+          <div role="status" className="mb-6 border border-[#16a34a]/30 px-4 py-3 text-sm text-[#16a34a]">
             {notice}
           </div>
         )}
@@ -337,12 +336,11 @@ const QdrantSection: React.FC<{ onError: (msg: string | null) => void; onNotice:
   const [busy, setBusy] = useState(false)
 
   const inputCls = clsx(
-    'px-3 py-2 rounded-lg text-sm border outline-none',
-    theme === 'dark' ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+    'px-3 py-2 border border-[var(--divider)] bg-transparent text-sm outline-none transition-colors focus:border-[var(--fg)]',
+    theme === 'dark' ? 'placeholder:text-slate-500' : 'placeholder:text-slate-400'
   )
   const ghostBtnCls = clsx(
-    'px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+    'px-4 py-2 border border-[var(--divider)] bg-transparent text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50'
   )
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -402,7 +400,7 @@ const QdrantSection: React.FC<{ onError: (msg: string | null) => void; onNotice:
         <button
           onClick={handleSnapshot}
           disabled={busy}
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
           {t('backup.qdrant.createSnapshot', 'Create snapshot')}
         </button>

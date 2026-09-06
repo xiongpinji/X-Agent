@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { toErrorMessage } from '@/services/errorMessage'
 import { apiClient } from '@/services/api'
-import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/i18n/context'
 import clsx from 'clsx'
 
@@ -28,14 +27,12 @@ const LANGUAGES = [
 ] as const
 
 const CodeReviewPage: React.FC = () => {
-  const { theme } = useAppStore()
   const { t } = useI18n()
   const [code, setCode] = useState('')
   const [language, setLanguage] = useState<string>('python')
   const [result, setResult] = useState<ReviewResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const isDark = theme === 'dark'
 
   const submitReview = async () => {
     if (!code.trim()) return
@@ -63,128 +60,121 @@ const CodeReviewPage: React.FC = () => {
     }
   }
 
-  const severityColors: Record<string, string> = {
-    error: 'text-red-500 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
-    warning: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
-    info: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
+  const severityBadge: Record<string, string> = {
+    error: 'badge-danger',
+    warning: 'badge-warning',
+    info: 'badge-muted',
   }
 
-  const severityIcons: Record<string, string> = { error: '🔴', warning: '🟡', info: '🔵' }
+  const inputCls =
+    'w-full px-3 py-2 border border-[var(--divider)] bg-transparent text-sm outline-none transition-colors focus:border-[var(--fg)] placeholder:opacity-40'
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">🔍 {t('codeReview.title', 'Code Review')}</h1>
-      <p className={clsx('text-sm mb-6', isDark ? 'text-slate-400' : 'text-slate-500')}>
-        {t('codeReview.subtitle', 'Submit code or a diff for multi-dimensional AI review (logic, security, style, tests)')}
-      </p>
+    <div className="min-h-full px-8 py-10">
+      <div className="max-w-4xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div className="w-12 border-t-2 mb-5" style={{ borderColor: 'var(--fg)' }} aria-hidden="true" />
+          <h1 className="page-title">{t('codeReview.title', 'Code Review')}</h1>
+          <p className="page-subtitle">
+            {t('codeReview.subtitle', 'Submit code or a diff for multi-dimensional AI review (logic, security, style, tests)')}
+          </p>
+        </header>
 
-      {/* Input */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-3">
-          <label
-            htmlFor="review-language"
-            className={clsx('text-sm font-medium', isDark ? 'text-slate-300' : 'text-slate-700')}
+        {/* Input */}
+        <div className="mb-10">
+          <div className="flex items-center gap-3 mb-3">
+            <label
+              htmlFor="review-language"
+              className="text-[11px] uppercase tracking-[0.06em] opacity-50"
+            >
+              {t('codeReview.language', 'Language')}
+            </label>
+            <select
+              id="review-language"
+              value={language}
+              onChange={e => setLanguage(e.target.value)}
+              className="px-3 py-1.5 border border-[var(--divider)] bg-transparent text-sm outline-none"
+            >
+              {LANGUAGES.map(lang => (
+                <option key={lang.value} value={lang.value}>{lang.label}</option>
+              ))}
+            </select>
+          </div>
+          <textarea
+            value={code}
+            onChange={e => setCode(e.target.value)}
+            placeholder={t('codeReview.placeholder', 'Paste your code or git diff here...')}
+            rows={10}
+            className={clsx(inputCls, 'px-4 py-3 font-mono resize-y')}
+          />
+          <button
+            onClick={submitReview}
+            disabled={!code.trim() || loading}
+            className="mt-3 px-5 py-2.5 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {t('codeReview.language', 'Language')}
-          </label>
-          <select
-            id="review-language"
-            value={language}
-            onChange={e => setLanguage(e.target.value)}
-            className={clsx(
-              'px-3 py-1.5 rounded-lg text-sm border',
-              isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
-            )}
-          >
-            {LANGUAGES.map(lang => (
-              <option key={lang.value} value={lang.value}>{lang.label}</option>
-            ))}
-          </select>
+            {loading ? '⏳ Reviewing...' : '🔍 Submit Review'}
+          </button>
         </div>
-        <textarea
-          value={code}
-          onChange={e => setCode(e.target.value)}
-          placeholder={t('codeReview.placeholder', 'Paste your code or git diff here...')}
-          rows={10}
-          className={clsx(
-            'w-full px-4 py-3 rounded-lg border text-sm font-mono resize-y',
-            isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
-          )}
-        />
-        <button
-          onClick={submitReview}
-          disabled={!code.trim() || loading}
-          className="mt-3 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {loading ? '⏳ Reviewing...' : '🔍 Submit Review'}
-        </button>
-      </div>
 
-      {/* Error */}
-      {error && (
-        <div className={clsx(
-          'mb-4 p-3 rounded-lg border text-sm',
-          isDark ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-red-50 border-red-200 text-red-600'
-        )}>
-          ⚠️ {error}
-        </div>
-      )}
+        {/* Error — thin border, transparent background */}
+        {error && (
+          <div className="mb-6 p-3 border border-[#dc2626]/30 text-sm text-[#dc2626]" role="alert">
+            ⚠️ {error}
+          </div>
+        )}
 
-      {/* Results */}
-      {result && (
-        <div className="space-y-3">
-          {/* Approval status */}
-          <div className={clsx(
-            'flex items-center gap-3 p-4 rounded-xl border',
-            result.approved
-              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-              : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
-          )}>
-            <span className="text-2xl">{result.approved ? '✅' : '⚠️'}</span>
-            <div>
-              <p className={clsx('font-semibold text-sm', result.approved ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400')}>
+        {/* Results */}
+        {result && (
+          <div>
+            {/* Approval status — inline badge row, no colored panel */}
+            <div className="mb-8 flex items-center gap-4 flex-wrap">
+              <span className={clsx('badge-status', result.approved ? 'badge-success' : 'badge-warning')}>
+                {result.approved ? '✓ ' : '! '}
                 {result.approved ? t('codeReview.approved', 'Approved') : t('codeReview.changesRequested', 'Changes Requested')}
-              </p>
+              </span>
               {result.score != null && (
-                <p className={clsx('text-xs', isDark ? 'text-slate-400' : 'text-slate-500')}>
-                  Score: {result.score}/100
-                </p>
+                <span className="text-[13px] opacity-60">
+                  Score: <span className="font-data">{result.score}/100</span>
+                </span>
               )}
             </div>
-          </div>
 
-          {/* Comments list */}
-          <h2 className="text-lg font-semibold">
-            {t('codeReview.comments', 'Comments')} {result.comments.length > 0 && `(${result.comments.length})`}
-          </h2>
-          {result.comments.length === 0 ? (
-            <p className={clsx('text-sm py-6 text-center', isDark ? 'text-slate-500' : 'text-slate-400')}>
-              ✓ {t('codeReview.noIssues', 'No issues found. Code looks good!')}
-            </p>
-          ) : (
-            result.comments.map((c, i) => {
-              const severity = c.severity ?? 'info'
-              return (
-                <div key={i} className={clsx('p-4 rounded-lg border', severityColors[severity])}>
-                  <div className="flex items-start gap-2">
-                    <span>{severityIcons[severity]}</span>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        {c.dimension && <span className="text-xs font-semibold uppercase">{c.dimension}</span>}
-                        {c.line != null && <span className="text-xs opacity-70">Line {c.line}</span>}
+            {/* Comments list — hairline divider rows */}
+            <h2 className="text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2">
+              {t('codeReview.comments', 'Comments')} {result.comments.length > 0 && `(${result.comments.length})`}
+            </h2>
+            {result.comments.length === 0 ? (
+              <p className="empty-state">
+                ✓ {t('codeReview.noIssues', 'No issues found. Code looks good!')}
+              </p>
+            ) : (
+              result.comments.map((c, i) => {
+                const severity = c.severity ?? 'info'
+                return (
+                  <div key={i} className="row-line">
+                    <div className="flex items-start gap-3">
+                      <span className={clsx('badge-status shrink-0 mt-0.5', severityBadge[severity])}>
+                        {severity}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          {c.dimension && <span className="text-xs font-semibold uppercase tracking-wide">{c.dimension}</span>}
+                          {c.line != null && <span className="text-xs opacity-50 font-data">Line {c.line}</span>}
+                        </div>
+                        <p className="text-sm font-medium break-words">{c.message}</p>
+                        {c.suggestion && (
+                          <p className="text-xs mt-1 opacity-60">💡 {c.suggestion}</p>
+                        )}
                       </div>
-                      <p className="text-sm font-medium">{c.message}</p>
-                      {c.suggestion && (
-                        <p className="text-xs mt-1 opacity-80">💡 {c.suggestion}</p>
-                      )}
                     </div>
                   </div>
-                </div>
-              )
-            })
-          )}
-        </div>
-      )}
+                )
+              })
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

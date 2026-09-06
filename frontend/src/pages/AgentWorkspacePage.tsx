@@ -99,7 +99,7 @@ const AgentWorkspacePage: React.FC = () => {
         {activeTab === 'chat' ? (
           <>
             <div className={clsx(
-              'flex-1 overflow-y-auto rounded-xl border p-4 space-y-3 mb-3',
+              'flex-1 overflow-y-auto border p-4 space-y-3 mb-3',
               isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
             )}>
               {chatMessages.length === 0 ? (
@@ -147,7 +147,7 @@ const AgentWorkspacePage: React.FC = () => {
             </div>
           </>
         ) : activeTab === 'tools' ? (
-          <div className={clsx('flex-1 rounded-xl border p-4', isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
+          <div className={clsx('flex-1 border p-4 bg-transparent', isDark ? 'border-slate-700' : 'border-slate-200')}>
             <h3 className="font-medium text-sm mb-3">🔧 Agent Tools</h3>
             <div className="grid grid-cols-2 gap-2">
               {(agent.capabilities || ['chat', 'search', 'code_execution']).map((cap, i) => (
@@ -162,7 +162,7 @@ const AgentWorkspacePage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className={clsx('flex-1 rounded-xl border p-4', isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
+          <div className={clsx('flex-1 border p-4 bg-transparent', isDark ? 'border-slate-700' : 'border-slate-200')}>
             <h3 className="font-medium text-sm mb-3">🧠 Agent Memory</h3>
             <p className={clsx('text-xs', isDark ? 'text-slate-400' : 'text-slate-500')}>
               {t('workspace.memoryInfo', 'Memory items associated with this agent will appear here.')}

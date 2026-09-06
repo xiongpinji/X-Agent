@@ -10,7 +10,7 @@ type AuthMode = 'login' | 'register' | 'apikey'
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate()
-  const { setUser, theme } = useAppStore()
+  const { setUser } = useAppStore()
   const [mode, setMode] = useState<AuthMode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -96,35 +96,41 @@ export const LoginPage: React.FC = () => {
     }
   }
 
+  // Square thin-border inputs — Codex terminal feel, theme via CSS vars.
+  const inputCls =
+    'w-full px-3 py-2 border bg-transparent text-sm outline-none transition-colors placeholder:opacity-40 focus:border-[var(--fg)]'
+
   return (
-    <div className={clsx(
-      'min-h-screen flex items-center justify-center px-4',
-      theme === 'dark' ? 'bg-slate-950' : 'bg-slate-50'
-    )}>
-      <div className={clsx(
-        'w-full max-w-md rounded-xl shadow-lg p-8',
-        theme === 'dark' ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200'
-      )}>
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <h1 className={clsx(
-            'text-3xl font-bold mb-2',
-            theme === 'dark' ? 'text-white' : 'text-slate-900'
-          )}>
-            X-Agent
-          </h1>
-          <p className={clsx(
-            'text-sm',
-            theme === 'dark' ? 'text-slate-400' : 'text-slate-600'
-          )}>
+    <div
+      className="min-h-screen flex items-center justify-center px-4"
+      style={{ backgroundColor: 'var(--bg)', color: 'var(--fg)' }}
+    >
+      {/* Hairline container — no radius, no shadow */}
+      <div
+        className="w-full max-w-md border p-8"
+        style={{ borderColor: 'var(--divider)' }}
+      >
+        {/* Header */}
+        <div className="mb-8">
+          <div
+            className="w-10 border-t-2 mb-4"
+            style={{ borderColor: 'var(--fg)' }}
+            aria-hidden="true"
+          />
+          <h1 className="text-[22px] font-medium tracking-tight">X-Agent</h1>
+          <p className="text-[13px] opacity-50 mt-1">
             {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
           </p>
         </div>
 
-        {/* Error */}
+        {/* Error — thin border, transparent background */}
         {error && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-            <AlertTriangle size={16} />
+          <div
+            role="alert"
+            className="mb-4 flex items-center gap-2 border px-3 py-2 text-sm text-[#dc2626]"
+            style={{ borderColor: 'rgba(220,38,38,.35)' }}
+          >
+            <AlertTriangle size={15} />
             {error}
           </div>
         )}
@@ -135,10 +141,7 @@ export const LoginPage: React.FC = () => {
             <div>
               <label
                 htmlFor="apikey"
-                className={clsx(
-                  'block text-sm font-medium mb-1',
-                  theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-                )}
+                className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1"
               >
                 API Key
               </label>
@@ -149,14 +152,10 @@ export const LoginPage: React.FC = () => {
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="xagent-dev-key-2024"
                 autoComplete="off"
-                className={clsx(
-                  'w-full px-4 py-2 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500',
-                  theme === 'dark'
-                    ? 'bg-slate-800 text-white border-slate-700 placeholder-slate-500'
-                    : 'bg-white text-slate-900 border-slate-300 placeholder-slate-400'
-                )}
+                className={inputCls}
+                style={{ borderColor: 'var(--divider)' }}
               />
-              <p className={clsx('mt-1 text-xs', theme === 'dark' ? 'text-slate-500' : 'text-slate-400')}>
+              <p className="mt-1 text-xs opacity-50">
                 开发模式：直接输入后端 X-API-Key 即可进入
               </p>
             </div>
@@ -165,10 +164,7 @@ export const LoginPage: React.FC = () => {
           <div>
             <label
               htmlFor="email"
-              className={clsx(
-                'block text-sm font-medium mb-1',
-                theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-              )}
+              className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1"
             >
               Email
             </label>
@@ -179,22 +175,15 @@ export const LoginPage: React.FC = () => {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               autoComplete="email"
-              className={clsx(
-                'w-full px-4 py-2 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500',
-                theme === 'dark'
-                  ? 'bg-slate-800 text-white border-slate-700 placeholder-slate-500'
-                  : 'bg-white text-slate-900 border-slate-300 placeholder-slate-400'
-              )}
+              className={inputCls}
+              style={{ borderColor: 'var(--divider)' }}
             />
           </div>
 
           <div>
             <label
               htmlFor="password"
-              className={clsx(
-                'block text-sm font-medium mb-1',
-                theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-              )}
+              className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1"
             >
               Password
             </label>
@@ -205,12 +194,8 @@ export const LoginPage: React.FC = () => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              className={clsx(
-                'w-full px-4 py-2 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500',
-                theme === 'dark'
-                  ? 'bg-slate-800 text-white border-slate-700 placeholder-slate-500'
-                  : 'bg-white text-slate-900 border-slate-300 placeholder-slate-400'
-              )}
+              className={inputCls}
+              style={{ borderColor: 'var(--divider)' }}
             />
           </div>
 
@@ -218,10 +203,7 @@ export const LoginPage: React.FC = () => {
             <div>
               <label
                 htmlFor="confirm-password"
-                className={clsx(
-                  'block text-sm font-medium mb-1',
-                  theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-                )}
+                className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1"
               >
                 Confirm Password
               </label>
@@ -232,12 +214,8 @@ export const LoginPage: React.FC = () => {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••"
                 autoComplete="new-password"
-                className={clsx(
-                  'w-full px-4 py-2 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500',
-                  theme === 'dark'
-                    ? 'bg-slate-800 text-white border-slate-700 placeholder-slate-500'
-                    : 'bg-white text-slate-900 border-slate-300 placeholder-slate-400'
-                )}
+                className={inputCls}
+                style={{ borderColor: 'var(--divider)' }}
               />
             </div>
           )}
@@ -248,31 +226,34 @@ export const LoginPage: React.FC = () => {
             type="submit"
             disabled={loading}
             className={clsx(
-              'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors',
-              loading
-                ? 'opacity-50 cursor-not-allowed bg-blue-600 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
+              'w-full flex items-center justify-center gap-2 px-4 py-2.5 font-medium text-sm text-white transition-opacity',
+              loading ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'
             )}
+            style={{ backgroundColor: 'var(--accent)' }}
           >
             {loading ? (
-              <Loader size={20} className="animate-spin" />
+              <Loader size={18} className="animate-spin" />
             ) : mode === 'login' ? (
-              <LogIn size={20} />
+              <LogIn size={18} />
             ) : (
-              <UserPlus size={20} />
+              <UserPlus size={18} />
             )}
             {mode === 'login' ? 'Sign In' : mode === 'register' ? 'Create Account' : 'Enter'}
           </button>
         </form>
 
         {/* Toggle mode */}
-        <div className="mt-6 text-center space-y-2">
+        <div
+          className="mt-6 pt-4 text-center space-y-2 border-t"
+          style={{ borderColor: 'var(--divider)' }}
+        >
           <button
             onClick={() => {
               setMode(mode === 'login' ? 'register' : 'login')
               setError(null)
             }}
-            className="block w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
+            className="block w-full text-sm font-medium hover:opacity-80 transition-opacity"
+            style={{ color: 'var(--accent)' }}
           >
             {mode === 'login'
               ? "Don't have an account? Sign up"
@@ -285,7 +266,7 @@ export const LoginPage: React.FC = () => {
               setMode(mode === 'apikey' ? 'login' : 'apikey')
               setError(null)
             }}
-            className="block w-full text-sm text-slate-500 hover:text-slate-700 font-medium"
+            className="block w-full text-sm font-medium opacity-50 hover:opacity-100 transition-opacity"
           >
             {mode === 'apikey' ? '← Email login' : '🔑 API Key login (dev)'}
           </button>

@@ -42,10 +42,10 @@ export function ConsoleSyncStatusBadge(props: {
       </div>
       {props.error ? <div className="max-w-[260px] truncate text-xs text-red-500" title={props.error}>{props.error}</div> : null}
       <div className="flex items-center gap-2">
-        <button className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50" onClick={props.onRefresh}>
+        <button className="border px-2 py-1 text-xs hover:bg-gray-50" onClick={props.onRefresh}>
           刷新
         </button>
-        <button className="rounded-lg border px-2 py-1 text-xs hover:bg-gray-50" onClick={props.onReconnect}>
+        <button className="border px-2 py-1 text-xs hover:bg-gray-50" onClick={props.onReconnect}>
           重连
         </button>
       </div>

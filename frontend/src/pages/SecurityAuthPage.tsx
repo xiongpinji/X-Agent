@@ -132,14 +132,11 @@ export const SecurityAuthPage: React.FC = () => {
   }
 
   const inputCls = clsx(
-    'px-3 py-2 rounded-lg border text-sm w-full',
-    theme === 'dark'
-      ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-500'
-      : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+    'px-3 py-2 border border-[var(--divider)] bg-transparent text-sm w-full outline-none transition-colors focus:border-[var(--fg)]',
+    theme === 'dark' ? 'placeholder:text-slate-500' : 'placeholder:text-slate-400'
   )
   const ghostBtnCls = clsx(
-    'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+    'flex items-center gap-2 px-3 py-2 border border-[var(--divider)] bg-transparent text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50'
   )
 
   return (
@@ -186,7 +183,7 @@ export const SecurityAuthPage: React.FC = () => {
               <button
                 onClick={handleSetupMFA}
                 disabled={mfaLoading}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium whitespace-nowrap transition-colors"
               >
                 {mfaLoading ? t('common.loading', 'Loading...') : t('security.startSetup', 'Start Setup')}
               </button>
@@ -235,7 +232,7 @@ export const SecurityAuthPage: React.FC = () => {
                 <button
                   onClick={handleVerifyMFA}
                   disabled={verifyLoading || !challengeId || !verifyCode}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium whitespace-nowrap transition-colors"
                 >
                   {t('security.verify', 'Verify')}
                 </button>

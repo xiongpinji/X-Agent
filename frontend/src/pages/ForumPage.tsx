@@ -3,6 +3,8 @@ import { ForumHome, ForumPostDetail, ForumCreatePost } from '@/components/Forum'
 
 type View = { name: 'home' } | { name: 'detail'; postId: string } | { name: 'create' }
 
+const DIVIDER = 'var(--divider)'
+
 /**
  * Forum page wrapper — internal navigation between the forum sub-views
  * (home / post detail / create post). Backend: /api/v1/forum/*.
@@ -11,30 +13,33 @@ const ForumPage: React.FC = () => {
   const [view, setView] = useState<View>({ name: 'home' })
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center gap-3">
+    <div className="min-h-full px-8 py-10">
+      <div className="max-w-4xl">
         {view.name !== 'home' && (
           <button
             onClick={() => setView({ name: 'home' })}
-            className="px-3 py-1 rounded border border-slate-600 text-sm hover:bg-slate-700"
+            className="mb-4 px-3 py-1.5 border text-sm hover:bg-[var(--hover)]"
+            style={{ borderColor: DIVIDER }}
             aria-label="Back to forum home"
           >
             ← 返回
           </button>
         )}
         {view.name === 'home' && (
-          <button
-            onClick={() => setView({ name: 'create' })}
-            className="ml-auto px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-500"
-          >
-            新建帖子
-          </button>
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => setView({ name: 'create' })}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium"
+            >
+              新建帖子
+            </button>
+          </div>
         )}
-      </div>
 
-      {view.name === 'home' && <ForumHome />}
-      {view.name === 'detail' && <ForumPostDetail postId={view.postId} />}
-      {view.name === 'create' && <ForumCreatePost />}
+        {view.name === 'home' && <ForumHome />}
+        {view.name === 'detail' && <ForumPostDetail postId={view.postId} />}
+        {view.name === 'create' && <ForumCreatePost />}
+      </div>
     </div>
   )
 }

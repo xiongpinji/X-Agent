@@ -52,7 +52,7 @@ export function TemplateInstantiationWizard({
     <div className="space-y-6">
       <TemplateMarketOfflineNotice />
 
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+      <section className="console-section">
         <h2 className="text-lg font-semibold">实例化模板：{template.name}</h2>
         <p className="mt-1 text-sm text-gray-500">{template.description}</p>
 
@@ -67,7 +67,7 @@ export function TemplateInstantiationWizard({
                 id={`param-${param.name}`}
                 placeholder={param.placeholder ?? param.description}
                 disabled={TEMPLATE_MARKET_OFFLINE}
-                className="w-full rounded-lg border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
+                className="w-full border border-gray-300 px-4 py-2 disabled:cursor-not-allowed disabled:bg-gray-100"
               />
               {param.help_text ? <p className="mt-1 text-xs text-gray-400">{param.help_text}</p> : null}
             </div>
@@ -81,13 +81,13 @@ export function TemplateInstantiationWizard({
       <div className="flex justify-end gap-2">
         <button
           onClick={onCancel}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+          className="border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
         >
           取消
         </button>
         <button
           disabled={TEMPLATE_MARKET_OFFLINE}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="bg-blue-600 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           实例化（未上线）
         </button>

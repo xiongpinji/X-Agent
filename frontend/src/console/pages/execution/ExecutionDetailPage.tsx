@@ -104,15 +104,15 @@ export function ExecutionDetailPage(props: ExecutionDetailPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+      <section className="console-section">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">执行详情</h2>
             <p className="text-sm text-gray-500">任务 {runId} 的执行剖面。</p>
           </div>
           <div className="flex gap-2">
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={props.onBack}>返回总览</button>
-            <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenRecovery?.(runId)}>进入恢复</button>
+            <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={props.onBack}>返回总览</button>
+            <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenRecovery?.(runId)}>进入恢复</button>
           </div>
         </div>
       </section>
@@ -135,7 +135,7 @@ export function ExecutionDetailPage(props: ExecutionDetailPageProps) {
           <Panel title="执行时间线">
             <div className="space-y-3">
               {steps.map((step) => (
-                <div key={step.name} className="rounded-xl border px-3 py-3">
+                <div key={step.name} className="border-b px-3 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="font-medium">{step.name}</div>
                     <div className="text-xs text-gray-500">{step.duration}</div>
@@ -148,7 +148,7 @@ export function ExecutionDetailPage(props: ExecutionDetailPageProps) {
           </Panel>
 
           <Panel title="消息 / 审计 / 记忆引用">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3">
               <LinkCard title={linkedTitles.messages ?? "关联消息"} subtitle="查看执行期间产生的消息事件" onClick={() => props.onOpenMessages?.(runId)} />
               <LinkCard title={linkedTitles.audit ?? "审计记录"} subtitle="查看执行链路审计" onClick={() => props.onOpenAudit?.(runId)} />
               <LinkCard title={linkedTitles.memory ?? "记忆引用"} subtitle="查看关联记忆和证据" onClick={() => props.onOpenMemory?.(runId)} />
@@ -160,7 +160,7 @@ export function ExecutionDetailPage(props: ExecutionDetailPageProps) {
           <Panel title="工具调用">
             <div className="space-y-2">
               {toolCalls.map((call) => (
-                <div key={`${call.tool}-${call.time}`} className="rounded-xl border px-3 py-3">
+                <div key={`${call.tool}-${call.time}`} className="border-b px-3 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="font-medium">{call.tool}</div>
                     <div className="text-xs text-gray-500">{call.time}</div>
@@ -174,8 +174,8 @@ export function ExecutionDetailPage(props: ExecutionDetailPageProps) {
 
           <Panel title="操作区">
             <div className="grid gap-2">
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenDispatch?.(runId)}>查看调度建议</button>
-              <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenRecovery?.(runId)}>重新进入恢复</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenDispatch?.(runId)}>查看调度建议</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenRecovery?.(runId)}>重新进入恢复</button>
             </div>
           </Panel>
         </aside>
@@ -186,16 +186,16 @@ export function ExecutionDetailPage(props: ExecutionDetailPageProps) {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border bg-gray-50 p-3">
+    <div className="flex items-baseline justify-between gap-3 border-b py-2">
       <div className="text-xs text-gray-500">{label}</div>
-      <div className="mt-1 font-medium text-gray-900">{value}</div>
+      <div className="font-data font-medium text-gray-900">{value}</div>
     </div>
   );
 }
 
 function LinkCard({ title, subtitle, onClick }: { title: string; subtitle: string; onClick?: () => void }) {
   return (
-    <button className="rounded-xl border px-3 py-3 text-left hover:bg-gray-50" onClick={onClick}>
+    <button className="border-b px-3 py-3 text-left hover:bg-gray-50" onClick={onClick}>
       <div className="font-medium">{title}</div>
       <div className="mt-1 text-xs text-gray-500">{subtitle}</div>
     </button>
@@ -204,7 +204,7 @@ function LinkCard({ title, subtitle, onClick }: { title: string; subtitle: strin
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-white p-4 shadow-sm">
+    <section className="console-section">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>

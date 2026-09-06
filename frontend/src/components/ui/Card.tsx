@@ -12,7 +12,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
 
     const variantStyles = {
       default: 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700',
-      elevated: 'bg-white dark:bg-slate-900 shadow-lg',
+      elevated: 'bg-white dark:bg-slate-900',
       outlined: 'border-2 border-slate-300 dark:border-slate-600',
     }
 

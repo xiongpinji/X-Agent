@@ -44,7 +44,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
       return (
         <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950 p-4">
-          <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-8 text-center">
+          <div className="max-w-md w-full bg-transparent border border-slate-200 dark:border-slate-700 p-8 text-center">
             <div className="text-4xl mb-4">⚠️</div>
             <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
               Something went wrong

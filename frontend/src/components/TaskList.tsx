@@ -131,7 +131,7 @@ export const TaskList: React.FC<TaskListProps> = ({
       key={task.task_id}
       role="button"
       tabIndex={0}
-      className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+      className="p-4 border-b border-gray-200 hover:bg-[var(--hover)] transition-colors cursor-pointer"
       onClick={() => onTaskClick?.(task)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onTaskClick?.(task); }}
     >

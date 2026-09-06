@@ -10,7 +10,7 @@ export const TEMPLATE_MARKET_OFFLINE = true;
 
 export function TemplateMarketOfflineNotice() {
   return (
-    <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+    <section className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
       <div className="font-semibold">后端模板市场未上线</div>
       <p className="mt-1">
         当前后端未提供模板市场接口（无 /api/v1/templates 路由），本页面的浏览、编辑与实例化操作已暂时禁用。

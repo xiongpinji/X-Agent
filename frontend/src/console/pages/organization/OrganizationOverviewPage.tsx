@@ -25,7 +25,7 @@ export function OrganizationOverviewPage(props: OrganizationOverviewPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+      <section className="console-section">
         <div className="text-xs text-gray-500">{resourceType}</div>
         <div className="mt-1 text-sm text-gray-700">资源 ID：{resourceId}</div>
         <div className="mt-2 text-xs text-gray-500">组织摘要：{props.linkedOrganizationSummary?.summary?.title ?? "organization"}</div>
@@ -34,7 +34,7 @@ export function OrganizationOverviewPage(props: OrganizationOverviewPageProps) {
         <div className="mt-1 text-xs text-gray-500">审计摘要：{props.linkedAuditsSummary?.summary?.title ?? "audits"}</div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="console-kpi-row">
         <StatCard label="部门数" value={String(totalDepartments)} />
         <StatCard label="角色数" value={String(totalRoles)} />
         <StatCard label="成员数" value={String(totalMembers)} />
@@ -51,9 +51,9 @@ export function OrganizationOverviewPage(props: OrganizationOverviewPageProps) {
 
         <Panel title="快捷入口">
           <div className="grid gap-2">
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50">查看组织结构</button>
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50">查看角色权限</button>
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50">查看审核队列</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50">查看组织结构</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50">查看角色权限</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50">查看审核队列</button>
           </div>
         </Panel>
       </section>
@@ -63,16 +63,13 @@ export function OrganizationOverviewPage(props: OrganizationOverviewPageProps) {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="text-sm text-gray-500">{label}</div>
-      <div className="mt-2 text-2xl font-bold text-gray-900">{value}</div>
-    </div>
+    <div className="console-kpi"><span className="kpi-label">{label}</span><span className="kpi-value">{value}</span></div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-white p-4 shadow-sm">
+    <section className="console-section">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>

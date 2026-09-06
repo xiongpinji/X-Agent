@@ -105,8 +105,12 @@ export const AuditLogsPage: React.FC = () => {
   }
 
   const inputCls = clsx(
-    'px-3 py-2 rounded-lg text-sm border outline-none',
-    theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+    'px-3 py-2 border border-[var(--divider)] bg-transparent text-sm outline-none transition-colors focus:border-[var(--fg)]',
+    theme === 'dark' ? 'placeholder:text-slate-500' : 'placeholder:text-slate-400'
+  )
+
+  const ghostBtnCls = clsx(
+    'flex items-center gap-1.5 px-3 py-2 border border-[var(--divider)] bg-transparent text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50'
   )
 
   return (
@@ -130,10 +134,7 @@ export const AuditLogsPage: React.FC = () => {
             <button
               onClick={() => handleExport('csv')}
               disabled={exportBusy}
-              className={clsx(
-                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-              )}
+              className={ghostBtnCls}
               aria-label={t('audit.exportCsv', 'Export CSV')}
             >
               <Download size={16} />
@@ -142,10 +143,7 @@ export const AuditLogsPage: React.FC = () => {
             <button
               onClick={() => handleExport('json')}
               disabled={exportBusy}
-              className={clsx(
-                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-              )}
+              className={ghostBtnCls}
               aria-label={t('audit.exportJson', 'Export JSON')}
             >
               <Download size={16} />
@@ -156,10 +154,7 @@ export const AuditLogsPage: React.FC = () => {
               disabled
               title={`${t('audit.exportPdf', 'Compliance PDF')} (${comingSoon})`}
               aria-label={`${t('audit.exportPdf', 'Compliance PDF')} (${comingSoon})`}
-              className={clsx(
-                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed',
-                theme === 'dark' ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-500'
-              )}
+              className={clsx(ghostBtnCls, 'opacity-50 cursor-not-allowed')}
             >
               <Download size={16} />
               PDF ({comingSoon})
@@ -167,7 +162,7 @@ export const AuditLogsPage: React.FC = () => {
             <button
               onClick={handleVerify}
               disabled={verifyBusy}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
               aria-label={t('audit.verify', 'Verify chain')}
             >
               <ShieldCheck size={16} />
@@ -176,10 +171,7 @@ export const AuditLogsPage: React.FC = () => {
             <button
               onClick={() => loadLogs(filters)}
               disabled={isLoading}
-              className={clsx(
-                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-              )}
+              className={ghostBtnCls}
               aria-label={t('common.refresh', 'Refresh')}
             >
               <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
@@ -193,10 +185,10 @@ export const AuditLogsPage: React.FC = () => {
           <div
             role="status"
             className={clsx(
-              'mb-6 rounded-lg border px-4 py-3 text-sm',
+              'mb-6 border px-4 py-3 text-sm',
               verification.valid
-                ? theme === 'dark' ? 'border-green-900 bg-green-950/40 text-green-300' : 'border-green-200 bg-green-50 text-green-700'
-                : theme === 'dark' ? 'border-red-900 bg-red-950/40 text-red-300' : 'border-red-200 bg-red-50 text-red-700'
+                ? 'border-[#16a34a]/30 text-[#16a34a]'
+                : 'border-[#dc2626]/30 text-[#dc2626]'
             )}
           >
             {verification.valid
@@ -214,10 +206,7 @@ export const AuditLogsPage: React.FC = () => {
         {loadError && (
           <div
             role="alert"
-            className={clsx(
-              'mb-6 rounded-lg border px-4 py-3 text-sm',
-              theme === 'dark' ? 'border-red-900 bg-red-950/40 text-red-300' : 'border-red-200 bg-red-50 text-red-700'
-            )}
+            className="mb-6 border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626]"
           >
             {loadError}
           </div>
@@ -261,17 +250,14 @@ export const AuditLogsPage: React.FC = () => {
           <button
             onClick={() => loadLogs(filters)}
             disabled={isLoading}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
             {t('audit.applyFilters', 'Apply')}
           </button>
           <button
             onClick={() => { setFilters(EMPTY_FILTERS); loadLogs(EMPTY_FILTERS) }}
             disabled={isLoading}
-            className={clsx(
-              'px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-              theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            )}
+            className={clsx(ghostBtnCls, 'px-4')}
           >
             {t('audit.resetFilters', 'Reset')}
           </button>
@@ -353,10 +339,7 @@ const AuditLogRow: React.FC<{ record: AuditLogRecord }> = ({ record }) => {
               <div className={clsx('text-xs font-medium mb-1', theme === 'dark' ? 'text-slate-400' : 'text-slate-500')}>
                 {t('audit.details', 'Details')}
               </div>
-              <pre className={clsx(
-                'rounded-md p-3 text-xs overflow-auto max-h-48',
-                theme === 'dark' ? 'bg-slate-950 text-slate-300 border border-slate-800' : 'bg-slate-50 text-slate-700 border border-slate-200'
-              )}>
+              <pre className="border border-[var(--divider)] bg-transparent p-3 text-xs overflow-auto max-h-48 cell-data opacity-80">
                 {JSON.stringify(record.details, null, 2)}
               </pre>
             </>

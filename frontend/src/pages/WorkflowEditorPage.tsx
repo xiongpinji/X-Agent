@@ -173,30 +173,25 @@ const WorkflowEditorPage: React.FC = () => {
   return (
     <div className="h-full flex flex-col">
       {/* Toolbar */}
-      <div className={clsx(
-        'flex items-center justify-between px-4 py-3 border-b',
-        isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
-      )}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--divider)]">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-bold">{t('workflows.editor', 'Workflow Editor')}</h1>
           {selectedWorkflow && (
-            <span className={clsx('text-sm px-2 py-0.5 rounded', isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600')}>
-              {selectedWorkflow.name}
-            </span>
+            <span className="cell-data opacity-50">{selectedWorkflow.name}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => addNode('task')} className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <button onClick={() => addNode('task')} className="px-3 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 transition-colors">
             + Task
           </button>
-          <button onClick={() => addNode('condition')} className="px-3 py-1.5 text-xs bg-amber-600 text-white rounded-lg hover:bg-amber-700">
+          <button onClick={() => addNode('condition')} className="px-3 py-1.5 text-xs border border-[var(--divider)] hover:bg-[var(--hover)] transition-colors">
             + Condition
           </button>
           {selectedWorkflow && (
             <button
               onClick={runWorkflow}
               disabled={running}
-              className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              className="px-3 py-1.5 text-xs text-[#16a34a] border border-current hover:bg-[var(--hover)] disabled:opacity-50 transition-colors"
             >
               {running ? '⏳ Running...' : '▶ Run'}
             </button>
@@ -206,26 +201,21 @@ const WorkflowEditorPage: React.FC = () => {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Workflow List Sidebar */}
-        <div className={clsx(
-          'w-56 border-r overflow-y-auto p-3',
-          isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-slate-50'
-        )}>
-          <h3 className="text-xs font-semibold uppercase tracking-wide mb-2 text-slate-500">Workflows</h3>
+        <div className="w-56 border-r border-[var(--divider)] overflow-y-auto p-3">
+          <h3 className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-2">Workflows</h3>
           {loading ? (
-            <p className="text-xs text-slate-400">Loading...</p>
+            <p className="empty-state">Loading...</p>
           ) : workflows.length === 0 ? (
-            <p className="text-xs text-slate-400">No workflows yet</p>
+            <p className="empty-state">No workflows yet</p>
           ) : (
-            <div className="space-y-1">
+            <div>
               {workflows.map(wf => (
                 <button
                   key={wf.id}
                   onClick={() => openWorkflow(wf)}
                   className={clsx(
-                    'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors',
-                    selectedWorkflow?.id === wf.id
-                      ? 'bg-blue-600 text-white'
-                      : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
+                    'w-full text-left px-2 py-2 text-sm border-b border-[var(--divider)] hover:bg-[var(--hover)] transition-colors',
+                    selectedWorkflow?.id === wf.id ? 'font-medium bg-[var(--hover)]' : 'opacity-60 hover:opacity-100'
                   )}
                 >
                   {wf.name}
@@ -247,7 +237,7 @@ const WorkflowEditorPage: React.FC = () => {
         >
           {!selectedWorkflow ? (
             <div className="flex items-center justify-center h-full">
-              <p className={clsx('text-sm', isDark ? 'text-slate-500' : 'text-slate-400')}>
+              <p className="text-sm opacity-50">
                 Select a workflow to edit, or create a new one
               </p>
             </div>
@@ -271,23 +261,23 @@ const WorkflowEditorPage: React.FC = () => {
                   tabIndex={0}
                   aria-label={`Node: ${node.label}`}
                   className={clsx(
-                    'absolute w-[120px] cursor-move select-none rounded-lg border-2 shadow-sm transition-shadow',
-                    selectedNode === node.id ? 'border-blue-500 shadow-md' : isDark ? 'border-slate-600' : 'border-slate-300',
-                    isDark ? 'bg-slate-800' : 'bg-white'
+                    'absolute w-[120px] cursor-move select-none border transition-colors',
+                    selectedNode === node.id ? 'border-blue-500' : 'border-[var(--divider)]'
                   )}
-                  style={{ left: node.x, top: node.y }}
+                  style={{ left: node.x, top: node.y, backgroundColor: 'var(--surface)' }}
                   onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedNode(node.id); }}
                 >
-                  <div className={clsx('h-1.5 rounded-t-md', NODE_COLORS[node.type])} />
+                  <div className={clsx('h-1', NODE_COLORS[node.type])} />
                   <div className="p-2">
                     <p className="text-xs font-medium truncate">{node.label}</p>
-                    <p className={clsx('text-[10px]', isDark ? 'text-slate-500' : 'text-slate-400')}>{node.type}</p>
+                    <p className="text-[10px] opacity-50">{node.type}</p>
                   </div>
                   {selectedNode === node.id && node.type !== 'start' && (
                     <button
                       onClick={(e) => { e.stopPropagation(); removeNode(node.id) }}
-                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
+                      className="absolute -top-2 -right-2 w-5 h-5 text-xs flex items-center justify-center text-[#dc2626] border border-current"
+                      style={{ backgroundColor: 'var(--surface)' }}
                     >
                       ×
                     </button>
@@ -297,12 +287,15 @@ const WorkflowEditorPage: React.FC = () => {
 
               {/* Run Status */}
               {runStatus && (
-                <div className={clsx(
-                  'absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm font-medium',
-                  runStatus === 'completed' ? 'bg-green-500 text-white' :
-                  runStatus === 'failed' ? 'bg-red-500 text-white' :
-                  'bg-blue-500 text-white'
-                )}>
+                <div
+                  className={clsx(
+                    'absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 text-sm font-medium border border-current',
+                    runStatus === 'completed' ? 'text-[#16a34a]' :
+                    runStatus === 'failed' ? 'text-[#dc2626]' :
+                    'text-blue-600'
+                  )}
+                  style={{ backgroundColor: 'var(--surface)' }}
+                >
                   {runStatus === 'completed' ? '✓ Workflow completed' :
                    runStatus === 'failed' ? '✗ Workflow failed' : '⏳ Running...'}
                 </div>
@@ -313,10 +306,7 @@ const WorkflowEditorPage: React.FC = () => {
 
         {/* Properties Panel */}
         {selectedNode && (
-          <div className={clsx(
-            'w-64 border-l p-4 overflow-y-auto',
-            isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
-          )}>
+          <div className="w-64 border-l border-[var(--divider)] p-4 overflow-y-auto">
             <h3 className="text-sm font-semibold mb-3">Node Properties</h3>
             {(() => {
               const node = nodes.find(n => n.id === selectedNode)
@@ -330,19 +320,16 @@ const WorkflowEditorPage: React.FC = () => {
                       type="text"
                       value={node.label}
                       onChange={e => updateNodeLabel(node.id, e.target.value)}
-                      className={clsx(
-                        'w-full px-2 py-1.5 rounded border text-sm',
-                        isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
-                      )}
+                      className="w-full px-2 py-1.5 border border-[var(--divider)] bg-transparent text-sm"
                     />
                   </div>
                   <div>
                     <span className="block text-xs font-medium mb-1">Type</span>
-                    <p className={clsx('text-sm', isDark ? 'text-slate-400' : 'text-slate-500')}>{node.type}</p>
+                    <p className="text-sm opacity-60">{node.type}</p>
                   </div>
                   <div>
                     <span className="block text-xs font-medium mb-1">ID</span>
-                    <p className={clsx('text-xs font-mono', isDark ? 'text-slate-500' : 'text-slate-400')}>{node.id}</p>
+                    <p className="cell-data opacity-50">{node.id}</p>
                   </div>
                 </div>
               )

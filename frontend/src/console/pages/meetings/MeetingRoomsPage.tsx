@@ -49,19 +49,19 @@ export function MeetingRoomsPage(props: MeetingRoomsPageProps) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)_320px]">
-      <aside className="rounded-2xl border bg-white p-4 shadow-sm">
+      <aside className="console-section">
         <header className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">会议室</h2>
             <p className="text-sm text-gray-500">选择一个房间进入协作。</p>
           </div>
-          <button className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onSelectRoom(activeRoom?.room_id ?? props.rooms[0]?.room_id ?? "")}>返回当前</button>
+          <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onSelectRoom(activeRoom?.room_id ?? props.rooms[0]?.room_id ?? "")}>返回当前</button>
         </header>
         <div className="mt-4 space-y-2">
           {props.rooms.map((room) => (
             <button
               key={room.room_id}
-              className={`w-full rounded-xl border px-3 py-3 text-left transition ${
+              className={`w-full border-b px-3 py-3 text-left transition ${
                 activeRoom?.room_id === room.room_id ? "border-blue-500 bg-blue-50" : "hover:bg-gray-50"
               }`}
               onClick={() => props.onSelectRoom(room.room_id)}
@@ -77,7 +77,7 @@ export function MeetingRoomsPage(props: MeetingRoomsPageProps) {
         </div>
       </aside>
 
-      <main className="rounded-2xl border bg-white p-4 shadow-sm">
+      <main className="console-section">
         {activeRoom ? (
           <>
             <header className="border-b pb-4">
@@ -96,7 +96,7 @@ export function MeetingRoomsPage(props: MeetingRoomsPageProps) {
         )}
       </main>
 
-      <aside className="space-y-4 rounded-2xl border bg-white p-4 shadow-sm">
+      <aside className="console-section space-y-4">
         {activeRoom ? (
           <>
             <MeetingRoomMemberPanel room={activeRoom} avatars={props.avatars} onInviteAgent={handleInviteAgent} />
@@ -117,7 +117,7 @@ function MeetingRoomMessageStream({ messages, avatars }: { messages: RealtimeMes
       {messages.length ? messages.map((msg) => {
         const avatar = avatars.find((a) => a.avatar_id === msg.sender_avatar_id);
         return (
-          <div key={msg.message_id} className="rounded-xl border px-3 py-2">
+          <div key={msg.message_id} className="border-b py-2">
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span>{avatar?.display_name ?? msg.sender_name}</span>
               <span>{msg.created_at}</span>
@@ -126,7 +126,7 @@ function MeetingRoomMessageStream({ messages, avatars }: { messages: RealtimeMes
             {msg.references?.length ? <div className="mt-2 text-xs text-blue-600">引用：{msg.references.join(", ")}</div> : null}
           </div>
         );
-      }) : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-gray-500">还没有消息，开始讨论吧。</div>}
+      }) : <div className="empty-state text-center">还没有消息，开始讨论吧。</div>}
     </div>
   );
 }
@@ -135,11 +135,11 @@ function MeetingRoomActionBar({ roomId, onSendMessage }: { roomId: string; onSen
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
   return (
-    <div className="rounded-2xl border bg-gray-50 p-3">
-      <textarea className="min-h-[88px] w-full rounded-xl border bg-white p-3 text-sm" value={value} onChange={(e) => setValue(e.target.value)} placeholder="输入会议消息，支持 @ 某个智能体、引用任务、发起确认..." />
+    <div className="border bg-gray-50 p-3">
+      <textarea className="min-h-[88px] w-full border bg-white p-3 text-sm" value={value} onChange={(e) => setValue(e.target.value)} placeholder="输入会议消息，支持 @ 某个智能体、引用任务、发起确认..." />
       <div className="mt-3 flex justify-end gap-2">
-        <button className="rounded-lg border px-3 py-2 text-sm">引用</button>
-        <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50" disabled={sending} onClick={async () => { if (!value.trim()) return; setSending(true); try { await onSendMessage({ roomId, content: value, references: [] }); setValue(""); } finally { setSending(false); } }}>
+        <button className="border px-3 py-2 text-sm">引用</button>
+        <button className="bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50" disabled={sending} onClick={async () => { if (!value.trim()) return; setSending(true); try { await onSendMessage({ roomId, content: value, references: [] }); setValue(""); } finally { setSending(false); } }}>
           {sending ? "发送中..." : "发送"}
         </button>
       </div>
@@ -156,7 +156,7 @@ function MeetingRoomMemberPanel({ room, avatars, onInviteAgent }: { room: Meetin
         {room.member_agent_ids.map((agentId) => {
           const avatar = avatars.find((a) => a.avatar_id === agentId || a.role_name === agentId);
           return (
-            <div key={agentId} className="flex items-center gap-3 rounded-xl border px-3 py-2">
+            <div key={agentId} className="flex items-center gap-3 border-b px-3 py-2">
               <div className="h-10 w-10 rounded-full bg-gray-200" />
               <div>
                 <div className="text-sm font-medium">{avatar?.display_name ?? agentId}</div>
@@ -166,11 +166,11 @@ function MeetingRoomMemberPanel({ room, avatars, onInviteAgent }: { room: Meetin
           );
         })}
       </div>
-      <div className="mt-4 rounded-xl border p-3">
+      <div className="mt-4 border p-3">
         <div className="text-xs text-gray-500">邀请成员</div>
         <div className="mt-2 flex gap-2">
-          <input className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" placeholder="输入 member_id" value={inviteId} onChange={(e) => setInviteId(e.target.value)} />
-          <button className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white" onClick={() => { if (!inviteId.trim()) return; onInviteAgent?.(inviteId.trim()); setInviteId(""); }}>邀请</button>
+          <input className="min-w-0 flex-1 border px-3 py-2 text-sm" placeholder="输入 member_id" value={inviteId} onChange={(e) => setInviteId(e.target.value)} />
+          <button className="bg-blue-600 px-3 py-2 text-sm text-white" onClick={() => { if (!inviteId.trim()) return; onInviteAgent?.(inviteId.trim()); setInviteId(""); }}>邀请</button>
         </div>
       </div>
     </section>
@@ -178,19 +178,19 @@ function MeetingRoomMemberPanel({ room, avatars, onInviteAgent }: { room: Meetin
 }
 
 function MeetingRoomTopicPanel({ room }: { room: MeetingRoomSummary }) {
-  return <section><h3 className="font-semibold">议题</h3><div className="mt-3 rounded-xl border p-3 text-sm text-gray-600">{room.topic || "暂无议题"}</div></section>;
+  return <section><h3 className="font-semibold">议题</h3><div className="mt-3 border p-3 text-sm text-gray-600">{room.topic || "暂无议题"}</div></section>;
 }
 
 function MeetingRoomTaskBoard() {
-  return <section><h3 className="font-semibold">任务</h3><div className="mt-3 rounded-xl border p-3 text-sm text-gray-500">暂未接入任务看板</div></section>;
+  return <section><h3 className="font-semibold">任务</h3><div className="mt-3 border p-3 text-sm text-gray-500">暂未接入任务看板</div></section>;
 }
 
 function MeetingRoomMemoPanel() {
-  return <section><h3 className="font-semibold">纪要</h3><div className="mt-3 rounded-xl border p-3 text-sm text-gray-500">暂无纪要</div></section>;
+  return <section><h3 className="font-semibold">纪要</h3><div className="mt-3 border p-3 text-sm text-gray-500">暂无纪要</div></section>;
 }
 
 function MeetingRoomValidationPanel() {
-  return <section><h3 className="font-semibold">验证</h3><div className="mt-3 rounded-xl border p-3 text-sm text-gray-500">暂未接入验证结果</div></section>;
+  return <section><h3 className="font-semibold">验证</h3><div className="mt-3 border p-3 text-sm text-gray-500">暂未接入验证结果</div></section>;
 }
 
 async function postCollaborationMessage(params: { roomId: string; senderId: string; senderType?: string; content: string; messageType?: string; mentions?: string[]; metadata?: Record<string, unknown>; }): Promise<RealtimeMessage> {

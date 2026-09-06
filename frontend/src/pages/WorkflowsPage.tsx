@@ -86,7 +86,7 @@ export const WorkflowsPage: React.FC = () => {
             </div>
             <button
               onClick={() => {/* Create workflow modal - coming soon */}}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
             >
               <Plus size={16} />
               {t('workflows.create', 'New Workflow')}
@@ -127,7 +127,7 @@ export const WorkflowsPage: React.FC = () => {
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleRun(wf.id) }}
-                        className="flex items-center gap-1 px-2.5 py-1 text-[12px] shrink-0 text-[#16a34a] border border-current rounded-full hover:opacity-80 transition-opacity"
+                        className="flex items-center gap-1 px-2.5 py-1 text-[12px] shrink-0 text-[#16a34a] border border-current hover:bg-[var(--hover)] hover:opacity-80 transition-opacity"
                       >
                         <Play size={12} />
                         Run

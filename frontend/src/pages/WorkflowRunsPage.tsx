@@ -108,10 +108,7 @@ export const WorkflowRunsPage: React.FC = () => {
             </div>
             <button
               onClick={loadRuns}
-              className={clsx(
-                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-              )}
+              className="flex items-center gap-2 px-3 py-2 border border-[var(--divider)] text-sm font-medium transition-colors hover:bg-[var(--hover)]"
               aria-label={t('runs.refresh', 'Refresh')}
             >
               <RefreshCw size={16} />
@@ -143,8 +140,8 @@ export const WorkflowRunsPage: React.FC = () => {
                         if (e.key === 'Enter' || e.key === ' ') openDetail(run.run_id)
                       }}
                       className={clsx(
-                        'row-line cursor-pointer px-2 -mx-2',
-                        selected?.run?.run_id === run.run_id && (theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100')
+                        'row-line cursor-pointer px-2 -mx-2 hover:bg-[var(--hover)]',
+                        selected?.run?.run_id === run.run_id && 'bg-[var(--hover)]'
                       )}
                     >
                       <div className="flex items-center gap-2">
@@ -230,15 +227,12 @@ export const WorkflowRunsPage: React.FC = () => {
                         value={approvalId}
                         onChange={(e) => setApprovalId(e.target.value)}
                         placeholder="approval_id"
-                        className={clsx(
-                          'flex-1 px-3 py-1.5 rounded-md border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500',
-                          theme === 'dark' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-900'
-                        )}
+                        className="flex-1 px-3 py-1.5 border border-[var(--divider)] bg-transparent text-sm"
                       />
                       <button
                         onClick={handleResumeApproved}
                         disabled={resuming}
-                        className="px-3 py-1.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                        className="px-3 py-1.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white transition-colors"
                       >
                         {t('runs.resumeApproved', 'Resume (approved)')}
                       </button>
@@ -269,10 +263,7 @@ export const WorkflowRunsPage: React.FC = () => {
                         {node.error && <p className="mt-1 text-[#dc2626] font-mono break-all">{node.error}</p>}
                         {node.output != null && (
                           <pre
-                            className={clsx(
-                              'mt-1 p-2 rounded overflow-x-auto font-mono',
-                              theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-700'
-                            )}
+                            className="mt-1 p-2 border border-[var(--divider)] overflow-x-auto font-mono"
                           >
                             {typeof node.output === 'string' ? node.output : JSON.stringify(node.output, null, 2)}
                           </pre>

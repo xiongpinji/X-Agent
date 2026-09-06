@@ -75,7 +75,7 @@ export function MemoryOverviewPage(props: MemoryOverviewPageProps) {
         <div className="console-summary-line">历史摘要：{apiData?.linked_summaries.history?.summary?.title ?? props.linkedHistorySummary?.summary?.title ?? "history"} · {archivedMemories} 条归档</div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="console-kpi-row">
         <StatCard label="记忆总数" value={String(totalMemories)} />
         <StatCard label="活跃记忆" value={String(activeMemories)} />
         <StatCard label="已归档" value={String(archivedMemories)} />
@@ -93,9 +93,9 @@ export function MemoryOverviewPage(props: MemoryOverviewPageProps) {
 
         <Panel title="快捷入口">
           <div className="grid gap-2">
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenDetail?.()}>查看记忆详情</button>
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenManagement?.()}>进入经验管理</button>
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenHistory?.()}>查看历史记录</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenDetail?.()}>查看记忆详情</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenManagement?.()}>进入经验管理</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenHistory?.()}>查看历史记录</button>
           </div>
         </Panel>
       </section>
@@ -105,16 +105,13 @@ export function MemoryOverviewPage(props: MemoryOverviewPageProps) {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="text-sm text-gray-500">{label}</div>
-      <div className="mt-2 text-2xl font-bold text-gray-900">{value}</div>
-    </div>
+    <div className="console-kpi"><span className="kpi-label">{label}</span><span className="kpi-value">{value}</span></div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-white p-4 shadow-sm">
+    <section className="console-section">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>

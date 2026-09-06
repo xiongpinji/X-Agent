@@ -731,23 +731,100 @@ tbody tr:hover {
   border-color: var(--divider);
 }
 
+.console-root .border-y,
+.console-root .border-x {
+  border-color: var(--divider);
+}
+
+/* divide-* separators converge on --divider */
+.console-root .divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-top-color: var(--divider);
+}
+
+.console-root .divide-x > :not([hidden]) ~ :not([hidden]) {
+  border-left-color: var(--divider);
+}
+
 .console-root .border-blue-500 {
   border-color: var(--accent);
 }
 
-/* Card chrome removal: no shadows, tighter radius */
+/* Card chrome removal — thorough pass: no shadows, no radius.
+   (Source pages are also stripped of these tokens; these rules are the
+   safety net for any residue.) */
+.console-root .shadow-xs,
 .console-root .shadow-sm,
 .console-root .shadow,
-.console-root .shadow-md {
+.console-root .shadow-md,
+.console-root .shadow-lg,
+.console-root .shadow-xl,
+.console-root .shadow-2xl {
   box-shadow: none;
 }
 
-.console-root .rounded-2xl {
-  border-radius: 6px;
+.console-root .hover\:shadow-sm:hover,
+.console-root .hover\:shadow-md:hover,
+.console-root .hover\:shadow-lg:hover {
+  box-shadow: none;
 }
 
-.console-root .rounded-xl {
-  border-radius: 4px;
+.console-root .rounded-sm,
+.console-root .rounded-md,
+.console-root .rounded-lg,
+.console-root .rounded-xl,
+.console-root .rounded-2xl,
+.console-root .rounded-3xl {
+  border-radius: 0;
+}
+
+/* Console section container: transparent, hairline top/bottom edges.
+   Replaces rounded/shadow card boxes. */
+.console-section {
+  border-top: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+  padding: 14px 0;
+}
+
+.console-section > h3 {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Console KPI row: single-line horizontal stats, hairline-separated.
+   Replaces stat-card grids. Label 11px uppercase 50%, mono value. */
+.console-kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding: 8px 0;
+}
+
+.console-kpi {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.console-kpi + .console-kpi {
+  margin-left: 22px;
+  padding-left: 22px;
+  border-left: 1px solid var(--divider);
+}
+
+.console-kpi .kpi-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.5;
+}
+
+.console-kpi .kpi-value {
+  font-family: ui-monospace, 'Fira Code', SFMono-Regular, Menlo, Consolas,
+    monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
 }
 
 /* Type color: gray/slate ramp → --fg with stepped opacity */

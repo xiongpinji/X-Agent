@@ -119,12 +119,10 @@ export const WorkflowSchedulesPage: React.FC = () => {
 
   const labelCls = clsx('block text-xs font-medium mb-1 opacity-60')
   const inputCls = clsx(
-    'w-full px-3 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500',
-    theme === 'dark' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-white border-slate-300 text-slate-900'
+    'w-full px-3 py-2 border text-sm bg-transparent border-[var(--divider)]'
   )
   const ghostBtnCls = clsx(
-    'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+    'flex items-center gap-2 px-3 py-2 border border-[var(--divider)] text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50'
   )
 
   return (
@@ -158,7 +156,7 @@ export const WorkflowSchedulesPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setShowForm(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
               >
                 <Plus size={16} />
                 {t('schedules.create', 'New Schedule')}
@@ -238,7 +236,7 @@ export const WorkflowSchedulesPage: React.FC = () => {
               <button
                 onClick={handleCreate}
                 disabled={submitting}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium transition-colors"
               >
                 <Play size={16} />
                 {submitting ? t('schedules.creating', 'Creating...') : t('schedules.submit', 'Create Schedule')}

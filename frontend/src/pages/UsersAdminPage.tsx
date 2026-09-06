@@ -140,8 +140,8 @@ const UsersAdminPage: React.FC = () => {
   }
 
   const inputCls = clsx(
-    'px-3 py-2 rounded-lg border text-sm',
-    isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
+    'px-3 py-2 border border-[var(--divider)] bg-transparent text-sm outline-none transition-colors focus:border-[var(--fg)]',
+    isDark ? 'placeholder:text-slate-500' : 'placeholder:text-slate-400'
   )
 
   // 403 — graceful permission notice instead of a crash
@@ -192,7 +192,7 @@ const UsersAdminPage: React.FC = () => {
 
         {message && (
           <div className={clsx(
-            'mb-4 px-3 py-2 rounded-lg text-sm border',
+            'mb-4 px-3 py-2 border text-sm',
             message.type === 'success'
               ? 'border-[#16a34a]/30 text-[#16a34a]'
               : 'border-[#dc2626]/30 text-[#dc2626]'
@@ -262,7 +262,7 @@ const UsersAdminPage: React.FC = () => {
                 <button
                   onClick={handleCreateUser}
                   disabled={!newUserEmail.trim() || creating}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   {creating ? t('common.saving', 'Saving...') : t('common.create', 'Create')}
                 </button>

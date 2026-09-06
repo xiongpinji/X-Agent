@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toErrorMessage } from '@/services/errorMessage'
-import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/i18n/context'
 import {
   evolutionOps,
@@ -21,11 +20,14 @@ import clsx from 'clsx'
 
 type StageFilter = 'all' | 'execute' | 'evaluate' | 'optimize' | 'learn'
 
-const STAGE_META: Record<string, { icon: string; badge: string }> = {
-  execute: { icon: '▶️', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-  evaluate: { icon: '📊', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-  optimize: { icon: '🛠️', badge: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
-  learn: { icon: '🧠', badge: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+const DIVIDER = 'var(--divider)'
+
+// Stage chips — thin-border status badges, no colored fills.
+const STAGE_BADGE: Record<string, string> = {
+  execute: 'badge-muted',
+  evaluate: 'badge-warning',
+  optimize: 'badge-muted',
+  learn: 'badge-success',
 }
 
 function safeJsonParse(raw: string): Record<string, unknown> | null {
@@ -40,9 +42,7 @@ function safeJsonParse(raw: string): Record<string, unknown> | null {
 }
 
 const EvolutionPage: React.FC = () => {
-  const { theme } = useAppStore()
   const { t } = useI18n()
-  const isDark = theme === 'dark'
 
   // ── Data state ──
   const [summary, setSummary] = useState<EvolutionSummary>({ reflections: 0, learnings: 0, capabilities: 0 })
@@ -246,53 +246,56 @@ const EvolutionPage: React.FC = () => {
     })
   }
 
-  // ── Shared style helpers ──
+  // ── Shared style helpers — hairline, no cards ──
 
-  const cardCls = clsx(
-    'p-5 rounded-xl border transition-shadow hover:shadow-md',
-    isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-  )
-  const inputCls = clsx(
-    'w-full px-3 py-1.5 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-blue-500/40',
-    isDark ? 'bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-500' : 'bg-white border-slate-300 text-slate-700 placeholder-slate-400'
-  )
-  const btnCls = clsx(
-    'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-    isDark ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-blue-500 text-white hover:bg-blue-600'
-  )
-  const mutedCls = clsx(isDark ? 'text-slate-400' : 'text-slate-500')
-  const errBoxCls = clsx(
-    'mt-2 p-2 rounded-lg border text-xs',
-    isDark ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-red-50 border-red-200 text-red-600'
-  )
+  const inputCls =
+    'w-full px-3 py-1.5 border border-[var(--divider)] bg-transparent text-sm outline-none transition-colors focus:border-[var(--fg)] placeholder:opacity-40'
+  const btnCls =
+    'px-3 py-1.5 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50'
+  const sectionTitle = 'text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2'
 
-  const renderError = (msg: string | null) => (msg ? <div className={errBoxCls}>⚠️ {msg}</div> : null)
+  const renderError = (msg: string | null) => (msg ? (
+    <div className="mt-2 p-2 border border-[#dc2626]/30 text-xs text-[#dc2626]">⚠️ {msg}</div>
+  ) : null)
 
   const renderJson = (data: Record<string, unknown>) => (
-    <pre className={clsx(
-      'mt-2 p-2 rounded-lg text-[11px] overflow-x-auto max-h-48 overflow-y-auto',
-      isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-600'
-    )}>
+    <pre className="mt-2 p-2 border border-[var(--divider)] bg-transparent text-[11px] overflow-x-auto max-h-48 overflow-y-auto cell-data opacity-80">
       {JSON.stringify(data, null, 2)}
     </pre>
   )
 
-  const statCards = [
-    { label: t('evolution.totalExecutions', 'Total Executions'), value: stats.total_executions, icon: '📋' },
-    { label: t('evolution.skillDrafts', 'Skill Drafts'), value: stats.skill_drafts, icon: '🧩' },
-    { label: t('evolution.skillsPromoted', 'Skills Promoted'), value: stats.promoted_skills, icon: '⚡' },
+  // KPI rows — single horizontal text lines, hairline vertical dividers.
+  const renderStatRow = (items: Array<{ label: string; value: string | number }>) => (
+    <dl className="flex flex-wrap gap-y-5">
+      {items.map((item, i) => (
+        <div
+          key={item.label}
+          className={clsx('flex flex-col gap-1.5 pr-6 mr-6', i < items.length - 1 && 'border-r')}
+          style={i < items.length - 1 ? { borderColor: DIVIDER } : undefined}
+        >
+          <dd className="font-data text-[20px] leading-none order-2">{item.value}</dd>
+          <dt className="text-[11px] uppercase tracking-[0.06em] opacity-50 order-1">{item.label}</dt>
+        </div>
+      ))}
+    </dl>
+  )
+
+  const engineStats = [
+    { label: t('evolution.totalExecutions', 'Total Executions'), value: stats.total_executions },
+    { label: t('evolution.skillDrafts', 'Skill Drafts'), value: stats.skill_drafts },
+    { label: t('evolution.skillsPromoted', 'Skills Promoted'), value: stats.promoted_skills },
   ]
-  const summaryCards = [
-    { label: t('evolution.reflections', 'Reflections'), value: summary.reflections, icon: '🪞' },
-    { label: t('evolution.learnings', 'Learnings'), value: summary.learnings, icon: '📚' },
-    { label: t('evolution.capabilities', 'Capabilities'), value: summary.capabilities, icon: '🧰' },
+  const summaryStats = [
+    { label: t('evolution.reflections', 'Reflections'), value: summary.reflections },
+    { label: t('evolution.learnings', 'Learnings'), value: summary.learnings },
+    { label: t('evolution.capabilities', 'Capabilities'), value: summary.capabilities },
   ]
-  const seCards = seStats
+  const seStatItems = seStats
     ? [
-        { label: t('evolution.totalRecords', 'Evolution Records'), value: seStats.total_records, icon: '🗂️' },
-        { label: t('evolution.avgScore', 'Avg Score'), value: seStats.average_score, icon: '📈' },
-        { label: t('evolution.optimizationsApplied', 'Optimizations'), value: seStats.optimizations_applied, icon: '🛠️' },
-        { label: t('evolution.distilledSkills', 'Distilled Skills'), value: seStats.distilled_skills, icon: '🧠' },
+        { label: t('evolution.totalRecords', 'Evolution Records'), value: seStats.total_records },
+        { label: t('evolution.avgScore', 'Avg Score'), value: seStats.average_score },
+        { label: t('evolution.optimizationsApplied', 'Optimizations'), value: seStats.optimizations_applied },
+        { label: t('evolution.distilledSkills', 'Distilled Skills'), value: seStats.distilled_skills },
       ]
     : []
 
@@ -302,452 +305,418 @@ const EvolutionPage: React.FC = () => {
       : null
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-bold">🧬 {t('evolution.title', 'Self-Evolution Engine')}</h1>
-        <button
-          onClick={loadData}
-          disabled={loading}
-          className={clsx(
-            'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-            isDark ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          )}
-        >
-          {loading ? '⏳' : '🔄'} {t('common.refresh', 'Refresh')}
-        </button>
-      </div>
-      <p className={clsx('text-sm mb-6', mutedCls)}>
-        {t('evolution.subtitle', 'GEPA closed-loop: Generate → Evaluate → Promote → Apply · Self-evolution: Execute → Evaluate → Optimize → Learn')}
-      </p>
-
-      {error && (
-        <div className={clsx(
-          'mb-4 p-3 rounded-lg border text-sm',
-          isDark ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-red-50 border-red-200 text-red-600'
-        )}>
-          ⚠️ {error}
-        </div>
-      )}
-
-      {loading && history.length === 0 ? (
-        <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-        </div>
-      ) : (
-        <>
-          {/* ── Stats (GEPA engine) ── */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            {statCards.map(stat => (
-              <div key={stat.label} className={clsx(cardCls, 'text-center')}>
-                <p className="text-2xl mb-1">{stat.icon}</p>
-                <p className="text-2xl font-bold">{stat.value}</p>
-                <p className={clsx('text-xs mt-1', mutedCls)}>{stat.label}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Summary (evolution store) ── */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            {summaryCards.map(stat => (
-              <div key={stat.label} className={clsx(cardCls, 'text-center')}>
-                <p className="text-2xl mb-1">{stat.icon}</p>
-                <p className="text-2xl font-bold">{stat.value}</p>
-                <p className={clsx('text-xs mt-1', mutedCls)}>{stat.label}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Self-evolution engine stats ── */}
-          {seCards.length > 0 && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              {seCards.map(stat => (
-                <div key={stat.label} className={clsx(cardCls, 'text-center')}>
-                  <p className="text-2xl mb-1">{stat.icon}</p>
-                  <p className="text-2xl font-bold">{stat.value}</p>
-                  <p className={clsx('text-xs mt-1', mutedCls)}>{stat.label}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── Trigger console ── */}
-          <h2 className="text-lg font-semibold mb-3">🚀 {t('evolution.triggerConsole', 'Trigger Console')}</h2>
-          <div className="grid lg:grid-cols-2 gap-4 mb-8">
-            {/* GEPA trigger */}
-            <div className={cardCls}>
-              <h3 className="font-medium text-sm mb-1">⚡ {t('evolution.gepaTrigger', 'GEPA Loop Trigger')}</h3>
-              <p className={clsx('text-xs mb-3', mutedCls)}>POST /evolution/trigger</p>
-              <label htmlFor="gepa-trajectory" className={clsx('block text-xs mb-1', mutedCls)}>trajectory (JSON)</label>
-              <textarea
-                id="gepa-trajectory"
-                value={gepaTrajectory}
-                onChange={e => setGepaTrajectory(e.target.value)}
-                placeholder='{"tool_calls": [...], "status": "completed"}'
-                rows={3}
-                className={clsx(inputCls, 'font-mono text-xs')}
-              />
-              <label htmlFor="gepa-result" className={clsx('block text-xs mt-2 mb-1', mutedCls)}>result (JSON)</label>
-              <textarea
-                id="gepa-result"
-                value={gepaResult}
-                onChange={e => setGepaResult(e.target.value)}
-                placeholder='{"success": true}'
-                rows={2}
-                className={clsx(inputCls, 'font-mono text-xs')}
-              />
-              <button onClick={runGepaTrigger} disabled={gepaBusy} className={clsx(btnCls, 'mt-3')}>
-                {gepaBusy ? '⏳' : '▶️'} {t('evolution.runTrigger', 'Run Trigger')}
-              </button>
-              {renderError(gepaError)}
-              {gepaOutcome && (
-                <div className={clsx('mt-3 text-xs space-y-1')}>
-                  <p>
-                    <span className={clsx(
-                      'px-1.5 py-0.5 rounded',
-                      gepaOutcome.status === 'completed'
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                    )}>
-                      {gepaOutcome.status}
-                    </span>
-                    {gepaOutcome.reason && <span className={clsx('ml-2', mutedCls)}>{gepaOutcome.reason}</span>}
-                  </p>
-                  {gepaOutcome.status === 'completed' && (
-                    <>
-                      <p className={mutedCls}>
-                        {t('evolution.shouldCreateSkill', 'Should create skill')}: {String(gepaOutcome.should_create_skill)}
-                        {gepaOutcome.skill_name && ` · ${gepaOutcome.skill_name}`}
-                        {gepaOutcome.confidence != null && ` · ${t('evolution.confidence', 'confidence')} ${Math.round(gepaOutcome.confidence * 100)}%`}
-                      </p>
-                      {gepaOutcome.key_patterns && gepaOutcome.key_patterns.length > 0 && (
-                        <p className={mutedCls}>{t('evolution.keyPatterns', 'Key patterns')}: {gepaOutcome.key_patterns.join(', ')}</p>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Full cycle trigger */}
-            <div className={cardCls}>
-              <h3 className="font-medium text-sm mb-1">🔁 {t('evolution.fullCycle', 'Full Evolution Cycle')}</h3>
-              <p className={clsx('text-xs mb-3', mutedCls)}>POST /evolution/self-evolution/cycle · Execute → Evaluate → Optimize → Learn</p>
-              <label htmlFor="cycle-task-id" className={clsx('block text-xs mb-1', mutedCls)}>task_id</label>
-              <input
-                id="cycle-task-id"
-                value={cycleTaskId}
-                onChange={e => setCycleTaskId(e.target.value)}
-                placeholder={t('evolution.taskIdPlaceholder', 'Task ID with a recorded execution')}
-                className={inputCls}
-              />
-              <button onClick={runCycle} disabled={cycleBusy || !cycleTaskId.trim()} className={clsx(btnCls, 'mt-3')}>
-                {cycleBusy ? '⏳' : '🔁'} {t('evolution.runCycle', 'Run Cycle')}
-              </button>
-              {renderError(cycleError)}
-              {cycleOutcome && (
-                <div className="mt-3 text-xs space-y-2">
-                  {cycleOutcome.error ? (
-                    <div className={errBoxCls}>⚠️ {cycleOutcome.error}</div>
-                  ) : (
-                    <>
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <span className={clsx('px-1.5 py-0.5 rounded', STAGE_META.evaluate.badge)}>
-                          📊 score {cycleOutcome.score != null ? cycleOutcome.score.toFixed(3) : '—'}
-                        </span>
-                        {cycleDelta != null && (
-                          <span className={clsx(
-                            'px-1.5 py-0.5 rounded',
-                            cycleDelta >= 0
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                              : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                          )}>
-                            {cycleDelta >= 0 ? '▲' : '▼'} {Math.abs(cycleDelta).toFixed(3)} {t('evolution.vsPrevCycle', 'vs prev')}
-                          </span>
-                        )}
-                        <span className={clsx('px-1.5 py-0.5 rounded', STAGE_META.optimize.badge)}>
-                          🛠️ {cycleOutcome.optimization?.optimizations?.length ?? 0} {t('evolution.suggestions', 'suggestions')}
-                        </span>
-                        <span className={clsx('px-1.5 py-0.5 rounded', STAGE_META.learn.badge)}>
-                          🧠 {cycleOutcome.skill_distilled ? t('evolution.skillPromoted', 'skill promoted') : t('evolution.noSkill', 'no skill')}
-                        </span>
-                      </div>
-                      {cycleOutcome.optimization?.suggested_approach && (
-                        <p className={mutedCls}>
-                          {t('evolution.suggestedApproach', 'Suggested approach')}: {cycleOutcome.optimization.suggested_approach}
-                          {cycleOutcome.optimization.should_retry && ` · ⚠️ ${t('evolution.shouldRetry', 'retry recommended')}`}
-                        </p>
-                      )}
-                      {cycleOutcome.optimization?.optimizations?.map((o, i) => (
-                        <p key={i} className={mutedCls}>• [{o.type}] {o.detail}</p>
-                      ))}
-                      {cycleOutcome.skill && (
-                        <p className={mutedCls}>🧠 {cycleOutcome.skill.name} — {cycleOutcome.skill.description}</p>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Manual ops panel ── */}
-          <h2 className="text-lg font-semibold mb-3">🎛️ {t('evolution.manualOps', 'Manual Stage Operations')}</h2>
-          <div className="grid lg:grid-cols-2 gap-4 mb-8">
-            {/* Record */}
-            <div className={cardCls}>
-              <h3 className="font-medium text-sm mb-1">▶️ {t('evolution.opRecord', 'Record Execution')}</h3>
-              <p className={clsx('text-xs mb-3', mutedCls)}>POST /evolution/self-evolution/record</p>
-              <input value={recTaskId} onChange={e => setRecTaskId(e.target.value)} placeholder="task_id" className={clsx(inputCls, 'mb-2')} />
-              <textarea
-                value={recTrace}
-                onChange={e => setRecTrace(e.target.value)}
-                placeholder='trace (JSON), e.g. {"status": "completed", "tool_calls": []}'
-                rows={2}
-                className={clsx(inputCls, 'font-mono text-xs')}
-              />
-              <button onClick={runRecord} disabled={recBusy || !recTaskId.trim()} className={clsx(btnCls, 'mt-3')}>
-                {recBusy ? '⏳' : '▶️'} {t('evolution.run', 'Run')}
-              </button>
-              {renderError(recError)}
-              {recOutcome && (
-                <p className={clsx('mt-2 text-xs', mutedCls)}>
-                  ✅ execution_id: <code className="font-mono">{recOutcome.execution_id}</code>
-                </p>
-              )}
-            </div>
-
-            {/* Evaluate */}
-            <div className={cardCls}>
-              <h3 className="font-medium text-sm mb-1">📊 {t('evolution.opEvaluate', 'Evaluate Execution')}</h3>
-              <p className={clsx('text-xs mb-3', mutedCls)}>POST /evolution/self-evolution/evaluate</p>
-              <input value={evalExecId} onChange={e => setEvalExecId(e.target.value)} placeholder="execution_id" className={clsx(inputCls, 'mb-2')} />
-              <textarea
-                value={evalFeedback}
-                onChange={e => setEvalFeedback(e.target.value)}
-                placeholder='feedback (JSON, optional), e.g. {"success": true, "rating": 4}'
-                rows={2}
-                className={clsx(inputCls, 'font-mono text-xs')}
-              />
-              <button onClick={runEvaluate} disabled={evalBusy || !evalExecId.trim()} className={clsx(btnCls, 'mt-3')}>
-                {evalBusy ? '⏳' : '📊'} {t('evolution.run', 'Run')}
-              </button>
-              {renderError(evalError)}
-              {evalOutcome && (
-                <p className={clsx('mt-2 text-xs', mutedCls)}>
-                  ✅ score: <strong>{evalOutcome.score.toFixed(3)}</strong>
-                </p>
-              )}
-            </div>
-
-            {/* Optimize */}
-            <div className={cardCls}>
-              <h3 className="font-medium text-sm mb-1">🛠️ {t('evolution.opOptimize', 'Optimize Strategy')}</h3>
-              <p className={clsx('text-xs mb-3', mutedCls)}>POST /evolution/self-evolution/optimize</p>
-              <div className="flex gap-2 mb-2">
-                <input value={optExecId} onChange={e => setOptExecId(e.target.value)} placeholder="execution_id" className={inputCls} />
-                <input
-                  value={optScore}
-                  onChange={e => setOptScore(e.target.value)}
-                  placeholder="score 0-1"
-                  className={clsx(inputCls, 'w-28 shrink-0')}
-                />
-              </div>
-              <button onClick={runOptimize} disabled={optBusy || !optExecId.trim()} className={btnCls}>
-                {optBusy ? '⏳' : '🛠️'} {t('evolution.run', 'Run')}
-              </button>
-              {renderError(optError)}
-              {optOutcome && (
-                <div className="mt-2 text-xs space-y-1">
-                  {optOutcome.error ? (
-                    <div className={errBoxCls}>⚠️ {optOutcome.error}</div>
-                  ) : (
-                    <>
-                      <p className={mutedCls}>
-                        {t('evolution.suggestedApproach', 'Suggested approach')}: {optOutcome.suggested_approach}
-                        {optOutcome.should_retry && ` · ⚠️ ${t('evolution.shouldRetry', 'retry recommended')}`}
-                      </p>
-                      {optOutcome.optimizations.map((o, i) => (
-                        <p key={i} className={mutedCls}>• [{o.type}] {o.detail}</p>
-                      ))}
-                      {optOutcome.optimizations.length === 0 && (
-                        <p className={mutedCls}>{t('evolution.noOptimizations', 'No optimization suggestions.')}</p>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Distill */}
-            <div className={cardCls}>
-              <h3 className="font-medium text-sm mb-1">🧠 {t('evolution.opDistill', 'Distill Skill')}</h3>
-              <p className={clsx('text-xs mb-3', mutedCls)}>POST /evolution/self-evolution/distill</p>
-              <input
-                value={distillIds}
-                onChange={e => setDistillIds(e.target.value)}
-                placeholder={t('evolution.distillPlaceholder', 'execution_ids, comma separated')}
-                className={clsx(inputCls, 'mb-2')}
-              />
-              <button onClick={runDistill} disabled={distillBusy || !distillIds.trim()} className={btnCls}>
-                {distillBusy ? '⏳' : '🧠'} {t('evolution.run', 'Run')}
-              </button>
-              {renderError(distillError)}
-              {distillOutcome && (
-                <div className="mt-2 text-xs space-y-1">
-                  {distillOutcome.error ? (
-                    <div className={errBoxCls}>⚠️ {distillOutcome.error}</div>
-                  ) : distillOutcome.skill ? (
-                    <>
-                      <p className={mutedCls}>
-                        {distillOutcome.promoted ? '✅ ' + t('evolution.skillPromoted', 'skill promoted') : '⏸️ ' + t('evolution.belowThreshold', 'below promotion threshold')}
-                        {' · '}{t('evolution.successRate', 'success rate')} {Math.round(distillOutcome.skill.success_rate * 100)}%
-                      </p>
-                      <p className={mutedCls}>🧠 {distillOutcome.skill.name} — {distillOutcome.skill.description}</p>
-                    </>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Cycle history / record event stream ── */}
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold">
-              🗂️ {t('evolution.history', 'Cycle History & Record Stream')} {history.length > 0 && `(${filteredHistory.length})`}
-            </h2>
-            <div className="flex gap-1.5">
-              {(['all', 'execute', 'evaluate', 'optimize', 'learn'] as StageFilter[]).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setStageFilter(f)}
-                  className={clsx(
-                    'px-2 py-1 rounded-lg text-xs font-medium transition-colors',
-                    stageFilter === f
-                      ? 'bg-blue-500 text-white'
-                      : isDark
-                        ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                  )}
-                >
-                  {f === 'all' ? t('evolution.filterAll', 'All') : `${STAGE_META[f].icon} ${f}`}
-                </button>
-              ))}
-            </div>
-          </div>
-          {filteredHistory.length === 0 ? (
-            <div className="text-center py-10 mb-8">
-              <p className="text-4xl mb-3">🗂️</p>
-              <p className={clsx('text-sm', mutedCls)}>
-                {t('evolution.noHistory', 'No evolution records yet. Record an execution or run a cycle to start the stream.')}
+    <div className="min-h-full px-8 py-10">
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div className="w-12 border-t-2 mb-5" style={{ borderColor: 'var(--fg)' }} aria-hidden="true" />
+          <div className="flex items-end justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="page-title">{t('evolution.title', 'Self-Evolution Engine')}</h1>
+              <p className="page-subtitle">
+                {t('evolution.subtitle', 'GEPA closed-loop: Generate → Evaluate → Promote → Apply · Self-evolution: Execute → Evaluate → Optimize → Learn')}
               </p>
             </div>
-          ) : (
-            <div className="space-y-2 mb-8">
-              {filteredHistory.map(rec => {
-                const meta = STAGE_META[rec.stage] ?? { icon: '•', badge: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' }
-                const expanded = expandedIds.has(rec.id)
-                return (
-                  <div key={rec.id} className={clsx(cardCls, 'p-3')}>
-                    <button onClick={() => toggleExpanded(rec.id)} className="w-full flex items-center gap-3 text-left">
-                      <span className={clsx('px-1.5 py-0.5 rounded text-[11px] shrink-0', meta.badge)}>
-                        {meta.icon} {rec.stage}
-                      </span>
-                      <span className="text-xs font-mono truncate">{rec.task_id || '—'}</span>
-                      {rec.score != null && (
-                        <span className={clsx('text-[11px] shrink-0', mutedCls)}>score {rec.score.toFixed(3)}</span>
-                      )}
-                      <span className={clsx('ml-auto text-[11px] shrink-0', mutedCls)}>
-                        {rec.created_at ? new Date(rec.created_at).toLocaleString() : ''}
-                      </span>
-                      <span className={clsx('text-[11px] shrink-0', mutedCls)}>{expanded ? '▾' : '▸'}</span>
-                    </button>
-                    {expanded && (
-                      <div className="mt-2">
-                        <p className={clsx('text-[11px]', mutedCls)}>id: <code className="font-mono">{rec.id}</code></p>
-                        {Object.keys(rec.input_data ?? {}).length > 0 && renderJson({ input: rec.input_data })}
-                        {Object.keys(rec.output_data ?? {}).length > 0 && renderJson({ output: rec.output_data })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
+            <button
+              onClick={loadData}
+              disabled={loading}
+              className="px-3 py-2 border border-[var(--divider)] bg-transparent text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50"
+            >
+              {loading ? '⏳' : '🔄'} {t('common.refresh', 'Refresh')}
+            </button>
+          </div>
+        </header>
 
-          {/* ── Promoted Skills (GEPA) ── */}
-          <h2 className="text-lg font-semibold mb-3">
-            ⚡ {t('evolution.promotedSkills', 'Promoted Skills')} {skills.length > 0 && `(${skills.length})`}
-          </h2>
-          {skills.length === 0 ? (
-            <div className="text-center py-8 mb-8">
-              <p className="text-4xl mb-3">🧬</p>
-              <p className={clsx('text-sm', mutedCls)}>
-                {t('evolution.noSkills', 'No skills promoted yet. Complete tasks to extract patterns and promote reusable skills.')}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3 mb-8">
-              {skills.map((skill, i) => (
-                <div key={skill.id || skill.name || i} className={clsx(cardCls, 'flex items-center justify-between')}>
-                  <div>
-                    <h3 className="font-medium text-sm">{skill.name}</h3>
-                    {skill.description && (
-                      <p className={clsx('text-xs mt-0.5', mutedCls)}>{skill.description}</p>
-                    )}
-                    <div className="flex gap-2 mt-1 flex-wrap">
-                      {skill.trigger_pattern && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                          {skill.trigger_pattern}
+        {error && (
+          <div className="mb-6 p-3 border border-[#dc2626]/30 text-sm text-[#dc2626]" role="alert">
+            ⚠️ {error}
+          </div>
+        )}
+
+        {loading && history.length === 0 ? (
+          <p className="empty-state">{t('common.loading', 'Loading...')}</p>
+        ) : (
+          <>
+            {/* ── Stats — single-row KPI text, no cards ── */}
+            <section className="mb-8" aria-label={t('evolution.title', 'Self-Evolution Engine')}>
+              {renderStatRow([...engineStats, ...summaryStats, ...seStatItems])}
+            </section>
+
+            <hr className="my-10 border-0 border-t" style={{ borderColor: DIVIDER }} />
+
+            {/* ── Trigger console ── */}
+            <section className="mb-10">
+              <h2 className={sectionTitle}>{t('evolution.triggerConsole', 'Trigger Console')}</h2>
+              <div className="grid lg:grid-cols-2 gap-10">
+                {/* GEPA trigger */}
+                <div>
+                  <h3 className="text-sm font-medium mb-1">{t('evolution.gepaTrigger', 'GEPA Loop Trigger')}</h3>
+                  <p className="cell-data text-[11px] opacity-50 mb-3">POST /evolution/trigger</p>
+                  <label htmlFor="gepa-trajectory" className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1">trajectory (JSON)</label>
+                  <textarea
+                    id="gepa-trajectory"
+                    value={gepaTrajectory}
+                    onChange={e => setGepaTrajectory(e.target.value)}
+                    placeholder='{"tool_calls": [...], "status": "completed"}'
+                    rows={3}
+                    className={clsx(inputCls, 'font-mono text-xs')}
+                  />
+                  <label htmlFor="gepa-result" className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mt-3 mb-1">result (JSON)</label>
+                  <textarea
+                    id="gepa-result"
+                    value={gepaResult}
+                    onChange={e => setGepaResult(e.target.value)}
+                    placeholder='{"success": true}'
+                    rows={2}
+                    className={clsx(inputCls, 'font-mono text-xs')}
+                  />
+                  <button onClick={runGepaTrigger} disabled={gepaBusy} className={clsx(btnCls, 'mt-3')}>
+                    {gepaBusy ? '⏳' : '▶️'} {t('evolution.runTrigger', 'Run Trigger')}
+                  </button>
+                  {renderError(gepaError)}
+                  {gepaOutcome && (
+                    <div className="mt-3 text-xs space-y-1">
+                      <p className="flex items-center gap-2 flex-wrap">
+                        <span className={clsx('badge-status', gepaOutcome.status === 'completed' ? 'badge-success' : 'badge-muted')}>
+                          {gepaOutcome.status}
                         </span>
+                        {gepaOutcome.reason && <span className="opacity-50">{gepaOutcome.reason}</span>}
+                      </p>
+                      {gepaOutcome.status === 'completed' && (
+                        <>
+                          <p className="opacity-50">
+                            {t('evolution.shouldCreateSkill', 'Should create skill')}: {String(gepaOutcome.should_create_skill)}
+                            {gepaOutcome.skill_name && ` · ${gepaOutcome.skill_name}`}
+                            {gepaOutcome.confidence != null && ` · ${t('evolution.confidence', 'confidence')} ${Math.round(gepaOutcome.confidence * 100)}%`}
+                          </p>
+                          {gepaOutcome.key_patterns && gepaOutcome.key_patterns.length > 0 && (
+                            <p className="opacity-50">{t('evolution.keyPatterns', 'Key patterns')}: {gepaOutcome.key_patterns.join(', ')}</p>
+                          )}
+                        </>
                       )}
-                      <span className="text-[10px] text-slate-400">used {skill.usage_count}x</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                        success {Math.round((skill.success_rate ?? 0) * 100)}%
-                      </span>
                     </div>
-                  </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
 
-          {/* ── Distilled Skills (self-evolution engine) ── */}
-          <h2 className="text-lg font-semibold mb-3">
-            🧠 {t('evolution.distilledSkillsList', 'Distilled Skills')} {distilledSkills.length > 0 && `(${distilledSkills.length})`}
-          </h2>
-          {distilledSkills.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-4xl mb-3">🧠</p>
-              <p className={clsx('text-sm', mutedCls)}>
-                {t('evolution.noDistilledSkills', 'No distilled skills yet. Run distill on successful executions (success rate ≥ 70%).')}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {distilledSkills.map(skill => (
-                <div key={skill.id} className={cardCls}>
-                  <h3 className="font-medium text-sm">{skill.name}</h3>
-                  <p className={clsx('text-xs mt-0.5', mutedCls)}>{skill.description}</p>
-                  {skill.pattern && <p className={clsx('text-[11px] mt-1', mutedCls)}>{skill.pattern}</p>}
-                  <div className="flex gap-2 mt-1 flex-wrap items-center">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                      success {Math.round(skill.success_rate * 100)}%
-                    </span>
-                    {skill.tool_sequence.map(tool => (
-                      <span key={tool} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 font-mono">
-                        {tool}
-                      </span>
-                    ))}
-                    <span className={clsx('text-[10px] ml-auto', mutedCls)}>
-                      {skill.created_at ? new Date(skill.created_at).toLocaleDateString() : ''}
-                    </span>
-                  </div>
+                {/* Full cycle trigger */}
+                <div>
+                  <h3 className="text-sm font-medium mb-1">{t('evolution.fullCycle', 'Full Evolution Cycle')}</h3>
+                  <p className="cell-data text-[11px] opacity-50 mb-3">POST /evolution/self-evolution/cycle · Execute → Evaluate → Optimize → Learn</p>
+                  <label htmlFor="cycle-task-id" className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1">task_id</label>
+                  <input
+                    id="cycle-task-id"
+                    value={cycleTaskId}
+                    onChange={e => setCycleTaskId(e.target.value)}
+                    placeholder={t('evolution.taskIdPlaceholder', 'Task ID with a recorded execution')}
+                    className={inputCls}
+                  />
+                  <button onClick={runCycle} disabled={cycleBusy || !cycleTaskId.trim()} className={clsx(btnCls, 'mt-3')}>
+                    {cycleBusy ? '⏳' : '🔁'} {t('evolution.runCycle', 'Run Cycle')}
+                  </button>
+                  {renderError(cycleError)}
+                  {cycleOutcome && (
+                    <div className="mt-3 text-xs space-y-2">
+                      {cycleOutcome.error ? (
+                        <div className="p-2 border border-[#dc2626]/30 text-[#dc2626]">⚠️ {cycleOutcome.error}</div>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap gap-2 items-center">
+                            <span className={clsx('badge-status', STAGE_BADGE.evaluate)}>
+                              score <span className="font-data">{cycleOutcome.score != null ? cycleOutcome.score.toFixed(3) : '—'}</span>
+                            </span>
+                            {cycleDelta != null && (
+                              <span className={clsx('badge-status', cycleDelta >= 0 ? 'badge-success' : 'badge-danger')}>
+                                {cycleDelta >= 0 ? '▲' : '▼'} {Math.abs(cycleDelta).toFixed(3)} {t('evolution.vsPrevCycle', 'vs prev')}
+                              </span>
+                            )}
+                            <span className={clsx('badge-status', STAGE_BADGE.optimize)}>
+                              {cycleOutcome.optimization?.optimizations?.length ?? 0} {t('evolution.suggestions', 'suggestions')}
+                            </span>
+                            <span className={clsx('badge-status', STAGE_BADGE.learn)}>
+                              {cycleOutcome.skill_distilled ? t('evolution.skillPromoted', 'skill promoted') : t('evolution.noSkill', 'no skill')}
+                            </span>
+                          </div>
+                          {cycleOutcome.optimization?.suggested_approach && (
+                            <p className="opacity-50">
+                              {t('evolution.suggestedApproach', 'Suggested approach')}: {cycleOutcome.optimization.suggested_approach}
+                              {cycleOutcome.optimization.should_retry && ` · ⚠️ ${t('evolution.shouldRetry', 'retry recommended')}`}
+                            </p>
+                          )}
+                          {cycleOutcome.optimization?.optimizations?.map((o, i) => (
+                            <p key={i} className="opacity-50">• [{o.type}] {o.detail}</p>
+                          ))}
+                          {cycleOutcome.skill && (
+                            <p className="opacity-50">{cycleOutcome.skill.name} — {cycleOutcome.skill.description}</p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+              </div>
+            </section>
+
+            {/* ── Manual ops panel ── */}
+            <section className="mb-10">
+              <h2 className={sectionTitle}>{t('evolution.manualOps', 'Manual Stage Operations')}</h2>
+              <div className="grid lg:grid-cols-2 gap-10">
+                {/* Record */}
+                <div>
+                  <h3 className="text-sm font-medium mb-1">{t('evolution.opRecord', 'Record Execution')}</h3>
+                  <p className="cell-data text-[11px] opacity-50 mb-3">POST /evolution/self-evolution/record</p>
+                  <input value={recTaskId} onChange={e => setRecTaskId(e.target.value)} placeholder="task_id" className={clsx(inputCls, 'mb-2')} />
+                  <textarea
+                    value={recTrace}
+                    onChange={e => setRecTrace(e.target.value)}
+                    placeholder='trace (JSON), e.g. {"status": "completed", "tool_calls": []}'
+                    rows={2}
+                    className={clsx(inputCls, 'font-mono text-xs')}
+                  />
+                  <button onClick={runRecord} disabled={recBusy || !recTaskId.trim()} className={clsx(btnCls, 'mt-3')}>
+                    {recBusy ? '⏳' : '▶️'} {t('evolution.run', 'Run')}
+                  </button>
+                  {renderError(recError)}
+                  {recOutcome && (
+                    <p className="mt-2 text-xs opacity-50">
+                      ✓ execution_id: <code className="cell-data">{recOutcome.execution_id}</code>
+                    </p>
+                  )}
+                </div>
+
+                {/* Evaluate */}
+                <div>
+                  <h3 className="text-sm font-medium mb-1">{t('evolution.opEvaluate', 'Evaluate Execution')}</h3>
+                  <p className="cell-data text-[11px] opacity-50 mb-3">POST /evolution/self-evolution/evaluate</p>
+                  <input value={evalExecId} onChange={e => setEvalExecId(e.target.value)} placeholder="execution_id" className={clsx(inputCls, 'mb-2')} />
+                  <textarea
+                    value={evalFeedback}
+                    onChange={e => setEvalFeedback(e.target.value)}
+                    placeholder='feedback (JSON, optional), e.g. {"success": true, "rating": 4}'
+                    rows={2}
+                    className={clsx(inputCls, 'font-mono text-xs')}
+                  />
+                  <button onClick={runEvaluate} disabled={evalBusy || !evalExecId.trim()} className={clsx(btnCls, 'mt-3')}>
+                    {evalBusy ? '⏳' : '📊'} {t('evolution.run', 'Run')}
+                  </button>
+                  {renderError(evalError)}
+                  {evalOutcome && (
+                    <p className="mt-2 text-xs opacity-50">
+                      ✓ score: <span className="font-data">{evalOutcome.score.toFixed(3)}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Optimize */}
+                <div>
+                  <h3 className="text-sm font-medium mb-1">{t('evolution.opOptimize', 'Optimize Strategy')}</h3>
+                  <p className="cell-data text-[11px] opacity-50 mb-3">POST /evolution/self-evolution/optimize</p>
+                  <div className="flex gap-2 mb-2">
+                    <input value={optExecId} onChange={e => setOptExecId(e.target.value)} placeholder="execution_id" className={inputCls} />
+                    <input
+                      value={optScore}
+                      onChange={e => setOptScore(e.target.value)}
+                      placeholder="score 0-1"
+                      className={clsx(inputCls, 'w-28 shrink-0')}
+                    />
+                  </div>
+                  <button onClick={runOptimize} disabled={optBusy || !optExecId.trim()} className={btnCls}>
+                    {optBusy ? '⏳' : '🛠️'} {t('evolution.run', 'Run')}
+                  </button>
+                  {renderError(optError)}
+                  {optOutcome && (
+                    <div className="mt-2 text-xs space-y-1">
+                      {optOutcome.error ? (
+                        <div className="p-2 border border-[#dc2626]/30 text-[#dc2626]">⚠️ {optOutcome.error}</div>
+                      ) : (
+                        <>
+                          <p className="opacity-50">
+                            {t('evolution.suggestedApproach', 'Suggested approach')}: {optOutcome.suggested_approach}
+                            {optOutcome.should_retry && ` · ⚠️ ${t('evolution.shouldRetry', 'retry recommended')}`}
+                          </p>
+                          {optOutcome.optimizations.map((o, i) => (
+                            <p key={i} className="opacity-50">• [{o.type}] {o.detail}</p>
+                          ))}
+                          {optOutcome.optimizations.length === 0 && (
+                            <p className="opacity-50">{t('evolution.noOptimizations', 'No optimization suggestions.')}</p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Distill */}
+                <div>
+                  <h3 className="text-sm font-medium mb-1">{t('evolution.opDistill', 'Distill Skill')}</h3>
+                  <p className="cell-data text-[11px] opacity-50 mb-3">POST /evolution/self-evolution/distill</p>
+                  <input
+                    value={distillIds}
+                    onChange={e => setDistillIds(e.target.value)}
+                    placeholder={t('evolution.distillPlaceholder', 'execution_ids, comma separated')}
+                    className={clsx(inputCls, 'mb-2')}
+                  />
+                  <button onClick={runDistill} disabled={distillBusy || !distillIds.trim()} className={btnCls}>
+                    {distillBusy ? '⏳' : '🧠'} {t('evolution.run', 'Run')}
+                  </button>
+                  {renderError(distillError)}
+                  {distillOutcome && (
+                    <div className="mt-2 text-xs space-y-1">
+                      {distillOutcome.error ? (
+                        <div className="p-2 border border-[#dc2626]/30 text-[#dc2626]">⚠️ {distillOutcome.error}</div>
+                      ) : distillOutcome.skill ? (
+                        <>
+                          <p className="opacity-50">
+                            {distillOutcome.promoted ? '✅ ' + t('evolution.skillPromoted', 'skill promoted') : '⏸️ ' + t('evolution.belowThreshold', 'below promotion threshold')}
+                            {' · '}{t('evolution.successRate', 'success rate')} {Math.round(distillOutcome.skill.success_rate * 100)}%
+                          </p>
+                          <p className="opacity-50">{distillOutcome.skill.name} — {distillOutcome.skill.description}</p>
+                        </>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <hr className="my-10 border-0 border-t" style={{ borderColor: DIVIDER }} />
+
+            {/* ── Cycle history / record event stream ── */}
+            <section className="mb-10">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h2 className={clsx(sectionTitle, 'mb-0')}>
+                  {t('evolution.history', 'Cycle History & Record Stream')} {history.length > 0 && `(${filteredHistory.length})`}
+                </h2>
+                <div className="flex gap-1.5">
+                  {(['all', 'execute', 'evaluate', 'optimize', 'learn'] as StageFilter[]).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setStageFilter(f)}
+                      className={clsx(
+                        'px-2 py-1 text-xs font-medium transition-opacity',
+                        stageFilter === f ? 'opacity-100 text-blue-600 dark:text-blue-400' : 'opacity-50 hover:opacity-100'
+                      )}
+                    >
+                      {f === 'all' ? t('evolution.filterAll', 'All') : f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {filteredHistory.length === 0 ? (
+                <p className="empty-state">
+                  {t('evolution.noHistory', 'No evolution records yet. Record an execution or run a cycle to start the stream.')}
+                </p>
+              ) : (
+                <div>
+                  {filteredHistory.map(rec => {
+                    const expanded = expandedIds.has(rec.id)
+                    return (
+                      <div key={rec.id} className="row-line" style={{ padding: '10px 0' }}>
+                        <button onClick={() => toggleExpanded(rec.id)} className="w-full flex items-center gap-3 text-left">
+                          <span className={clsx('badge-status shrink-0', STAGE_BADGE[rec.stage] ?? 'badge-muted')}>
+                            {rec.stage}
+                          </span>
+                          <span className="cell-data text-xs truncate">{rec.task_id || '—'}</span>
+                          {rec.score != null && (
+                            <span className="text-[11px] shrink-0 opacity-50 font-data">score {rec.score.toFixed(3)}</span>
+                          )}
+                          <span className="ml-auto text-[11px] shrink-0 opacity-50 cell-data">
+                            {rec.created_at ? new Date(rec.created_at).toLocaleString() : ''}
+                          </span>
+                          <span className="text-[11px] shrink-0 opacity-50">{expanded ? '▾' : '▸'}</span>
+                        </button>
+                        {expanded && (
+                          <div className="mt-2">
+                            <p className="text-[11px] opacity-50">id: <code className="cell-data">{rec.id}</code></p>
+                            {Object.keys(rec.input_data ?? {}).length > 0 && renderJson({ input: rec.input_data })}
+                            {Object.keys(rec.output_data ?? {}).length > 0 && renderJson({ output: rec.output_data })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+
+            <hr className="my-10 border-0 border-t" style={{ borderColor: DIVIDER }} />
+
+            {/* ── Promoted Skills (GEPA) ── */}
+            <section className="mb-10">
+              <h2 className={sectionTitle}>
+                {t('evolution.promotedSkills', 'Promoted Skills')} {skills.length > 0 && `(${skills.length})`}
+              </h2>
+              {skills.length === 0 ? (
+                <p className="empty-state">
+                  {t('evolution.noSkills', 'No skills promoted yet. Complete tasks to extract patterns and promote reusable skills.')}
+                </p>
+              ) : (
+                <div>
+                  {skills.map((skill, i) => (
+                    <div key={skill.id || skill.name || i} className="row-line flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <h3 className="font-medium text-sm truncate">{skill.name}</h3>
+                        {skill.description && (
+                          <p className="text-xs mt-0.5 opacity-50 truncate">{skill.description}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2 items-center shrink-0 flex-wrap justify-end">
+                        {skill.trigger_pattern && (
+                          <span className="badge-status badge-muted">{skill.trigger_pattern}</span>
+                        )}
+                        <span className="text-[11px] opacity-50 font-data">used {skill.usage_count}x</span>
+                        <span className="badge-status badge-success">
+                          success {Math.round((skill.success_rate ?? 0) * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <hr className="my-10 border-0 border-t" style={{ borderColor: DIVIDER }} />
+
+            {/* ── Distilled Skills (self-evolution engine) ── */}
+            <section>
+              <h2 className={sectionTitle}>
+                {t('evolution.distilledSkillsList', 'Distilled Skills')} {distilledSkills.length > 0 && `(${distilledSkills.length})`}
+              </h2>
+              {distilledSkills.length === 0 ? (
+                <p className="empty-state">
+                  {t('evolution.noDistilledSkills', 'No distilled skills yet. Run distill on successful executions (success rate ≥ 70%).')}
+                </p>
+              ) : (
+                <div>
+                  {distilledSkills.map(skill => (
+                    <div key={skill.id} className="row-line">
+                      <div className="flex items-center justify-between gap-4">
+                        <h3 className="font-medium text-sm truncate">{skill.name}</h3>
+                        <div className="flex gap-2 items-center shrink-0">
+                          <span className="badge-status badge-success">
+                            success {Math.round(skill.success_rate * 100)}%
+                          </span>
+                          <span className="text-[11px] opacity-50 cell-data">
+                            {skill.created_at ? new Date(skill.created_at).toLocaleDateString() : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs mt-0.5 opacity-50">{skill.description}</p>
+                      {skill.pattern && <p className="text-[11px] mt-1 opacity-50">{skill.pattern}</p>}
+                      {skill.tool_sequence.length > 0 && (
+                        <div className="flex gap-2 mt-1.5 flex-wrap items-center">
+                          {skill.tool_sequence.map(tool => (
+                            <span key={tool} className="badge-status badge-muted cell-data">{tool}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </div>
     </div>
   )
 }

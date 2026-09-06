@@ -267,7 +267,7 @@ export const SkillMarketComplete: React.FC = () => {
     <div
       role="button"
       tabIndex={0}
-      className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-4 cursor-pointer"
+      className="border-y p-4 cursor-pointer"
       onClick={() => {
         setSelectedSkill(skill);
         setShowDetailModal(true);
@@ -338,7 +338,7 @@ export const SkillMarketComplete: React.FC = () => {
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="bg-white max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           <div className="sticky top-0 bg-white border-b p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-4xl">{selectedSkill.icon_emoji}</span>
@@ -357,23 +357,11 @@ export const SkillMarketComplete: React.FC = () => {
 
           <div className="p-6 space-y-6">
             {/* 统计信息 */}
-            <div className="grid grid-cols-4 gap-4">
-              <div className="bg-blue-50 p-3 rounded-lg text-center">
-                <div className="text-2xl font-bold text-blue-600">{selectedSkill.rating.toFixed(1)}</div>
-                <div className="text-xs text-gray-600">评分</div>
-              </div>
-              <div className="bg-green-50 p-3 rounded-lg text-center">
-                <div className="text-2xl font-bold text-green-600">{selectedSkill.downloads}</div>
-                <div className="text-xs text-gray-600">下载</div>
-              </div>
-              <div className="bg-purple-50 p-3 rounded-lg text-center">
-                <div className="text-2xl font-bold text-purple-600">{selectedSkill.installed_count}</div>
-                <div className="text-xs text-gray-600">已安装</div>
-              </div>
-              <div className="bg-orange-50 p-3 rounded-lg text-center">
-                <div className="text-2xl font-bold text-orange-600">{selectedSkill.usage_count}</div>
-                <div className="text-xs text-gray-600">使用次数</div>
-              </div>
+            <div className="console-kpi-row">
+              <div className="console-kpi"><span className="kpi-label">评分</span><span className="kpi-value">{selectedSkill.rating.toFixed(1)}</span></div>
+              <div className="console-kpi"><span className="kpi-label">下载</span><span className="kpi-value">{selectedSkill.downloads}</span></div>
+              <div className="console-kpi"><span className="kpi-label">已安装</span><span className="kpi-value">{selectedSkill.installed_count}</span></div>
+              <div className="console-kpi"><span className="kpi-label">使用次数</span><span className="kpi-value">{selectedSkill.usage_count}</span></div>
             </div>
 
             {/* 描述 */}
@@ -449,32 +437,20 @@ export const SkillMarketComplete: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gray-50">
       {/* 头部 */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
+      <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">技能市场</h1>
           <p className="text-gray-600">发现和使用强大的AI技能，提高工作效率</p>
 
           {/* 统计信息 */}
           {stats && (
-            <div className="grid grid-cols-4 gap-4 mt-6">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">{stats.total_skills}</div>
-                <div className="text-sm text-gray-600">总技能数</div>
-              </div>
-              <div className="bg-green-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{stats.installed_skills}</div>
-                <div className="text-sm text-gray-600">已安装</div>
-              </div>
-              <div className="bg-purple-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">{stats.total_downloads}</div>
-                <div className="text-sm text-gray-600">总下载</div>
-              </div>
-              <div className="bg-orange-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-orange-600">{stats.average_rating.toFixed(1)}</div>
-                <div className="text-sm text-gray-600">平均评分</div>
-              </div>
+            <div className="console-kpi-row mt-6">
+              <div className="console-kpi"><span className="kpi-label">总技能数</span><span className="kpi-value">{stats.total_skills}</span></div>
+              <div className="console-kpi"><span className="kpi-label">已安装</span><span className="kpi-value">{stats.installed_skills}</span></div>
+              <div className="console-kpi"><span className="kpi-label">总下载</span><span className="kpi-value">{stats.total_downloads}</span></div>
+              <div className="console-kpi"><span className="kpi-label">平均评分</span><span className="kpi-value">{stats.average_rating.toFixed(1)}</span></div>
             </div>
           )}
         </div>
@@ -491,13 +467,13 @@ export const SkillMarketComplete: React.FC = () => {
                 placeholder="搜索技能..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="rating">按评分</option>
               <option value="downloads">按下载</option>
@@ -564,7 +540,7 @@ export const SkillMarketComplete: React.FC = () => {
           <div
             className={
               viewMode === 'grid'
-                ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'
+                ? 'grid grid-cols-1 md:grid-cols-2 gap-4'
                 : 'space-y-4'
             }
           >

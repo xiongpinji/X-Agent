@@ -55,12 +55,12 @@ export function MemoryHistoryPage(props: MemoryHistoryPageProps) {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border bg-white p-4 shadow-sm">
+      <section className="console-section">
         <h2 className="text-lg font-semibold">记忆历史</h2>
         <p className="text-sm text-gray-500">查看记忆、经验和引用的历史事件。</p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="console-kpi-row">
         <StatCard label="事件总数" value={String(totalEvents)} />
         <StatCard label="成功事件" value={String(successEvents)} />
         <StatCard label="失败事件" value={String(failedEvents)} />
@@ -80,9 +80,9 @@ export function MemoryHistoryPage(props: MemoryHistoryPageProps) {
 
         <Panel title="操作区">
           <div className="grid gap-2">
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50">筛选成功事件</button>
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50">筛选失败事件</button>
-            <button className="rounded-xl border px-3 py-2 text-left hover:bg-gray-50">导出历史记录</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50">筛选成功事件</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50">筛选失败事件</button>
+            <button className="border-b px-3 py-2 text-left hover:bg-gray-50">导出历史记录</button>
           </div>
         </Panel>
       </section>
@@ -92,16 +92,13 @@ export function MemoryHistoryPage(props: MemoryHistoryPageProps) {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      <div className="text-sm text-gray-500">{label}</div>
-      <div className="mt-2 text-2xl font-bold text-gray-900">{value}</div>
-    </div>
+    <div className="console-kpi"><span className="kpi-label">{label}</span><span className="kpi-value">{value}</span></div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border bg-white p-4 shadow-sm">
+    <section className="console-section">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>

@@ -103,7 +103,7 @@ const NotificationCenter: React.FC = () => {
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setIsOpen(false); }}
           />
           <div className={clsx(
-            'absolute right-0 top-full mt-2 w-80 max-h-96 rounded-xl shadow-xl border z-50 overflow-hidden flex flex-col',
+            'absolute right-0 top-full mt-2 w-80 max-h-96 border z-50 overflow-hidden flex flex-col',
             isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
           )} role="region" aria-label="Notifications">
             {/* Header */}

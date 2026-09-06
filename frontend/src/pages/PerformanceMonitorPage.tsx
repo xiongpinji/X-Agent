@@ -35,10 +35,27 @@ interface QueueHealth {
 const API_BASE = '/api/v1';
 const HEADERS = { 'X-API-Key': localStorage.getItem('api_key') || 'xagent-dev-key-2024' };
 
-const MetricCard: React.FC<{ label: string; value: string | number; status?: 'ok' | 'warn' | 'danger' }> = ({ label, value, status = 'ok' }) => (
-  <div className={`rounded-lg border p-4 ${status === 'danger' ? 'border-red-300 bg-red-50 dark:bg-red-950' : status === 'warn' ? 'border-yellow-300 bg-yellow-50 dark:bg-yellow-950' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
-    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</p>
-    <p className="text-2xl font-bold mt-1 text-gray-900 dark:text-white">{value}</p>
+const DIVIDER = 'var(--divider)';
+
+/** KPI cell — label 11px uppercase 50% + mono value, hairline vertical divider. */
+const StatItem: React.FC<{
+  label: string;
+  value: string | number;
+  status?: 'ok' | 'warn' | 'danger';
+  last?: boolean;
+}> = ({ label, value, status = 'ok', last }) => (
+  <div
+    className={`flex flex-col gap-1.5 pr-6 mr-6 ${last ? '' : 'border-r'}`}
+    style={last ? undefined : { borderColor: DIVIDER }}
+  >
+    <dd
+      className={`font-data text-[20px] leading-none order-2 ${
+        status === 'danger' ? 'text-[#dc2626]' : status === 'warn' ? 'text-[#d97706]' : ''
+      }`}
+    >
+      {value}
+    </dd>
+    <dt className="text-[11px] uppercase tracking-[0.06em] opacity-50 order-1">{label}</dt>
   </div>
 );
 
@@ -83,99 +100,129 @@ export const PerformanceMonitorPage: React.FC = () => {
   const cpuStatus = (v: number) => v > 80 ? 'danger' : v > 60 ? 'warn' : 'ok';
   const memStatus = (v: number) => v > 85 ? 'danger' : v > 70 ? 'warn' : 'ok';
 
+  const sectionTitle = 'text-[11px] uppercase tracking-[0.08em] opacity-50 mb-3';
+
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">⚡ Performance Monitor</h1>
-        <span className="text-xs text-gray-400">Auto-refresh: 5s</span>
-      </div>
+    <div className="min-h-full px-8 py-10">
+      <div className="max-w-6xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div className="w-12 border-t-2 mb-5" style={{ borderColor: 'var(--fg)' }} aria-hidden="true" />
+          <div className="flex items-end justify-between gap-4 flex-wrap">
+            <h1 className="page-title">⚡ Performance Monitor</h1>
+            <span className="cell-data text-xs opacity-50">Auto-refresh: 5s</span>
+          </div>
+        </header>
 
-      {error && <div className="p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded">{error}</div>}
+        {error && (
+          <div className="mb-6 p-3 border border-[#dc2626]/30 text-sm text-[#dc2626]" role="alert">
+            {error}
+          </div>
+        )}
 
-      {/* Top metric cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <MetricCard label="CPU" value={health ? `${health.cpu_percent}%` : '—'} status={health ? cpuStatus(health.cpu_percent) : 'ok'} />
-        <MetricCard label="Memory" value={health ? `${health.memory_percent}%` : '—'} status={health ? memStatus(health.memory_percent) : 'ok'} />
-        <MetricCard label="Loop Lag" value={health ? `${health.event_loop_lag_ms}ms` : '—'} />
-        <MetricCard label="Active Tasks" value={queue ? queue.pool.active_tasks : '—'} />
-        <MetricCard label="Pool Util" value={queue ? `${queue.pool.utilization_percent}%` : '—'} status={queue && queue.pool.utilization_percent > 80 ? 'warn' : 'ok'} />
-        <MetricCard label="Success Rate" value={queue ? `${queue.throughput.success_rate}%` : '—'} />
-      </div>
+        {/* Top metrics — single-row KPI text, no cards */}
+        <dl className="flex flex-wrap gap-y-5 mb-10">
+          <StatItem label="CPU" value={health ? `${health.cpu_percent}%` : '—'} status={health ? cpuStatus(health.cpu_percent) : 'ok'} />
+          <StatItem label="Memory" value={health ? `${health.memory_percent}%` : '—'} status={health ? memStatus(health.memory_percent) : 'ok'} />
+          <StatItem label="Loop Lag" value={health ? `${health.event_loop_lag_ms}ms` : '—'} />
+          <StatItem label="Active Tasks" value={queue ? queue.pool.active_tasks : '—'} />
+          <StatItem label="Pool Util" value={queue ? `${queue.pool.utilization_percent}%` : '—'} status={queue && queue.pool.utilization_percent > 80 ? 'warn' : 'ok'} />
+          <StatItem label="Success Rate" value={queue ? `${queue.throughput.success_rate}%` : '—'} last />
+        </dl>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* CPU & Memory trend */}
-        <div className="border rounded-lg p-4 dark:border-gray-700">
-          <h3 className="text-sm font-medium mb-3 text-gray-700 dark:text-gray-300">CPU / Memory Trend</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={history}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
-              <Tooltip />
-              <Legend />
-              <Area type="monotone" dataKey="cpu" stroke="#ef4444" fill="#fecaca" name="CPU %" />
-              <Area type="monotone" dataKey="mem" stroke="#3b82f6" fill="#bfdbfe" name="Mem %" />
-            </AreaChart>
-          </ResponsiveContainer>
+        {/* Charts — transparent containers with hairline top border */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-10">
+          <section className="pt-4 border-t" style={{ borderColor: DIVIDER }}>
+            <h3 className={sectionTitle}>CPU / Memory Trend</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={history}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+                <Tooltip />
+                <Legend />
+                <Area type="monotone" dataKey="cpu" stroke="#ef4444" fill="#fecaca" name="CPU %" />
+                <Area type="monotone" dataKey="mem" stroke="#3b82f6" fill="#bfdbfe" name="Mem %" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </section>
+
+          <section className="pt-4 border-t" style={{ borderColor: DIVIDER }}>
+            <h3 className={sectionTitle}>Concurrency Pool</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <RadialBarChart
+                cx="50%" cy="50%" innerRadius="40%" outerRadius="90%"
+                data={[{
+                  name: 'Active',
+                  value: queue?.pool.active_tasks ?? 0,
+                  fill: '#3b82f6',
+                }, {
+                  name: 'Capacity',
+                  value: queue?.pool.capacity_remaining ?? 0,
+                  fill: '#d1d5db',
+                }]}
+              >
+                <RadialBar dataKey="value" cornerRadius={4} />
+                <Legend iconSize={10} />
+                <Tooltip />
+              </RadialBarChart>
+            </ResponsiveContainer>
+          </section>
         </div>
 
-        {/* Concurrency pool radial */}
-        <div className="border rounded-lg p-4 dark:border-gray-700">
-          <h3 className="text-sm font-medium mb-3 text-gray-700 dark:text-gray-300">Concurrency Pool</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <RadialBarChart
-              cx="50%" cy="50%" innerRadius="40%" outerRadius="90%"
-              data={[{
-                name: 'Active',
-                value: queue?.pool.active_tasks ?? 0,
-                fill: '#3b82f6',
-              }, {
-                name: 'Capacity',
-                value: queue?.pool.capacity_remaining ?? 0,
-                fill: '#d1d5db',
-              }]}
-            >
-              <RadialBar dataKey="value" cornerRadius={4} />
-              <Legend iconSize={10} />
-              <Tooltip />
-            </RadialBarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Bottom info */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="border rounded-lg p-4 dark:border-gray-700">
-          <h3 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">🧠 Memory Optimizer</h3>
-          {perf?.memory ? (
-            <ul className="text-sm space-y-1 text-gray-600 dark:text-gray-400">
-              <li>Current: {perf.memory.current_mb} MB</li>
-              <li>Target: {perf.memory.target_mb} MB</li>
-              <li>Utilization: {perf.memory.utilization_percent}%</li>
-            </ul>
-          ) : <p className="text-sm text-gray-400">Loading…</p>}
-        </div>
-        <div className="border rounded-lg p-4 dark:border-gray-700">
-          <h3 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">🔄 Parallel Pool</h3>
-          {perf?.parallel_pool ? (
-            <ul className="text-sm space-y-1 text-gray-600 dark:text-gray-400">
-              <li>Max Concurrency: {String(perf.parallel_pool.max_concurrency)}</li>
-              <li>Active: {String(perf.parallel_pool.active_tasks)}</li>
-              <li>Batches: {String(perf.parallel_pool.total_batches)}</li>
-            </ul>
-          ) : <p className="text-sm text-gray-400">Loading…</p>}
-        </div>
-        <div className="border rounded-lg p-4 dark:border-gray-700">
-          <h3 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">💡 Recommendation</h3>
-          {health ? (
-            <p className={`text-lg font-semibold ${health.recommendation === 'scale_down' ? 'text-red-500' : health.recommendation === 'scale_up' ? 'text-green-500' : 'text-blue-500'}`}>
-              {health.recommendation === 'scale_down' ? '⚠️ Scale Down' : health.recommendation === 'scale_up' ? '🚀 Scale Up' : '✅ Stable'}
-            </p>
-          ) : <p className="text-sm text-gray-400">Loading…</p>}
-          {queue?.queue.backpressure && (
-            <p className="text-xs text-red-500 mt-2">⚠️ Backpressure active</p>
-          )}
+        {/* Bottom info — mono tabular rows, hairline dividers */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+          <section className="pt-4 border-t" style={{ borderColor: DIVIDER }}>
+            <h3 className={sectionTitle}>🧠 Memory Optimizer</h3>
+            {perf?.memory ? (
+              <div className="font-data text-[13px]">
+                <div className="flex items-baseline justify-between py-2 border-b" style={{ borderColor: DIVIDER }}>
+                  <span className="opacity-50">Current</span>
+                  <span className="tabular-nums">{perf.memory.current_mb} MB</span>
+                </div>
+                <div className="flex items-baseline justify-between py-2 border-b" style={{ borderColor: DIVIDER }}>
+                  <span className="opacity-50">Target</span>
+                  <span className="tabular-nums">{perf.memory.target_mb} MB</span>
+                </div>
+                <div className="flex items-baseline justify-between py-2 border-b" style={{ borderColor: DIVIDER }}>
+                  <span className="opacity-50">Utilization</span>
+                  <span className="tabular-nums">{perf.memory.utilization_percent}%</span>
+                </div>
+              </div>
+            ) : <p className="empty-state">Loading…</p>}
+          </section>
+          <section className="pt-4 border-t" style={{ borderColor: DIVIDER }}>
+            <h3 className={sectionTitle}>🔄 Parallel Pool</h3>
+            {perf?.parallel_pool ? (
+              <div className="font-data text-[13px]">
+                <div className="flex items-baseline justify-between py-2 border-b" style={{ borderColor: DIVIDER }}>
+                  <span className="opacity-50">Max Concurrency</span>
+                  <span className="tabular-nums">{String(perf.parallel_pool.max_concurrency)}</span>
+                </div>
+                <div className="flex items-baseline justify-between py-2 border-b" style={{ borderColor: DIVIDER }}>
+                  <span className="opacity-50">Active</span>
+                  <span className="tabular-nums">{String(perf.parallel_pool.active_tasks)}</span>
+                </div>
+                <div className="flex items-baseline justify-between py-2 border-b" style={{ borderColor: DIVIDER }}>
+                  <span className="opacity-50">Batches</span>
+                  <span className="tabular-nums">{String(perf.parallel_pool.total_batches)}</span>
+                </div>
+              </div>
+            ) : <p className="empty-state">Loading…</p>}
+          </section>
+          <section className="pt-4 border-t" style={{ borderColor: DIVIDER }}>
+            <h3 className={sectionTitle}>💡 Recommendation</h3>
+            {health ? (
+              <>
+                <p className={`text-base font-medium ${health.recommendation === 'scale_down' ? 'text-[#dc2626]' : health.recommendation === 'scale_up' ? 'text-[#16a34a]' : ''}`}>
+                  {health.recommendation === 'scale_down' ? '⚠️ Scale Down' : health.recommendation === 'scale_up' ? '🚀 Scale Up' : '✅ Stable'}
+                </p>
+                {queue?.queue.backpressure && (
+                  <p className="text-xs text-[#dc2626] mt-2">⚠️ Backpressure active</p>
+                )}
+              </>
+            ) : <p className="empty-state">Loading…</p>}
+          </section>
         </div>
       </div>
     </div>

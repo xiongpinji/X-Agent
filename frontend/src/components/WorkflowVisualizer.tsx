@@ -52,7 +52,7 @@ export const WorkflowVisualizer = React.forwardRef<HTMLDivElement, WorkflowVisua
                       onClick={() => onNodeClick?.(node.id)}
                       className={clsx(
                         'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all',
-                        'hover:shadow-lg cursor-pointer',
+                        'cursor-pointer',
                         node.status === 'completed'
                           ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                           : node.status === 'running'

@@ -100,198 +100,196 @@ const SettingsPage: React.FC = () => {
     { id: 'notifications', label: t('settings.notifications', 'Notifications'), icon: '🔔' },
   ]
 
+  const inputCls =
+    'w-full px-3 py-2 border bg-transparent text-sm outline-none transition-colors focus:border-[var(--fg)]'
+
+  const renderToggle = (checked: boolean, onClick: () => void, label: string) => (
+    <button
+      onClick={onClick}
+      className={clsx(
+        'font-data text-sm transition-opacity',
+        checked ? 'opacity-100' : 'opacity-40 hover:opacity-80'
+      )}
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+    >
+      {checked ? '✓ on' : '✗ off'}
+    </button>
+  )
+
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">{t('settings.title', 'Settings')}</h1>
+    <div className="min-h-full px-8 py-10">
+      <div className="max-w-3xl">
+        {/* Header — Dashboard-style */}
+        <header className="mb-8">
+          <div
+            className="w-12 border-t-2 mb-5"
+            style={{ borderColor: 'var(--fg)' }}
+            aria-hidden="true"
+          />
+          <h1 className="page-title">{t('settings.title', 'Settings')}</h1>
+        </header>
 
-      {/* Message */}
-      {message && (
-        <div className={clsx(
-          'mb-4 p-3 rounded-lg text-sm',
-          message.type === 'success'
-            ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-            : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-        )} role="alert">
-          {message.text}
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-slate-200 dark:border-slate-700" role="tablist">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            onClick={() => setActiveTab(tab.id)}
+        {/* Message — thin border, transparent background */}
+        {message && (
+          <div
             className={clsx(
-              'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
-              activeTab === tab.id
-                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+              'mb-4 px-3 py-2 border text-sm',
+              message.type === 'success' ? 'text-[#16a34a]' : 'text-[#dc2626]'
             )}
+            style={{ borderColor: message.type === 'success' ? 'rgba(22,163,74,.35)' : 'rgba(220,38,38,.35)' }}
+            role="alert"
           >
-            <span className="mr-1.5">{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Profile Tab */}
-      {activeTab === 'profile' && (
-        <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium mb-1">{t('settings.displayName', 'Display Name')}</label>
-            <input
-              type="text"
-              value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
-              className={clsx(
-                'w-full max-w-md px-3 py-2 rounded-lg border text-sm',
-                isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
-              )}
-            />
+            {message.text}
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">{t('settings.email', 'Email')}</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className={clsx(
-                'w-full max-w-md px-3 py-2 rounded-lg border text-sm',
-                isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
-              )}
-            />
-          </div>
-          <button
-            onClick={handleSaveProfile}
-            disabled={saving}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-          >
-            {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save Changes')}
-          </button>
-        </div>
-      )}
+        )}
 
-      {/* API Keys Tab */}
-      {activeTab === 'apikeys' && (
-        <div className="space-y-4">
-          {lastCreatedKey && (
-            <div className="p-3 rounded-lg text-sm bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300" role="alert">
-              <p className="font-medium mb-1">{t('settings.keyCreatedOnce', 'Copy your API key now — it is shown only once:')}</p>
-              <code className="block break-all text-xs select-all">{lastCreatedKey}</code>
-            </div>
-          )}
-          <div className="flex gap-2 max-w-md">
-            <input
-              type="text"
-              value={newKeyName}
-              onChange={e => setNewKeyName(e.target.value)}
-              placeholder={t('settings.keyNamePlaceholder', 'Key name (e.g. Production)')}
-              className={clsx(
-                'flex-1 px-3 py-2 rounded-lg border text-sm',
-                isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300'
-              )}
-            />
+        {/* Tabs — underline style */}
+        <div className="flex gap-1 mb-8 border-b" style={{ borderColor: 'var(--divider)' }} role="tablist">
+          {tabs.map(tab => (
             <button
-              onClick={handleCreateApiKey}
-              disabled={!newKeyName.trim() || saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
-              {t('settings.createKey', 'Create')}
-            </button>
-          </div>
-
-          {apiKeys.length === 0 ? (
-            <p className={clsx('text-sm py-8 text-center', isDark ? 'text-slate-500' : 'text-slate-400')}>
-              {t('settings.noKeys', 'No API keys created yet.')}
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {apiKeys.map(key => (
-                <div key={key.id} className={clsx(
-                  'flex items-center justify-between p-3 rounded-lg border',
-                  isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-                )}>
-                  <div>
-                    <p className="text-sm font-medium">{key.name}</p>
-                    <p className={clsx('text-xs', isDark ? 'text-slate-500' : 'text-slate-400')}>
-                      {key.prefix} • {new Date(key.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleDeleteApiKey(key.id)}
-                    className="text-xs text-red-500 hover:text-red-700 font-medium"
-                  >
-                    {t('common.delete', 'Delete')}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Appearance Tab */}
-      {activeTab === 'appearance' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between max-w-md">
-            <div>
-              <p className="text-sm font-medium">{t('settings.darkMode', 'Dark Mode')}</p>
-              <p className={clsx('text-xs', isDark ? 'text-slate-500' : 'text-slate-400')}>
-                {t('settings.darkModeDesc', 'Switch between light and dark theme')}
-              </p>
-            </div>
-            <button
-              onClick={toggleTheme}
+              key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
               className={clsx(
-                'relative w-12 h-6 rounded-full transition-colors',
-                isDark ? 'bg-blue-600' : 'bg-slate-300'
+                'px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
+                activeTab === tab.id
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent opacity-50 hover:opacity-100'
               )}
-              role="switch"
-              aria-checked={isDark}
-              aria-label={t('settings.darkMode', 'Dark Mode')}
             >
-              <span className={clsx(
-                'absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform',
-                isDark ? 'translate-x-6' : 'translate-x-0.5'
-              )} />
+              {tab.label}
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Notifications Tab */}
-      {activeTab === 'notifications' && (
-        <div className="space-y-4 max-w-md">
-          {([
-            ['agentComplete', t('settings.notifAgent', 'Agent task completion')],
-            ['workflowStatus', t('settings.notifWorkflow', 'Workflow status changes')],
-            ['systemAlerts', t('settings.notifSystem', 'System alerts')],
-            ['emailDigest', t('settings.notifEmail', 'Email digest (daily)')],
-          ] as const).map(([key, label]) => (
-            <div key={key} className="flex items-center justify-between">
-              <span className="text-sm">{label}</span>
-              <button
-                onClick={() => setNotifPrefs(prev => ({ ...prev, [key]: !prev[key] }))}
-                className={clsx(
-                  'relative w-10 h-5 rounded-full transition-colors',
-                  notifPrefs[key] ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
-                )}
-                role="switch"
-                aria-checked={notifPrefs[key]}
-                aria-label={label}
-              >
-                <span className={clsx(
-                  'absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform',
-                  notifPrefs[key] ? 'translate-x-5' : 'translate-x-0.5'
-                )} />
-              </button>
-            </div>
           ))}
         </div>
-      )}
+
+        {/* Profile Tab */}
+        {activeTab === 'profile' && (
+          <div className="space-y-5 max-w-md">
+            <div>
+              <label className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1">{t('settings.displayName', 'Display Name')}</label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                className={inputCls}
+                style={{ borderColor: 'var(--divider)' }}
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1">{t('settings.email', 'Email')}</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className={inputCls}
+                style={{ borderColor: 'var(--divider)' }}
+              />
+            </div>
+            <button
+              onClick={handleSaveProfile}
+              disabled={saving}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save Changes')}
+            </button>
+          </div>
+        )}
+
+        {/* API Keys Tab */}
+        {activeTab === 'apikeys' && (
+          <div className="space-y-4">
+            {lastCreatedKey && (
+              <div
+                className="p-3 border text-sm text-[#16a34a]"
+                style={{ borderColor: 'rgba(22,163,74,.35)' }}
+                role="alert"
+              >
+                <p className="font-medium mb-1">{t('settings.keyCreatedOnce', 'Copy your API key now — it is shown only once:')}</p>
+                <code className="block break-all text-xs select-all cell-data">{lastCreatedKey}</code>
+              </div>
+            )}
+            <div className="flex gap-2 max-w-md">
+              <input
+                type="text"
+                value={newKeyName}
+                onChange={e => setNewKeyName(e.target.value)}
+                placeholder={t('settings.keyNamePlaceholder', 'Key name (e.g. Production)')}
+                className={clsx(inputCls, 'flex-1')}
+                style={{ borderColor: 'var(--divider)' }}
+              />
+              <button
+                onClick={handleCreateApiKey}
+                disabled={!newKeyName.trim() || saving}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {t('settings.createKey', 'Create')}
+              </button>
+            </div>
+
+            {apiKeys.length === 0 ? (
+              <p className="empty-state">{t('settings.noKeys', 'No API keys created yet.')}</p>
+            ) : (
+              <div>
+                {apiKeys.map(key => (
+                  <div key={key.id} className="row-line flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{key.name}</p>
+                      <p className="cell-data opacity-50 truncate">
+                        {key.prefix} • {new Date(key.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteApiKey(key.id)}
+                      className="text-xs text-[#dc2626] opacity-60 hover:opacity-100 font-medium transition-opacity"
+                    >
+                      {t('common.delete', 'Delete')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Appearance Tab */}
+        {activeTab === 'appearance' && (
+          <div className="max-w-md">
+            <div className="row-line flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">{t('settings.darkMode', 'Dark Mode')}</p>
+                <p className="text-xs opacity-50">
+                  {t('settings.darkModeDesc', 'Switch between light and dark theme')}
+                </p>
+              </div>
+              {renderToggle(isDark, toggleTheme, t('settings.darkMode', 'Dark Mode'))}
+            </div>
+          </div>
+        )}
+
+        {/* Notifications Tab */}
+        {activeTab === 'notifications' && (
+          <div className="max-w-md">
+            {([
+              ['agentComplete', t('settings.notifAgent', 'Agent task completion')],
+              ['workflowStatus', t('settings.notifWorkflow', 'Workflow status changes')],
+              ['systemAlerts', t('settings.notifSystem', 'System alerts')],
+              ['emailDigest', t('settings.notifEmail', 'Email digest (daily)')],
+            ] as const).map(([key, label]) => (
+              <div key={key} className="row-line flex items-center justify-between">
+                <span className="text-sm">{label}</span>
+                {renderToggle(
+                  notifPrefs[key],
+                  () => setNotifPrefs(prev => ({ ...prev, [key]: !prev[key] })),
+                  label
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

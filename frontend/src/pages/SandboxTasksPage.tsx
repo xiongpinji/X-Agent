@@ -58,18 +58,14 @@ export const SandboxTasksPage: React.FC = () => {
 
   const muted = clsx('text-sm opacity-60')
   const input = clsx(
-    'w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors',
-    theme === 'dark'
-      ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-500 focus:border-blue-500'
-      : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-500'
+    'w-full px-3 py-2 border text-sm bg-transparent border-[var(--divider)]'
   )
   const errBox = clsx(
-    'mb-6 rounded-lg border px-4 py-3 text-sm',
-    'border-[#dc2626]/30 text-[#dc2626]'
+    'mb-6 border px-4 py-3 text-sm',
+    'border-[#dc2626]/40 text-[#dc2626]'
   )
   const ghostBtnCls = clsx(
-    'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-    theme === 'dark' ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+    'flex items-center gap-2 px-3 py-2 border border-[var(--divider)] text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50'
   )
 
   const loadTasks = useCallback(async () => {
@@ -192,7 +188,7 @@ export const SandboxTasksPage: React.FC = () => {
               </button>
               <button
                 onClick={() => setShowSubmit(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
               >
                 <Plus size={16} />
                 {t('sandbox.newTask', 'New Task')}
@@ -220,8 +216,8 @@ export const SandboxTasksPage: React.FC = () => {
                     key={task.task_id}
                     onClick={() => setSelectedId(task.task_id)}
                     className={clsx(
-                      'row-line w-full flex items-center justify-between gap-3 px-2 -mx-2 text-left',
-                      selectedId === task.task_id && (theme === 'dark' ? 'bg-slate-800' : 'bg-slate-100')
+                      'row-line w-full flex items-center justify-between gap-3 px-2 -mx-2 text-left hover:bg-[var(--hover)]',
+                      selectedId === task.task_id && 'bg-[var(--hover)]'
                     )}
                   >
                     <span className="cell-data opacity-70 truncate">
@@ -265,7 +261,7 @@ export const SandboxTasksPage: React.FC = () => {
                   </div>
                 )}
                 {detail.error && (
-                  <div className={clsx('rounded-lg border px-3 py-2 text-sm break-words', 'border-[#dc2626]/30 text-[#dc2626]')} role="alert">
+                  <div className="border px-3 py-2 text-sm break-words border-[#dc2626]/40 text-[#dc2626]" role="alert">
                     {detail.error}
                   </div>
                 )}
@@ -312,10 +308,13 @@ export const SandboxTasksPage: React.FC = () => {
         {/* Submit modal */}
         {showSubmit && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-            <div className={clsx(
-              'rounded-lg p-6 border w-full max-w-lg max-h-[90vh] overflow-y-auto',
-              theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
-            )}>
+            <div
+              className={clsx(
+                'p-6 border w-full max-w-lg max-h-[90vh] overflow-y-auto',
+                theme === 'dark' ? 'bg-slate-900' : 'bg-white'
+              )}
+              style={{ borderColor: 'var(--divider)' }}
+            >
               <h3 className="text-lg font-medium mb-4">{t('sandbox.newTask', 'New Task')}</h3>
               <div className="space-y-3">
                 <div>
@@ -374,17 +373,14 @@ export const SandboxTasksPage: React.FC = () => {
                 <button
                   onClick={() => setShowSubmit(false)}
                   disabled={submitting}
-                  className={clsx(
-                    'flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50',
-                    theme === 'dark' ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                  )}
+                  className="flex-1 px-4 py-2 border border-[var(--divider)] text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50"
                 >
                   {t('common.cancel', 'Cancel')}
                 </button>
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || !form.name.trim() || !form.command.trim()}
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
                 >
                   {submitting ? t('common.loading', 'Loading...') : t('sandbox.submit', 'Submit')}
                 </button>

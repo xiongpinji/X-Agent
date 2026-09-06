@@ -121,17 +121,14 @@ const SyncPage: React.FC = () => {
             <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => setShowEnqueue(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
               >
                 <Plus size={16} />
                 {t('sync.enqueue', 'Enqueue')}
               </button>
               <button
                 onClick={handleTrigger}
-                className={clsx(
-                  'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200',
-                )}
+                className="flex items-center gap-2 px-3 py-2 border border-[var(--divider)] text-sm font-medium transition-colors hover:bg-[var(--hover)]"
               >
                 <RefreshCw size={16} />
                 {t('sync.trigger', 'Trigger Sync')}
@@ -140,10 +137,7 @@ const SyncPage: React.FC = () => {
               <button
                 disabled
                 title={t('sync.offlineComingSoon', 'Offline toggle requires cloud connection (coming soon)')}
-                className={clsx(
-                  'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed',
-                  isDark ? 'bg-slate-800 text-slate-400' : 'bg-white border border-slate-200 text-slate-500',
-                )}
+                className="flex items-center gap-2 px-3 py-2 border border-[var(--divider)] text-sm font-medium opacity-50 cursor-not-allowed"
               >
                 {offline?.enabled ? <WifiOff size={16} /> : <Wifi size={16} />}
                 {t('sync.offlineMode', 'Offline Mode')}
@@ -154,7 +148,7 @@ const SyncPage: React.FC = () => {
         </header>
 
         {loadError && (
-          <div role="alert" className="mb-6 rounded-lg border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626]">
+          <div role="alert" className="mb-6 border border-[#dc2626]/40 px-4 py-3 text-sm text-[#dc2626]">
             {loadError}
           </div>
         )}
@@ -226,7 +220,7 @@ const SyncPage: React.FC = () => {
                       <td>
                         <button
                           onClick={() => setResolving(c)}
-                          className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                          className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors"
                         >
                           {t('sync.resolve', 'Resolve')}
                         </button>
@@ -357,15 +351,15 @@ const EnqueueModal: React.FC<EnqueueModalProps> = ({ dark, onClose, onDone }) =>
     }
   }
 
-  const inputCls = clsx(
-    'w-full px-3 py-2 rounded-lg text-sm',
-    dark ? 'bg-slate-800 text-white border border-slate-700' : 'bg-slate-50 text-slate-900 border border-slate-300',
-  )
+  const inputCls = 'w-full px-3 py-2 text-sm bg-transparent border border-[var(--divider)]'
   const labelCls = 'block text-[13px] opacity-60 mb-1'
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
-      <div className={clsx('rounded-lg p-6 max-w-md w-full mx-4 border', dark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
+      <div
+        className={clsx('p-6 max-w-md w-full mx-4 border', dark ? 'bg-slate-900' : 'bg-white')}
+        style={{ borderColor: 'var(--divider)' }}
+      >
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-medium">
             {t('sync.enqueueTitle', 'Enqueue Sync Operation')}
@@ -407,16 +401,13 @@ const EnqueueModal: React.FC<EnqueueModalProps> = ({ dark, onClose, onDone }) =>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={onClose} className={clsx(
-            'flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-            dark ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-900',
-          )}>
+          <button onClick={onClose} className="flex-1 px-4 py-2 border border-[var(--divider)] text-sm font-medium transition-colors hover:bg-[var(--hover)]">
             {t('common.cancel', 'Cancel')}
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting || !entityType.trim() || !entityId.trim()}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
           >
             {submitting ? t('common.loading', 'Loading...') : t('sync.enqueue', 'Enqueue')}
           </button>
@@ -458,7 +449,10 @@ const ResolveModal: React.FC<ResolveModalProps> = ({ dark, conflict, onClose, on
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
-      <div className={clsx('rounded-lg p-6 max-w-lg w-full mx-4 border', dark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200')}>
+      <div
+        className={clsx('p-6 max-w-lg w-full mx-4 border', dark ? 'bg-slate-900' : 'bg-white')}
+        style={{ borderColor: 'var(--divider)' }}
+      >
         <h2 className="text-lg font-medium mb-4">
           {t('sync.resolveTitle', 'Resolve Conflict')}
         </h2>
@@ -470,10 +464,7 @@ const ResolveModal: React.FC<ResolveModalProps> = ({ dark, conflict, onClose, on
             <p className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1">
               {t('sync.localData', 'Local')} (v{conflict.local_version})
             </p>
-            <pre className={clsx(
-              'cell-data text-xs p-3 rounded-lg overflow-auto max-h-40',
-              dark ? 'bg-slate-800' : 'bg-slate-50',
-            )}>
+            <pre className="cell-data text-xs p-3 border border-[var(--divider)] overflow-auto max-h-40">
               {JSON.stringify(conflict.local_data, null, 2)}
             </pre>
           </div>
@@ -481,10 +472,7 @@ const ResolveModal: React.FC<ResolveModalProps> = ({ dark, conflict, onClose, on
             <p className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-1">
               {t('sync.cloudData', 'Cloud')} (v{conflict.cloud_version})
             </p>
-            <pre className={clsx(
-              'cell-data text-xs p-3 rounded-lg overflow-auto max-h-40',
-              dark ? 'bg-slate-800' : 'bg-slate-50',
-            )}>
+            <pre className="cell-data text-xs p-3 border border-[var(--divider)] overflow-auto max-h-40">
               {JSON.stringify(conflict.cloud_data, null, 2)}
             </pre>
           </div>
@@ -497,10 +485,7 @@ const ResolveModal: React.FC<ResolveModalProps> = ({ dark, conflict, onClose, on
             id="sync-strategy"
             value={strategy}
             onChange={(e) => setStrategy(e.target.value)}
-            className={clsx(
-              'w-full px-3 py-2 rounded-lg text-sm',
-              dark ? 'bg-slate-800 text-white border border-slate-700' : 'bg-slate-50 text-slate-900 border border-slate-300',
-            )}
+            className="w-full px-3 py-2 text-sm bg-transparent border border-[var(--divider)]"
           >
             {RESOLUTION_STRATEGIES.map((s) => (
               <option key={s} value={s}>{s}</option>
@@ -508,16 +493,13 @@ const ResolveModal: React.FC<ResolveModalProps> = ({ dark, conflict, onClose, on
           </select>
         </div>
         <div className="flex gap-2">
-          <button onClick={onClose} className={clsx(
-            'flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-            dark ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-900',
-          )}>
+          <button onClick={onClose} className="flex-1 px-4 py-2 border border-[var(--divider)] text-sm font-medium transition-colors hover:bg-[var(--hover)]">
             {t('common.cancel', 'Cancel')}
           </button>
           <button
             onClick={handleResolve}
             disabled={submitting}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
           >
             {submitting ? t('common.loading', 'Loading...') : t('sync.resolve', 'Resolve')}
           </button>
