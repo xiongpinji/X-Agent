@@ -273,8 +273,11 @@ class TestPathMapper:
         symlink_path = workspace_path / "link"
         try:
             symlink_path.symlink_to(outside)
+            # virtual 路径须与 symlink 实际位置一致(/link 解析到的是
+            # base/user1/link, symlink 建在 project/link 下——此前测试靠
+            # /tmp forbidden 误打误撞通过, 换 workspace 后路径不匹配暴露)
             with pytest.raises(PermissionError):
-                mapper.map_virtual_to_real("/link", user_id)
+                mapper.map_virtual_to_real("/project/link", user_id)
         except OSError:
             # Symlinks may not be supported on all systems
             pass
