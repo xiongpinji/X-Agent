@@ -79,7 +79,7 @@ jobs:
         # 单测密闭性：不启动调度常驻循环（生产由 startup 默认开启）
         XAGENT_SCHEDULER_ENABLED: "false"
       run: |
-        pytest tests/ -m "not e2e and not performance" -n auto -v --tb=short --timeout=300
+        pytest tests/ -m "not e2e and not performance" -n auto -v --tb=short --timeout=300 --basetemp=.pytest-tmp
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
@@ -163,7 +163,7 @@ jobs:
       # 2026-09-06：integration 标记当前 0 用例（-m "integration" 空收集退出码 5，
       # 此前被 continue-on-error 掩盖）；真实集成测试在 tests/integration/ 目录
       run: |
-        pytest tests/integration/ -v --tb=short
+        pytest tests/integration/ -v --tb=short --basetemp=.pytest-tmp-int
 
   contract-tests:
     runs-on: ubuntu-latest
@@ -221,7 +221,7 @@ jobs:
         # 契约测试密闭性：不启动调度常驻循环（与 unit job 惯例一致）
         XAGENT_SCHEDULER_ENABLED: "false"
       run: |
-        pytest tests/ -m "contracts" -v --tb=short
+        pytest tests/ -m "contracts" -v --tb=short --basetemp=.pytest-tmp-ct
 
   performance-tests:
     runs-on: ubuntu-latest

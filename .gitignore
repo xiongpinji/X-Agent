@@ -212,3 +212,4 @@ commercial_audit/node_modules/
 
 # data/ 全目录为运行时产物 (2026-07-26 修正)
 data/
+.pytest-tmp*/

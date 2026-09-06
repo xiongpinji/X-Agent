@@ -253,9 +253,20 @@ class DockerSandbox:
                 env=env,
             )
         try:
-            stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            # 不用 wait_for 包 communicate：取消该任务在 Linux asyncio 子进程
+            # 管道上有竞态（CI xdist 曾致 worker 崩溃）。改为等待超时后 kill
+            # 进程再收割输出，communicate 任务本身永不取消。
+            communicate_task = asyncio.create_task(proc.communicate())
+            done, _ = await asyncio.wait({communicate_task}, timeout=timeout)
+            if not done:
+                await _kill_process_tree(proc)
+                import contextlib
+
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(communicate_task, timeout=5.0)
+                raise TimeoutError(f"Command timed out after {timeout}s")
+            stdout_b, stderr_b = communicate_task.result()
         except TimeoutError:
-            await _kill_process_tree(proc)
             raise
         return SandboxResult(
             success=proc.returncode == 0,
