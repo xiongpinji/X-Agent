@@ -3813,6 +3813,12 @@ class AgentLoop:
             "8. MULTI-FILE EDITS: When modifying 2+ existing files, use apply_batch_patch with all patches in ONE call "
             "instead of multiple apply_text_patch calls. This is faster and atomic.\n"
             "9. After all tests pass, provide a brief summary of what was created and the test results.\n"
+            "10. HONEST REPORTING (absolute): Only report actions you ACTUALLY performed via tool_calls in this run. "
+            "NEVER claim a file was modified unless you called write_file/apply_text_patch for it in THIS response cycle. "
+            "NEVER claim tests passed unless quoting the ACTUAL stdout/exit_code returned by run_command. "
+            "If you cannot or did not run something, say so explicitly. Fabricated results are the worst possible failure.\n"
+            "11. When reporting test results, QUOTE the real summary line from run_command stdout "
+            "(e.g. '11 passed in 0.52s') — never restate it from memory.\n"
             "Remember: Your job is to PRODUCE WORKING CODE. Write → Test → Fix → Confirm. Call write_file NOW."
         )
 

@@ -1725,6 +1725,22 @@ def build_default_tool_registry(
     ) -> dict[str, Any]:
         """Execute command directly on the host (original behavior)."""
         import asyncio as _aio
+        import os as _os
+        import sys as _sys
+
+        # 长任务实测（2026-09-06）发现的两类环境缺陷在此修复：
+        # 1. 裸 "python"/"pytest" 解析到系统解释器（无 venv 依赖、Windows GBK
+        #    site 模块崩溃 "Fatal Python error: init_import_site"）——把当前
+        #    解释器目录前置到 PATH，使子命令命中本进程环境；
+        # 2. 编码——强制 UTF-8，防中文路径/输出下子进程崩溃。
+        import pathlib as _pl
+
+        _interp_dir = str(_pl.Path(_sys.executable).parent.resolve())
+        _env = dict(_os.environ)
+        _env["PATH"] = _interp_dir + _os.pathsep + _env.get("PATH", "")
+        _env["PYTHONUTF8"] = "1"
+        _env["PYTHONIOENCODING"] = "utf-8"
+        _env["PYTHONNOUSERSITE"] = "1"
 
         try:
             proc = await _aio.create_subprocess_shell(
@@ -1732,6 +1748,7 @@ def build_default_tool_registry(
                 stdout=_aio.subprocess.PIPE,
                 stderr=_aio.subprocess.PIPE,
                 cwd=work_dir,
+                env=_env,
             )
             out_b, err_b = await _aio.wait_for(
                 proc.communicate(), timeout=min(timeout, 300)
