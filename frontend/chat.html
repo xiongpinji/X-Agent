@@ -223,6 +223,128 @@ textarea.inp{resize:vertical;min-height:80px}
 .ro-em{font-size:20px;margin-bottom:4px}
 .ro-nm{font-size:11.5px;font-weight:600}
 .ro-rl{font-size:10px;color:var(--g2)}
+
+/* ============================================================
+   TERMINAL MODE OVERRIDE - ZCode/Codex terminal workbench
+   ============================================================ */
+:root{
+  --red:#58a6ff; --rl:#79c0ff; --rd:#388bfd;
+  --gold:#8b949e; --gd:#6e7681;
+  --bg:#0d1117; --blk:#0d1117; --c1:#0d1117; --c2:#161b22; --c3:#21262d; --c4:#30363d;
+  --wht:#e6edf3; --g1:#8b949e; --g2:#6e7681; --bdr:#21262d;
+  --r8:0px; --r12:0px; --r16:0px;
+  --trans:background-color .12s ease,color .12s ease;
+  --mono:ui-monospace,'Cascadia Code',Consolas,'JetBrains Mono',Menlo,monospace;
+}
+html,body{font-family:var(--mono) !important;font-size:13px;line-height:1.55}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#30363d;border-radius:0}
+
+.app{display:flex;height:100vh;background:var(--bg)}
+.nav{width:180px;background:var(--bg);border-right:1px solid var(--bdr)}
+.nav-logo{padding:14px 14px 12px;border-bottom:1px solid var(--bdr);display:block}
+.nav-logo svg{display:none}
+.logo-txt{display:block}
+.logo-nm{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:0;color:var(--wht)}
+.logo-sl{display:none}
+.nav-items{padding:8px 0;gap:0}
+.ni{font-family:var(--mono);font-size:12.5px;color:var(--g1);border-radius:0;
+   border-left:2px solid transparent;padding:5px 14px;gap:0}
+.ni:hover{background:var(--c2);color:var(--wht)}
+.ni.on{background:transparent;color:var(--rl);border-left-color:var(--red)}
+.ni-icon{display:none}
+.nav-bot{border-top:1px solid var(--bdr)}
+.conn-row{font-family:var(--mono);font-size:11px;color:var(--g2);padding:6px 14px}
+.c-dot{width:6px;height:6px;border-radius:0;box-shadow:none;background:#3fb950}
+.c-dot.off{background:#f85149}
+
+.view{font-family:var(--mono)}
+.vh{padding:12px 20px;border-bottom:1px solid var(--bdr)}
+.vh h2{font-size:13px;font-weight:600;letter-spacing:0;font-family:var(--mono)}
+.vh p{font-size:11px;color:var(--g2);font-family:var(--mono)}
+.inp,select.inp,textarea{font-family:var(--mono);font-size:12.5px;background:var(--bg) !important;
+  color:var(--wht);border:1px solid var(--bdr) !important;border-radius:0 !important;box-shadow:none !important}
+.inp:focus{outline:none;border-color:var(--g1) !important}
+button{font-family:var(--mono)}
+.btn,.sbtn{border-radius:0 !important;box-shadow:none !important}
+.card{background:transparent !important;border:none !important;border-bottom:1px solid var(--bdr) !important;
+  border-radius:0 !important;box-shadow:none !important;padding:10px 0 !important;transition:none}
+.card:hover{background:transparent !important}
+
+.ag-grid,.ag-grid *{border-radius:0 !important}
+.ag-card,.agc{display:block !important;width:100% !important;margin:0 !important;
+  background:transparent !important;border:none !important;border-bottom:1px solid var(--bdr) !important;
+  box-shadow:none !important;padding:10px 20px !important;cursor:pointer}
+.ag-card:hover,.agc:hover{background:var(--c2) !important}
+.ag-emoji,.agc .em{display:none !important}
+.ag-name,.agc .nm{font-size:13px;font-weight:600;color:var(--wht)}
+.ag-desc,.agc .ds{font-size:11.5px;color:var(--g1)}
+
+.v-chat{display:flex;flex-direction:column}
+.chat-head{padding:8px 20px;border-bottom:1px solid var(--bdr);
+  font-family:var(--mono);font-size:11px;color:var(--g1);background:transparent}
+.msgs{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+.msg{display:flex;gap:0;background:transparent !important;border:none !important;padding:0 !important;margin:0 !important}
+.m-av{display:none !important}
+.m-body{flex:1;min-width:0;padding-left:0}
+.m-time{font-family:var(--mono);font-size:10.5px;color:var(--g2);margin-bottom:2px;letter-spacing:.02em}
+.bbl{background:transparent !important;border:none !important;border-radius:0 !important;
+  box-shadow:none !important;padding:0 !important;font-size:13px;color:var(--wht);
+  font-family:var(--mono);line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.msg.u .m-time{color:var(--rl)}
+.bbl pre,.bbl code{background:var(--c2) !important;border:1px solid var(--bdr);border-radius:3px;
+  font-family:var(--mono);font-size:12.5px}
+.bbl pre{padding:10px 12px;overflow-x:auto;margin:6px 0}
+.bbl code{padding:1px 5px}
+.bbl h1,.bbl h2,.bbl h3{font-size:13.5px;border-bottom:1px solid var(--bdr);padding-bottom:4px;margin:12px 0 6px}
+
+.tcs{margin-top:6px;display:flex;flex-direction:column;gap:4px}
+.tc,.tcs>div{background:transparent !important;border:none !important;border-left:2px solid var(--bdr);
+  border-radius:0 !important;padding:2px 0 2px 12px !important;font-family:var(--mono)}
+.tc .tc-hd,.tcs .t{font-family:var(--mono);font-size:11.5px;color:var(--g1)}
+.tc pre,.tcs pre{background:var(--c2) !important;border:1px solid var(--bdr) !important;border-radius:3px;
+  font-size:11.5px;color:var(--g1);padding:8px 10px;margin:4px 0}
+
+.thk{font-family:var(--mono);font-size:12px;color:var(--g2);padding-left:0 !important;
+  background:transparent !important;border:none !important;display:flex;align-items:center;gap:8px}
+.thk .dts{display:none !important}
+.thk span::before{content:'\25CB ';color:var(--rl)}
+
+.wlc-screen{align-items:flex-start !important;text-align:left !important;justify-content:flex-start;
+  padding:28px 4px;gap:6px}
+.wlc-panda-lg{display:none !important}
+.wlc-nm{font-family:var(--mono);font-size:13px;color:var(--wht)}
+.wlc-nm em{color:var(--rl) !important}
+.wlc-desc{font-family:var(--mono);font-size:12px;color:var(--g2)}
+.qbtns{gap:0;flex-wrap:wrap}
+.qbtn{font-family:var(--mono);font-size:11.5px;background:transparent !important;
+  border:1px solid var(--bdr) !important;border-radius:0 !important;color:var(--g1) !important;
+  padding:3px 10px !important;box-shadow:none !important}
+.qbtn:hover{border-color:var(--rl) !important;color:var(--rl) !important;background:transparent !important}
+
+.chat-input-area,.input-area{background:var(--bg) !important;
+  border-top:1px solid var(--bdr) !important;padding:10px 20px !important;border-radius:0 !important}
+#inp{width:100%;background:transparent !important;border:none !important;
+  font-family:var(--mono);font-size:13px;color:var(--wht);padding:2px 0 !important;
+  resize:none;line-height:1.5}
+#inp:focus{outline:none;border:none !important}
+.sbtn{background:transparent !important;border:1px solid var(--bdr) !important;color:var(--g1) !important;
+  border-radius:0 !important;font-family:var(--mono);font-size:12px;padding:4px 12px !important}
+.sbtn:hover:not(:disabled){border-color:var(--rl) !important;color:var(--rl) !important}
+.sbtn:disabled{opacity:.4}
+
+.mem-list,.hist-list{font-family:var(--mono)}
+table{font-family:var(--mono);font-size:12px}
+th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--g2);font-weight:500}
+.badge,.tag{background:transparent !important;
+  border:1px solid var(--bdr) !important;border-radius:0 !important;color:var(--g1) !important;
+  font-family:var(--mono);font-size:10.5px}
+.modal{border-radius:0 !important;box-shadow:none !important;border:1px solid var(--bdr)}
+.toast{border-radius:0 !important;font-family:var(--mono)}
+.kpi-row,.kpi{font-family:var(--mono)}
+.kpi-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--g2)}
+.kpi-value{font-variant-numeric:tabular-nums;color:var(--wht)}
+
 </style>
 </head>
 <body>
@@ -300,28 +422,9 @@ textarea.inp{resize:vertical;min-height:80px}
       </div>
       <div class="msgs" id="msgs">
         <div class="wlc-screen" id="wlc-screen">
-          <svg class="wlc-panda-lg" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="40" cy="42" r="34" fill="#FAFAFA"/>
-            <circle cx="17" cy="16" r="12" fill="#1A1A1A"/>
-            <circle cx="63" cy="16" r="12" fill="#1A1A1A"/>
-            <circle cx="40" cy="42" r="30" fill="#D62B2B"/>
-            <ellipse cx="40" cy="55" rx="15" ry="10" fill="#F0C9A0"/>
-            <path d="M18 32 Q22 20 32 26 Q28 36 20 36Z" fill="#1A1A1A"/>
-            <path d="M62 32 Q58 20 48 26 Q52 36 60 36Z" fill="#1A1A1A"/>
-            <path d="M16 34 Q22 22 34 28 Q30 38 18 38Z" fill="#FFF" opacity=".6"/>
-            <path d="M64 34 Q58 22 46 28 Q50 38 62 38Z" fill="#FFF" opacity=".6"/>
-            <ellipse cx="29" cy="38" rx="7" ry="8" fill="#1A1A1A"/>
-            <ellipse cx="51" cy="38" rx="7" ry="8" fill="#1A1A1A"/>
-            <circle cx="29" cy="37" r="4" fill="#7B3B1A"/>
-            <circle cx="51" cy="37" r="4" fill="#7B3B1A"/>
-            <circle cx="30" cy="35.5" r="1.5" fill="#FFF"/>
-            <circle cx="52" cy="35.5" r="1.5" fill="#FFF"/>
-            <ellipse cx="40" cy="49" rx="5" ry="3.5" fill="#1A1A1A"/>
-          </svg>
-          <div class="wlc-nm">你好，我是 <em id="wlc-nm-em">X-Agent</em></div>
-          <div class="wlc-desc" id="wlc-desc">国潮智能体，勇敢探索。请先从左侧选择或从广场选择一个智能体，开始对话。</div>
-          <div class="qbtns" id="qbtns"></div>
-        </div>
+        <div class="wlc-nm" style="color:var(--g1)">$ <em id="wlc-nm-em" style="color:var(--rl);font-style:normal">x-agent</em> ready</div>
+        <div class="wlc-desc" id="wlc-desc">type a task below - tools run server-side</div>
+        <div class="qbtns" id="qbtns"></div>
       </div>
       <div class="ibar">
         <div class="iwrap">
@@ -648,26 +751,10 @@ function clearChat() {
   msgs.innerHTML = '';
   const ws = document.createElement('div');
   ws.className = 'wlc-screen'; ws.id = 'wlc-screen';
-  ws.innerHTML = msgs.querySelector('style') ? '' : `
-    <svg class="wlc-panda-lg" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="40" cy="42" r="34" fill="#FAFAFA"/>
-      <circle cx="17" cy="16" r="12" fill="#1A1A1A"/>
-      <circle cx="63" cy="16" r="12" fill="#1A1A1A"/>
-      <circle cx="40" cy="42" r="30" fill="#D62B2B"/>
-      <ellipse cx="40" cy="55" rx="15" ry="10" fill="#F0C9A0"/>
-      <path d="M18 32 Q22 20 32 26 Q28 36 20 36Z" fill="#1A1A1A"/>
-      <path d="M62 32 Q58 20 48 26 Q52 36 60 36Z" fill="#1A1A1A"/>
-      <ellipse cx="29" cy="38" rx="7" ry="8" fill="#1A1A1A"/>
-      <ellipse cx="51" cy="38" rx="7" ry="8" fill="#1A1A1A"/>
-      <circle cx="29" cy="37" r="4" fill="#7B3B1A"/>
-      <circle cx="51" cy="37" r="4" fill="#7B3B1A"/>
-      <circle cx="30" cy="35.5" r="1.5" fill="#FFF"/>
-      <circle cx="52" cy="35.5" r="1.5" fill="#FFF"/>
-      <ellipse cx="40" cy="49" rx="5" ry="3.5" fill="#1A1A1A"/>
-    </svg>
-    <div class="wlc-nm"><em id="wlc-nm-em" style="color:var(--red);font-style:normal">${currentAgent?currentAgent.nm:'X-Agent'}</em></div>
-    <div class="wlc-desc" id="wlc-desc">${currentAgent?currentAgent.desc||'专业智能体，随时准备帮你完成任务。':'请先选择一个智能体。'}</div>
-    <div class="qbtns" id="qbtns">${(currentAgent?currentAgent.qbtns||[]:['你好！','你能做什么？']).map(q=>`<button class="qbtn" onclick="fillQ('${q.replace(/'/g,"\\'")}')">${q}</button>`).join('')}</div>`;
+  ws.innerHTML = `
+    <div class="wlc-nm" style="color:var(--g1)">$ <em id="wlc-nm-em">${currentAgent?currentAgent.nm:'x-agent'}</em> ready</div>
+    <div class="wlc-desc" id="wlc-desc">${currentAgent?currentAgent.desc||'':'type a task below - tools run server-side'}</div>
+    <div class="qbtns" id="qbtns">${(currentAgent?currentAgent.qbtns||[]:['echo: hello','1+1=?']).map(q=>`<button class="qbtn" onclick="fillQ('${q.replace(/'/g,"\\'")}')">${q}</button>`).join('')}</div>`;
   msgs.appendChild(ws);
 }
 </script>
@@ -740,10 +827,10 @@ function appendMsg(role, html, extra='') {
   const isU = role==='user';
   const d = document.createElement('div');
   d.className = `msg ${isU?'u':'a'}`;
+  const ts = new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});
   d.innerHTML = `
-    <div class="m-av${isU?' u':''}" style="${isU?'':'background:'+ag.bg}">${isU?'我':ag.em}</div>
     <div class="m-body">
-      <div class="m-time">${isU?'我':ag.nm||'X-Agent'} · ${new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</div>
+      <div class="m-time">${isU ? 'you' : (ag.nm || 'agent')} <span style="opacity:.55">${ts}</span></div>
       <div class="bbl">${html}</div>
       ${extra}
     </div>`;
@@ -756,8 +843,7 @@ function showThinking() {
   const ag = currentAgent || {em:'🤖',bg:'#1A1A1A'};
   const d = document.createElement('div');
   d.className='msg a'; d.id='thk';
-  d.innerHTML=`<div class="m-av" style="background:${ag.bg}">${ag.em}</div>
-    <div class="thk"><div class="dts"><div class="dt"></div><div class="dt"></div><div class="dt"></div></div><span>思考中…</span></div>`;
+  d.innerHTML=`<div class="m-body"><div class="thk"><span>working</span></div></div>`;
   msgs.appendChild(d);
   msgs.scrollTop = msgs.scrollHeight;
 }
