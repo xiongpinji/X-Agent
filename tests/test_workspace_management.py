@@ -266,15 +266,20 @@ class TestPathMapper:
         workspace_path = temp_dir / user_id / "project"
         workspace_path.mkdir(parents=True, exist_ok=True)
 
-        # Create symlink pointing outside workspace
+        # Create symlink pointing outside workspace（指向 workspace 外的普通文件，
+        # 不依赖系统路径——forbidden 表命中随平台变化，出界判定才是本测试语义）
+        outside = temp_dir.parent / "outside_secret.txt"
+        outside.write_text("secret", encoding="utf-8")
         symlink_path = workspace_path / "link"
         try:
-            symlink_path.symlink_to("/etc/passwd")
+            symlink_path.symlink_to(outside)
             with pytest.raises(PermissionError):
                 mapper.map_virtual_to_real("/link", user_id)
         except OSError:
             # Symlinks may not be supported on all systems
             pass
+        finally:
+            outside.unlink(missing_ok=True)
 
     def test_validate_path(self, mapper):
         """Test path validation."""
