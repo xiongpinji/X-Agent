@@ -77,7 +77,25 @@
     "community": "Community",
     "marketplace": "Marketplace",
     "console": "Console",
-    "main": "Main navigation"
+    "main": "Main navigation",
+    "workSessions": "Work Sessions",
+    "forum": "Forum",
+    "workflowSchedules": "Schedules",
+    "workflowRuns": "Runs",
+    "checkpoints": "Checkpoints",
+    "sandboxTasks": "Sandbox",
+    "approvals": "Approvals",
+    "automation": "Automation",
+    "sync": "Sync",
+    "auditLogs": "Audit Logs",
+    "backup": "Backup",
+    "observability": "Observability",
+    "analytics": "Analytics",
+    "compliance": "Compliance",
+    "tenants": "Tenants",
+    "usersAdmin": "Users",
+    "security": "Security",
+    "mcp": "MCP"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -426,5 +444,8 @@
     "startChat": "Start a conversation with this agent",
     "typeMessage": "Message this agent...",
     "memoryInfo": "Memory items associated with this agent will appear here."
+  },
+  "approvals": {
+    "noPermission": "Your role lacks approval permission (requires workflow:control). Contact an administrator."
   }
 }

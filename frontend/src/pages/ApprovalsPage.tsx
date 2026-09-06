@@ -20,7 +20,7 @@ const STATUS_BADGE: Record<string, string> = {
 }
 
 export const ApprovalsPage: React.FC = () => {
-  const { theme, setError } = useAppStore()
+  const { theme } = useAppStore()
   const { t } = useI18n()
   const [records, setRecords] = useState<ApprovalRecord[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -34,13 +34,21 @@ export const ApprovalsPage: React.FC = () => {
       const data = await governanceOps.listApprovals({ limit: 200 })
       setRecords(data)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load approvals'
+      let message = error instanceof Error ? error.message : 'Failed to load approvals'
+      // 403 = scope 不足（普通用户无 workflow:control）——给出可行动的提示而非裸错误码
+      const status = (error as { response?: { status?: number } })?.response?.status
+        ?? (error as { status?: number })?.status
+      if (status === 403) {
+        message = t(
+          'approvals.noPermission',
+          '当前角色无审批权限（需要 workflow:control）。请联系管理员调整角色。'
+        )
+      }
       setLoadError(message)
-      setError(message)
     } finally {
       setIsLoading(false)
     }
-  }, [setError])
+  }, [t])
 
   useEffect(() => {
     loadApprovals()

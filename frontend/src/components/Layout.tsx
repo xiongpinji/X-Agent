@@ -19,12 +19,23 @@ interface NavItem {
   href: string
   labelKey: string
   fallback: string
+  /** 可见角色白名单；缺省 = 所有登录用户可见（后端仍做 scope 鉴权） */
+  roles?: string[]
 }
 
 interface NavGroup {
   labelKey: string
   fallback: string
   items: NavItem[]
+}
+
+/** 当前用户角色：登录/注册响应写入（默认 user 最小权限） */
+function currentUserRole(): string {
+  try {
+    return localStorage.getItem('user_role') || 'user'
+  } catch {
+    return 'user'
+  }
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
@@ -58,23 +69,23 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         { href: '/goals', labelKey: 'navigation.goals', fallback: 'Goals' },
         { href: '/mcp', labelKey: 'navigation.mcp', fallback: 'MCP' },
         { href: '/sandbox-tasks', labelKey: 'navigation.sandboxTasks', fallback: 'Sandbox' },
-        { href: '/approvals', labelKey: 'navigation.approvals', fallback: 'Approvals' },
+        { href: '/approvals', roles: ["admin", "developer"], labelKey: 'navigation.approvals', fallback: 'Approvals' },
         { href: '/automation', labelKey: 'navigation.automation', fallback: 'Automation' },
-        { href: '/sync', labelKey: 'navigation.sync', fallback: 'Sync' },
+        { href: '/sync', roles: ["admin", "developer"], labelKey: 'navigation.sync', fallback: 'Sync' },
       ],
     },
     {
       labelKey: 'navigation.groupSystem',
       fallback: 'System',
       items: [
-        { href: '/audit-logs', labelKey: 'navigation.auditLogs', fallback: 'Audit Logs' },
-        { href: '/backup', labelKey: 'navigation.backup', fallback: 'Backup' },
-        { href: '/observability', labelKey: 'navigation.observability', fallback: 'Observability' },
-        { href: '/analytics', labelKey: 'navigation.analytics', fallback: 'Analytics' },
-        { href: '/compliance', labelKey: 'navigation.compliance', fallback: 'Compliance' },
-        { href: '/admin/tenants', labelKey: 'navigation.tenants', fallback: 'Tenants' },
-        { href: '/admin/users', labelKey: 'navigation.usersAdmin', fallback: 'Users' },
-        { href: '/security', labelKey: 'navigation.security', fallback: 'Security' },
+        { href: '/audit-logs', roles: ["admin", "developer"], labelKey: 'navigation.auditLogs', fallback: 'Audit Logs' },
+        { href: '/backup', roles: ["admin"], labelKey: 'navigation.backup', fallback: 'Backup' },
+        { href: '/observability', roles: ["admin"], labelKey: 'navigation.observability', fallback: 'Observability' },
+        { href: '/analytics', roles: ["admin", "developer"], labelKey: 'navigation.analytics', fallback: 'Analytics' },
+        { href: '/compliance', roles: ["admin"], labelKey: 'navigation.compliance', fallback: 'Compliance' },
+        { href: '/admin/tenants', roles: ["admin"], labelKey: 'navigation.tenants', fallback: 'Tenants' },
+        { href: '/admin/users', roles: ["admin"], labelKey: 'navigation.usersAdmin', fallback: 'Users' },
+        { href: '/security', roles: ["admin"], labelKey: 'navigation.security', fallback: 'Security' },
         { href: '/evolution', labelKey: 'navigation.evolution', fallback: 'Evolution' },
         { href: '/review', labelKey: 'navigation.review', fallback: 'Code Review' },
         { href: '/settings', labelKey: 'navigation.settings', fallback: 'Settings' },
@@ -120,7 +131,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             className="flex-1 overflow-y-auto py-3"
             aria-label={t('navigation.main', 'Main navigation')}
           >
-            {navGroups.map((group) => (
+            {navGroups.map((group) => {
+              // 按角色过滤导航入口（后端 scope 鉴权仍是权威；这里只隐藏无权限入口，
+              // 修复普通用户点进管理页只能看到裸 403 的体验问题）
+              const role = currentUserRole()
+              const visible = group.items.filter(
+                (item) => !item.roles || item.roles.includes(role)
+              )
+              if (!visible.length) return null
+              return (
               <div key={group.labelKey} className="mb-1">
                 <div
                   className="px-5 pt-4 pb-1.5 text-[11px] uppercase tracking-[0.08em] opacity-50 select-none"
@@ -128,7 +147,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 >
                   {t(group.labelKey, group.fallback)}
                 </div>
-                {group.items.map((item) => (
+                {visible.map((item) => (
                   <NavLink
                     key={item.href}
                     href={item.href}
@@ -136,7 +155,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   />
                 ))}
               </div>
-            ))}
+              )
+            })}
           </nav>
 
           {/* User Profile */}

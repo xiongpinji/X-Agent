@@ -69,7 +69,17 @@ export const useAppStore = create<AppState>()(
       user: null,
       isAuthenticated: false,
       setUser: (user) => set({ user, isAuthenticated: !!user }),
-      logout: () => set({ user: null, isAuthenticated: false }),
+      logout: () => {
+        // 登出清理本地凭证（含侧栏过滤用的角色）
+        try {
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('refresh_token')
+          localStorage.removeItem('user_role')
+        } catch {
+          /* localStorage 不可用时忽略 */
+        }
+        set({ user: null, isAuthenticated: false })
+      },
 
       // UI state
       theme: 'light',

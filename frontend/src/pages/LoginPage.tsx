@@ -77,6 +77,9 @@ export const LoginPage: React.FC = () => {
       if (response.refresh_token) {
         localStorage.setItem('refresh_token', response.refresh_token)
       }
+      // 角色供侧栏导航过滤（Layout.currentRoleFilter；后端 scope 鉴权仍是权威）
+      const role = (response.user as { role?: string } | undefined)?.role
+      localStorage.setItem('user_role', role || 'user')
 
       // Set user in store
       setUser({

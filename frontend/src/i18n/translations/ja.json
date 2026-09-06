@@ -64,7 +64,26 @@
     "documentation": "ドキュメント",
     "community": "コミュニティ",
     "marketplace": "マーケットプレイス",
-    "console": "コンソール"
+    "console": "コンソール",
+    "workSessions": "ワークセッション",
+    "forum": "フォーラム",
+    "workflowSchedules": "スケジュール",
+    "workflowRuns": "実行履歴",
+    "checkpoints": "チェックポイント",
+    "sandboxTasks": "サンドボックス",
+    "approvals": "承認",
+    "automation": "オートメーション",
+    "sync": "同期",
+    "auditLogs": "監査ログ",
+    "backup": "バックアップ",
+    "observability": "オブザーバビリティ",
+    "analytics": "アナリティクス",
+    "compliance": "コンプライアンス",
+    "tenants": "テナント",
+    "usersAdmin": "ユーザー",
+    "security": "セキュリティ",
+    "mcp": "MCP",
+    "goals": "ゴール"
   },
   "dashboard": {
     "title": "ダッシュボード",
@@ -320,5 +339,8 @@
     "years": "年",
     "ago": "前",
     "in": "後"
+  },
+  "approvals": {
+    "noPermission": "現在のロールには承認権限がありません（workflow:control が必要です）。管理者に連絡してください。"
   }
 }

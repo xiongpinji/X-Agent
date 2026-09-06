@@ -49,7 +49,14 @@ export const Dashboard: React.FC = React.memo(() => {
         totalAgents: agents.length,
         activeTasks,
         totalTools: tools.length,
-        uptime: String(metrics.uptime || metrics.uptime_percent || '—'),
+        uptime: (() => {
+          const secs = Number(metrics.uptime_seconds ?? metrics.uptime_percent)
+          if (!Number.isFinite(secs) || secs <= 0) return '—'
+          const h = Math.floor(secs / 3600)
+          const m = Math.floor((secs % 3600) / 60)
+          const s = Math.floor(secs % 60)
+          return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`
+        })(),
         requestCount: metrics.total_requests || metrics.request_count || metrics.runs || 0,
         errorRate: metrics.error_rate != null ? `${(metrics.error_rate * 100).toFixed(1)}%` : '—',
         avgLatency: metrics.avg_latency_ms != null ? `${Math.round(metrics.avg_latency_ms)}ms` : '—',

@@ -815,7 +815,7 @@ async function showRunDetail(id) {
 // ===== MEMORY =====
 async function loadMemory() {
   try {
-    const data = await api('/api/v1/memory/layers');
+    const data = await api('/api/v1/memory/stats');
     document.getElementById('mem-list').innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px">
         ${(data.layers||[]).map(l=>`

@@ -64,7 +64,26 @@
     "documentation": "문서",
     "community": "커뮤니티",
     "marketplace": "마켓플레이스",
-    "console": "콘솔"
+    "console": "콘솔",
+    "workSessions": "작업 세션",
+    "forum": "포럼",
+    "workflowSchedules": "스케줄",
+    "workflowRuns": "실행 기록",
+    "checkpoints": "체크포인트",
+    "sandboxTasks": "샌드박스",
+    "approvals": "승인",
+    "automation": "자동화",
+    "sync": "동기화",
+    "auditLogs": "감사 로그",
+    "backup": "백업",
+    "observability": "관측 가능성",
+    "analytics": "분석",
+    "compliance": "컴플라이언스",
+    "tenants": "테넌트",
+    "usersAdmin": "사용자",
+    "security": "보안",
+    "mcp": "MCP",
+    "goals": "목표"
   },
   "dashboard": {
     "title": "대시보드",
@@ -320,5 +339,8 @@
     "years": "년",
     "ago": "전",
     "in": "후"
+  },
+  "approvals": {
+    "noPermission": "현재 역할에 승인 권한이 없습니다(workflow:control 필요). 관리자에게 문의하세요."
   }
 }

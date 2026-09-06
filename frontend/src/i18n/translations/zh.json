@@ -77,7 +77,25 @@
     "community": "社区",
     "marketplace": "市场",
     "console": "控制台",
-    "main": "主导航"
+    "main": "主导航",
+    "workSessions": "工作会话",
+    "forum": "论坛",
+    "workflowSchedules": "定时调度",
+    "workflowRuns": "运行记录",
+    "checkpoints": "检查点",
+    "sandboxTasks": "沙盒任务",
+    "approvals": "审批中心",
+    "automation": "自动化",
+    "sync": "数据同步",
+    "auditLogs": "审计日志",
+    "backup": "备份恢复",
+    "observability": "可观测性",
+    "analytics": "数据分析",
+    "compliance": "合规中心",
+    "tenants": "租户管理",
+    "usersAdmin": "用户管理",
+    "security": "安全管理",
+    "mcp": "MCP 管理"
   },
   "dashboard": {
     "title": "仪表板",
@@ -426,5 +444,8 @@
     "startChat": "开始与此代理对话",
     "typeMessage": "向此代理发送消息...",
     "memoryInfo": "与此代理关联的记忆项将显示在这里。"
+  },
+  "approvals": {
+    "noPermission": "当前角色无审批权限（需要 workflow:control）。请联系管理员调整角色。"
   }
 }

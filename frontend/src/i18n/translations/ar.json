@@ -64,7 +64,26 @@
     "documentation": "التوثيق",
     "community": "المجتمع",
     "marketplace": "السوق",
-    "console": "وحدة التحكم"
+    "console": "وحدة التحكم",
+    "workSessions": "جلسات العمل",
+    "forum": "المنتدى",
+    "workflowSchedules": "الجدولة",
+    "workflowRuns": "عمليات التشغيل",
+    "checkpoints": "نقاط التحقق",
+    "sandboxTasks": "صندوق الرمل",
+    "approvals": "الموافقات",
+    "automation": "الأتمتة",
+    "sync": "المزامنة",
+    "auditLogs": "سجلات التدقيق",
+    "backup": "النسخ الاحتياطي",
+    "observability": "المراقبة",
+    "analytics": "التحليلات",
+    "compliance": "الامتثال",
+    "tenants": "المستأجرون",
+    "usersAdmin": "المستخدمون",
+    "security": "الأمان",
+    "mcp": "MCP",
+    "goals": "الأهداف"
   },
   "dashboard": {
     "title": "لوحة التحكم",
@@ -320,5 +339,8 @@
     "years": "سنوات",
     "ago": "منذ",
     "in": "في"
+  },
+  "approvals": {
+    "noPermission": "دورك يفتقر إلى صلاحية الموافقة (يتطلب workflow:control). اتصل بالمسؤول."
   }
 }

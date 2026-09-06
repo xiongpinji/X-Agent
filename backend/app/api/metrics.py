@@ -139,7 +139,7 @@ async def metrics_summary(
     trace_store: TraceStoreDependency,
     workflow_repository: WorkflowRepositoryDependency,
     workflow_schedule_store: WorkflowScheduleStoreDependency,
-) -> dict[str, int]:
+) -> dict[str, int | None]:
     enforce_scope(principal, "audit:read")
     return await _summary_payload(
         approval_store,
@@ -195,7 +195,29 @@ async def _summary_payload(
     memory_count = memory.count()
     if hasattr(memory_count, "__await__"):
         memory_count = await memory_count
+
+    # 仪表板运行健康指标（真实来源，不造数）：
+    # - uptime：进程启动至今（模块导入时刻近似 app 启动）
+    # - error_rate：审计链中 outcome != success 的占比
+    # - avg_latency_ms：审计无耗时字段时返回 None（前端诚实显示 —）
+    import time as _time
+
+    global _PROCESS_START
+    try:
+        _PROCESS_START
+    except NameError:
+        _PROCESS_START = _time.time()
+    uptime_seconds = max(0.0, _time.time() - _PROCESS_START)
+
+    _audit_total = audit_store.count()
+    _audit_failed = len(audit_store.list(limit=100000, outcome="failure")) if _audit_total else 0
+    error_rate = (_audit_failed / _audit_total) if _audit_total else 0.0
+
     return {
+        "uptime_seconds": round(uptime_seconds, 1),
+        "error_rate": round(error_rate, 4),
+        "avg_latency_ms": None,
+        "total_requests": _audit_total,
         "runs": run_store.count(),
         "traces": len(trace_store.list_trace_ids()),
         "trace_events": trace_store.event_count(),

@@ -64,7 +64,26 @@
     "documentation": "Documentación",
     "community": "Comunidad",
     "marketplace": "Mercado",
-    "console": "Consola"
+    "console": "Consola",
+    "workSessions": "Sesiones de Trabajo",
+    "forum": "Foro",
+    "workflowSchedules": "Programaciones",
+    "workflowRuns": "Ejecuciones",
+    "checkpoints": "Puntos de Control",
+    "sandboxTasks": "Sandbox",
+    "approvals": "Aprobaciones",
+    "automation": "Automatización",
+    "sync": "Sincronización",
+    "auditLogs": "Registros de Auditoría",
+    "backup": "Copia de Seguridad",
+    "observability": "Observabilidad",
+    "analytics": "Analítica",
+    "compliance": "Cumplimiento",
+    "tenants": "Inquilinos",
+    "usersAdmin": "Usuarios",
+    "security": "Seguridad",
+    "mcp": "MCP",
+    "goals": "Objetivos"
   },
   "dashboard": {
     "title": "Panel de control",
@@ -320,5 +339,8 @@
     "years": "años",
     "ago": "hace",
     "in": "en"
+  },
+  "approvals": {
+    "noPermission": "Tu rol no tiene permiso de aprobación (requiere workflow:control). Contacta a un administrador."
   }
 }
