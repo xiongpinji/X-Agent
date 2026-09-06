@@ -240,7 +240,7 @@ html,body{font-family:var(--mono) !important;font-size:13px;line-height:1.55}
 ::-webkit-scrollbar{width:8px;height:8px}
 ::-webkit-scrollbar-thumb{background:#30363d;border-radius:0}
 
-.app{display:flex;height:100vh;background:var(--bg)}
+.app{display:flex;flex-direction:column;height:100vh;background:var(--bg)}
 .nav{width:180px;background:var(--bg);border-right:1px solid var(--bdr)}
 .nav-logo{padding:14px 14px 12px;border-bottom:1px solid var(--bdr);display:block}
 .nav-logo svg{display:none}
@@ -345,54 +345,56 @@ th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--g2
 .kpi-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--g2)}
 .kpi-value{font-variant-numeric:tabular-nums;color:var(--wht)}
 
+
+/* —— ZCode 式顶栏命令行导航 —— */
+.topbar{display:flex;align-items:center;gap:2px;padding:6px 16px;border-bottom:1px solid var(--bdr);
+  font-family:var(--mono);font-size:12px;background:var(--bg);flex-shrink:0}
+.tb-brand{font-weight:600;color:var(--wht);margin-right:4px}
+.tb-sep{color:var(--g2);margin:0 6px;opacity:.6}
+.tb-link{border-left:none !important;padding:2px 2px !important;color:var(--g1) !important;cursor:pointer}
+.tb-link:hover{background:transparent !important;color:var(--wht) !important;text-decoration:underline}
+.tb-link.on{color:var(--rl) !important;text-decoration:underline}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:2px}
+.view{flex:1;overflow:hidden;display:none}
+.view.on{display:block}
+#v-chat.on{display:flex}
+.chat-wrap{display:flex;width:100%;height:100%}
+/* —— chat 视图精简：去常驻智能体侧栏，头部改薄状态行 —— */
+.chat-sidebar{display:none !important}
+.chat-main{flex:1;display:flex;flex-direction:column;min-width:0}
+.chat-hd{padding:4px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:8px;
+  font-family:var(--mono);font-size:11px;color:var(--g1)}
+.chat-hd .av-wrap{display:none !important}
+.ch-nm{font-size:11px;font-weight:400;color:var(--g1)}
+.ch-rl{display:none}
+.chat-hd .btn{font-size:10.5px;padding:1px 8px;background:transparent !important;
+  border:1px solid var(--bdr) !important;color:var(--g1) !important;border-radius:0 !important}
+.chat-hd .btn:hover{border-color:var(--rl) !important;color:var(--rl) !important}
+
 </style>
 </head>
 <body>
 <div class="app">
 <!-- NAV -->
-<nav class="nav">
-  <div class="nav-logo">
-    <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="40" cy="42" r="34" fill="#FAFAFA"/>
-      <circle cx="17" cy="16" r="12" fill="#1A1A1A"/>
-      <circle cx="63" cy="16" r="12" fill="#1A1A1A"/>
-      <circle cx="40" cy="42" r="30" fill="#D62B2B"/>
-      <ellipse cx="40" cy="55" rx="15" ry="10" fill="#F0C9A0"/>
-      <path d="M18 32 Q22 20 32 26 Q28 36 20 36Z" fill="#1A1A1A"/>
-      <path d="M62 32 Q58 20 48 26 Q52 36 60 36Z" fill="#1A1A1A"/>
-      <path d="M16 34 Q22 22 34 28 Q30 38 18 38Z" fill="#FFF" opacity=".6"/>
-      <path d="M64 34 Q58 22 46 28 Q50 38 62 38Z" fill="#FFF" opacity=".6"/>
-      <ellipse cx="29" cy="38" rx="7" ry="8" fill="#1A1A1A"/>
-      <ellipse cx="51" cy="38" rx="7" ry="8" fill="#1A1A1A"/>
-      <circle cx="29" cy="37" r="4" fill="#7B3B1A"/>
-      <circle cx="51" cy="37" r="4" fill="#7B3B1A"/>
-      <circle cx="30" cy="35.5" r="1.5" fill="#FFF"/>
-      <circle cx="52" cy="35.5" r="1.5" fill="#FFF"/>
-      <ellipse cx="40" cy="49" rx="5" ry="3.5" fill="#1A1A1A"/>
-    </svg>
-    <div class="logo-txt">
-      <span class="logo-nm">X-Agent</span>
-      <span class="logo-sl">勇敢 · 探索</span>
-    </div>
-  </div>
-  <div class="nav-items">
-    <div class="ni on" data-view="agents" onclick="nav(this)"><span class="ni-icon">🤖</span>智能体广场</div>
-    <div class="ni" data-view="chat" onclick="nav(this)" id="ni-chat"><span class="ni-icon">💬</span>对话</div>
-    <div class="ni" data-view="history" onclick="nav(this)"><span class="ni-icon">📜</span>对话历史</div>
-    <div class="ni" data-view="memory" onclick="nav(this)"><span class="ni-icon">💾</span>记忆管理</div>
-    <div class="ni" data-view="tools" onclick="nav(this)"><span class="ni-icon">🔧</span>工具中心</div>
-    <div class="ni" data-view="security" onclick="nav(this)"><span class="ni-icon">🔐</span>安全管理</div>
-    <div class="ni" data-view="logs" onclick="nav(this)"><span class="ni-icon">📊</span>审计日志</div>
-    <div class="ni" data-view="settings" onclick="nav(this)"><span class="ni-icon">⚙️</span>系统设置</div>
-  </div>
-  <div class="nav-bot">
-    <div class="conn-row"><div class="c-dot" id="connDot"></div><span id="connTxt">检查中…</span></div>
-  </div>
-</nav>
+<header class="topbar">
+    <span class="tb-brand">x-agent</span>
+    <span class="tb-sep">/</span>
+    <a class="ni tb-link" data-view="chat" onclick="nav(this)">chat</a>
+    <a class="ni tb-link" data-view="history" onclick="nav(this)">history</a>
+    <a class="ni tb-link" data-view="memory" onclick="nav(this)">memory</a>
+    <a class="ni tb-link" data-view="tools" onclick="nav(this)">tools</a>
+    <a class="ni tb-link" data-view="security" onclick="nav(this)">keys</a>
+    <a class="ni tb-link" data-view="settings" onclick="nav(this)">config</a>
+    <span class="tb-right">
+      <a class="ni tb-link" data-view="agents" onclick="nav(this)">agent</a>
+      <span class="tb-sep">/</span>
+      <span class="conn-row" style="padding:0"><span class="c-dot" id="conn-dot"></span> <span id="conn-txt">connected</span></span>
+    </span>
+  </header>
 
 <div class="main">
 <!-- ===== AGENTS VIEW ===== -->
-<div class="view on" id="v-agents">
+<div class="view" id="v-agents">
   <div class="vhd">
     <span class="vhd-ttl">智能体广场</span>
     <span class="vhd-sub">选择或创建你的专属智能体</span>
@@ -405,7 +407,7 @@ th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--g2
 </div>
 
 <!-- ===== CHAT VIEW ===== -->
-<div class="view" id="v-chat">
+<div class="view on" id="v-chat">
   <div class="chat-wrap">
     <div class="chat-sidebar">
       <div class="cs-hd"><span class="cs-ttl">我的智能体</span></div>
@@ -416,15 +418,15 @@ th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--g2
         <div class="av-wrap" id="ch-av-wrap" style="width:36px;height:36px;border-radius:10px;font-size:17px;background:#1C1C1C"></div>
         <div><div class="ch-nm" id="ch-nm">选择一个智能体</div><div class="ch-rl" id="ch-rl">开始对话</div></div>
         <div style="margin-left:auto;display:flex;gap:8px">
-          <button class="btn btn-ghost btn-sm" onclick="clearChat()">🗑 清空</button>
-          <button class="btn btn-ghost btn-sm" onclick="nav(document.querySelector('[data-view=agents]'))">← 广场</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearChat()">clear</button>
+          <button class="btn btn-ghost btn-sm" onclick="nav(document.querySelector('[data-view=agents]'))">switch agent</button>
         </div>
       </div>
       <div class="msgs" id="msgs">
         <div class="wlc-screen" id="wlc-screen">
         <div class="wlc-nm" style="color:var(--g1)">$ <em id="wlc-nm-em" style="color:var(--rl);font-style:normal">x-agent</em> ready</div>
         <div class="wlc-desc" id="wlc-desc">type a task below - tools run server-side</div>
-        <div class="qbtns" id="qbtns"></div>
+        <div class="wlc-hint" style="font-size:11.5px;color:var(--g2);margin-top:2px">type a task, or pick an agent via the <span style="color:var(--rl)">agent</span> link above</div>
       </div>
       <div class="ibar">
         <div class="iwrap">
