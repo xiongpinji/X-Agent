@@ -2,6 +2,8 @@
 性能测试 - 响应时间、吞吐量、压力测试
 """
 import pytest
+
+from tests._redis_guard import require_redis
 import asyncio
 import time
 from uuid import uuid4
@@ -130,6 +132,7 @@ class TestPerformance:
 
     @pytest.mark.asyncio
     async def test_rate_limiter_throughput(self, db_manager):
+        require_redis()
         """测试速率限制器吞吐量"""
         rate_limiter = get_rate_limiter()
 
@@ -239,6 +242,7 @@ class TestStressTest:
 
     @pytest.mark.asyncio
     async def test_high_concurrency_rate_limiting(self, db_manager):
+        require_redis()
         """测试高并发速率限制"""
         rate_limiter = get_rate_limiter()
 

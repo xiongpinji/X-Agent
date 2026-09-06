@@ -33,6 +33,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e ".[dev,test,cli]"
 
+    - name: Install Playwright browsers
+      run: python -m playwright install chromium --with-deps
+
     - name: Run code formatting check
       continue-on-error: true  # Advisory: formatting enforced via pre-commit locally
       run: |
@@ -50,10 +53,14 @@ jobs:
         mypy backend/ --ignore-missing-imports --no-strict-optional || true
 
     - name: Run unit tests
+      env:
+        XAGENT_SCHEDULER_ENABLED: "false"
+      # 对齐 test.yml：性能计时类已挂 performance 标记（负载敏感走 advisory job）；
+      # --basetemp 避开 Linux /tmp（_FORBIDDEN_PATHS 禁止前缀）
       run: |
-        pytest tests/ -m "not e2e and not integration and not contracts" \
+        pytest tests/ -m "not e2e and not integration and not contracts and not performance" \
           -n auto \
-          -v --tb=short --timeout=300
+          -v --tb=short --timeout=300 --basetemp=.pytest-tmp
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
