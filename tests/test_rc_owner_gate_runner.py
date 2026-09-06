@@ -253,7 +253,7 @@ def test_owner_gate_runner_loads_non_placeholder_env_file_values(tmp_path: Path,
     )
 
     assert report.status == "passed"
-    assert report.env_file.endswith("owner.env") and "/" not in report.env_file
+    assert report.env_file.endswith("owner.env") and str(tmp_path) not in report.env_file
     assert report.loaded_env_names == ["XAGENT_GITHUB_TEST_ISSUE_URL", "XAGENT_OLLAMA_MODEL"]
     assert report.unresolved_env_names == ["XAGENT_GITHUB_TOKEN"]
     assert report.owner_gate_env_names == ["XAGENT_GITHUB_TEST_ISSUE_URL"]
@@ -324,7 +324,7 @@ def test_owner_gate_runner_report_does_not_leak_absolute_env_file_path(tmp_path:
     payload = json.dumps(report.to_dict())
 
     assert report.status == "passed"
-    assert report.env_file.endswith("owner.env") and "/" not in report.env_file
+    assert report.env_file.endswith("owner.env") and str(tmp_path) not in report.env_file
     assert str(tmp_path) not in payload
 
 

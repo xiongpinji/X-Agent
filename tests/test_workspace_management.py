@@ -46,13 +46,15 @@ class TestWorkspaceManager:
     """Tests for WorkspaceManager."""
 
     @pytest.fixture
-    def temp_dir(self):
-        """Create temporary directory for tests with safe cleanup."""
-        tmpdir = tempfile.mkdtemp()
-        try:
-            yield Path(tmpdir)
-        finally:
-            _safe_rmtree(tmpdir)
+    def temp_dir(self, tmp_path):
+        """临时工作区——用 pytest tmp_path（CI basetemp 在仓库内）。
+
+        此前 tempfile.mkdtemp() 在 Linux 落 /tmp，被 PathMapper 的系统目录
+        禁止表拦下（Windows %TEMP% 不在表内故本地从未触发）。
+        """
+        ws = tmp_path / "workspace"
+        ws.mkdir(exist_ok=True)
+        yield ws
 
     @pytest.fixture
     def manager(self, temp_dir):

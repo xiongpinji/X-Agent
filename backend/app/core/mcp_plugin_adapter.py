@@ -437,6 +437,14 @@ class MCPPluginStdioSession:
         except MCPPluginToolError:
             raise  # 远端工具级失败，会话保持可用
         except BaseException as exc:
+            # SDK 超时（McpError "Timed out while waiting..."）转译为可识别的
+            # 超时文案，调用方/测试按"超时"语义判定而非绑定 SDK 英文消息
+            if "timed out" in str(exc).lower():
+                self._mark_dead(f"请求超时：{exc!r}")
+                raise MCPPluginTransportError(
+                    f"MCP 请求超时（{effective:.1f}s）："
+                    f"command='{self.command_line}'：{exc!r}"
+                ) from exc
             self._mark_dead(f"传输失败：{exc!r}")
             raise MCPPluginTransportError(
                 f"MCP 请求失败（插件进程可能已退出）："

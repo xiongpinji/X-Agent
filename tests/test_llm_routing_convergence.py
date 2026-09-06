@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import json
 
-import httpx
+try:  # 新版 anthropic SDK 捆绑 httpx2 fork，http_client 必须来自同源
+    import httpx2 as httpx  # type: ignore[no-redef]
+except ImportError:
+    import httpx
 import pytest
 
 from backend.app.core.cache import CacheManager
