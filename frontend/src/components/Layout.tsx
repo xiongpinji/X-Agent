@@ -69,7 +69,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         { href: '/goals', labelKey: 'navigation.goals', fallback: 'Goals' },
         { href: '/mcp', labelKey: 'navigation.mcp', fallback: 'MCP' },
         { href: '/sandbox-tasks', labelKey: 'navigation.sandboxTasks', fallback: 'Sandbox' },
-        { href: '/approvals', roles: ["admin", "developer"], labelKey: 'navigation.approvals', fallback: 'Approvals' },
+        { href: '/approvals', roles: ["admin"], labelKey: 'navigation.approvals', fallback: 'Approvals' }, // workflow:control 仅 admin 具备
         { href: '/automation', labelKey: 'navigation.automation', fallback: 'Automation' },
         { href: '/sync', roles: ["admin", "developer"], labelKey: 'navigation.sync', fallback: 'Sync' },
       ],
