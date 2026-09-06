@@ -28,7 +28,7 @@ dependencies = [
     # streaming_enhanced 模块级导入（CI 只装 pyproject 依赖，缺它 ModuleNotFoundError）
     "orjson>=3.10.0",
     # MCP 插件握手（backend.app.core.mcp_plugin_adapter 生产级依赖官方 SDK）
-    "mcp>=1.28.0",
+    "mcp>=1.28.0,<1.29",  # 锁定已验证版本(更新的 minor 在 py3.11 有 float+timedelta 超时 bug)
     "qdrant-client>=1.11.0",
     "scikit-learn>=1.5.0",
     "sqlalchemy>=2.0.0",
