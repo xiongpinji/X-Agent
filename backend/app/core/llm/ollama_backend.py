@@ -15,6 +15,14 @@ from typing import Any
 
 import httpx
 
+try:  # 新版 anthropic SDK 引入的 httpx2 fork 与 httpx 并存时，注入的
+    # http_client 可能抛 httpx2 异常——并入捕获避免逃逸（无 httpx2 时回退）
+    import httpx2
+
+    _HTTP_ERRORS: tuple[type[BaseException], ...] = (httpx.HTTPError, httpx2.HTTPError)
+except ImportError:
+    _HTTP_ERRORS = (httpx.HTTPError,)
+
 from backend.app.core.llm.backends import (
     BaseLLMBackend,
     LLMBackendError,
@@ -94,7 +102,7 @@ class OllamaBackend(BaseLLMBackend):
                 async with httpx.AsyncClient(**self._client_kwargs()) as client:
                     response = await client.post("/api/chat", json=payload)
             response.raise_for_status()
-        except httpx.HTTPError as exc:
+        except _HTTP_ERRORS as exc:
             raise LLMBackendError(
                 f"{self.name} backend failed (base_url={self.base_url}): {exc}"
             ) from exc
@@ -175,7 +183,7 @@ class OllamaBackend(BaseLLMBackend):
                         yield text
                     if chunk.get("done"):
                         break
-        except httpx.HTTPError as exc:
+        except _HTTP_ERRORS as exc:
             raise LLMBackendError(f"{self.name} streaming failed: {exc}") from exc
         finally:
             if owns_client:

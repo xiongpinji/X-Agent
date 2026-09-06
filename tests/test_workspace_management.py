@@ -202,13 +202,11 @@ class TestPathMapper:
     """Tests for PathMapper."""
 
     @pytest.fixture
-    def temp_dir(self):
-        """Create temporary directory with safe cleanup."""
-        tmpdir = tempfile.mkdtemp()
-        try:
-            yield Path(tmpdir)
-        finally:
-            _safe_rmtree(tmpdir)
+    def temp_dir(self, tmp_path):
+        """临时工作区——pytest tmp_path（理由见上方同类 fixture 注释）。"""
+        ws = tmp_path / "workspace"
+        ws.mkdir(exist_ok=True)
+        yield ws
 
     @pytest.fixture
     def mapper(self, temp_dir):
@@ -293,13 +291,11 @@ class TestMountManager:
     """Tests for MountManager."""
 
     @pytest.fixture
-    def temp_dir(self):
-        """Create temporary directory with safe cleanup."""
-        tmpdir = tempfile.mkdtemp()
-        try:
-            yield Path(tmpdir)
-        finally:
-            _safe_rmtree(tmpdir)
+    def temp_dir(self, tmp_path):
+        """临时工作区——pytest tmp_path（理由见上方同类 fixture 注释）。"""
+        ws = tmp_path / "workspace"
+        ws.mkdir(exist_ok=True)
+        yield ws
 
     @pytest.fixture
     def manager(self, temp_dir):
@@ -424,13 +420,11 @@ class TestFileAccessControl:
     """Tests for FileAccessControl."""
 
     @pytest.fixture
-    def temp_dir(self):
-        """Create temporary directory with safe cleanup."""
-        tmpdir = tempfile.mkdtemp()
-        try:
-            yield Path(tmpdir)
-        finally:
-            _safe_rmtree(tmpdir)
+    def temp_dir(self, tmp_path):
+        """临时工作区——pytest tmp_path（理由见上方同类 fixture 注释）。"""
+        ws = tmp_path / "workspace"
+        ws.mkdir(exist_ok=True)
+        yield ws
 
     @pytest.fixture
     def control(self, temp_dir):
