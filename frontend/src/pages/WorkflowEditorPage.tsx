@@ -191,7 +191,7 @@ const WorkflowEditorPage: React.FC = () => {
             <button
               onClick={runWorkflow}
               disabled={running}
-              className="px-3 py-1.5 text-xs text-[#16a34a] border border-current hover:bg-[var(--hover)] disabled:opacity-50 transition-colors"
+              className="px-3 py-1.5 text-xs text-[var(--success)] border border-current hover:bg-[var(--hover)] disabled:opacity-50 transition-colors"
             >
               {running ? '⏳ Running...' : '▶ Run'}
             </button>
@@ -276,7 +276,7 @@ const WorkflowEditorPage: React.FC = () => {
                   {selectedNode === node.id && node.type !== 'start' && (
                     <button
                       onClick={(e) => { e.stopPropagation(); removeNode(node.id) }}
-                      className="absolute -top-2 -right-2 w-5 h-5 text-xs flex items-center justify-center text-[#dc2626] border border-current"
+                      className="absolute -top-2 -right-2 w-5 h-5 text-xs flex items-center justify-center text-[var(--danger)] border border-current"
                       style={{ backgroundColor: 'var(--surface)' }}
                     >
                       ×
@@ -290,8 +290,8 @@ const WorkflowEditorPage: React.FC = () => {
                 <div
                   className={clsx(
                     'absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 text-sm font-medium border border-current',
-                    runStatus === 'completed' ? 'text-[#16a34a]' :
-                    runStatus === 'failed' ? 'text-[#dc2626]' :
+                    runStatus === 'completed' ? 'text-[var(--success)]' :
+                    runStatus === 'failed' ? 'text-[var(--danger)]' :
                     'text-blue-600'
                   )}
                   style={{ backgroundColor: 'var(--surface)' }}

@@ -231,11 +231,18 @@ class LocalKMS(KMSProvider):
         return results
 
     def health_check(self) -> bool:
-        """检查密钥目录可写."""
+        """检查密钥目录可写（幂等、无删除副作用）。
+
+        阻塞项修复：不再"写探测文件随后 unlink"。健康检查必须无副作用，而它被
+        ``main.py`` 启动流程直接调用；删除若被外部策略拦截（受限环境可能抛
+        ``SystemExit`` —— 它是 ``BaseException``，穿透 ``except Exception``），会
+        经 anyio TaskGroup 冒泡取消整个 app lifespan，导致整批测试 setup 失败。
+        改为**覆写保留**探测文件；密钥目录从不做目录枚举，残留标记文件无副作用。
+        """
         try:
-            test_file = self._key_dir / ".health_check"
-            test_file.write_text("ok")
-            test_file.unlink()
+            self._key_dir.mkdir(parents=True, exist_ok=True)
+            (self._key_dir / ".health_check").write_text("ok")
             return True
         except OSError:
             return False
+

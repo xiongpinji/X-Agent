@@ -232,15 +232,23 @@ class TestDockerSandboxPoolIntegration:
         sbx = DockerSandbox(SandboxSpec(), pool=pool)
         monkeypatch.setattr(sbx, "_use_docker", True)
 
-        # Dedicated create path needs the real docker import — fake it.
-        import sys
-        import types
+        # P1-5：专用容器改由 docker CLI 创建（不再依赖 SDK）。这里替换 CLI seam，
+        # 断言语义："池耗尽 → 回退到专用容器；stop 时移除它，而不是 release 回池"。
+        created: list[str] = []
+        removed: list[str] = []
 
-        fake_module = types.SimpleNamespace(from_env=lambda: fake_client)
-        monkeypatch.setitem(sys.modules, "docker", fake_module)
+        async def fake_create() -> str:
+            created.append("dedicated-1")
+            return "dedicated-1"
+
+        async def fake_remove(cid: str) -> None:
+            removed.append(cid)
+
+        monkeypatch.setattr(sbx, "_create_dedicated_container", fake_create)
+        monkeypatch.setattr(sbx, "_remove_container", fake_remove)
 
         await sbx.start()
         assert sbx._pooled is False  # pool exhausted -> dedicated container
+        assert created == ["dedicated-1"]
         await sbx.stop()
-        dedicated = fake_client.containers.created[-1]
-        assert dedicated.removed is True  # non-pooled containers are removed
+        assert removed == ["dedicated-1"]  # non-pooled containers are removed

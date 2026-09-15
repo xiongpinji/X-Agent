@@ -975,6 +975,11 @@ def _mock_feedback_obj(**kwargs):
     fb.created_at = kwargs.get("created_at", datetime(2024, 1, 1, tzinfo=UTC))
     fb.updated_at = kwargs.get("updated_at", datetime(2024, 1, 1, tzinfo=UTC))
     fb.resolved_at = kwargs.get("resolved_at", None)
+    # ⚠️ 这个替身手写枚举了每个字段。MagicMock 的未配置属性会**自动生成子 Mock**，
+    # 而 Pydantic 拒绝把 Mock 当 str，于是端点直接 500 —— 2026-09-15 加
+    # resolution_note 时就是这么坏了 6 条用例。以后给 FeedbackResponse /
+    # FeedbackModel 加字段，必须同步加到这里。
+    fb.resolution_note = kwargs.get("resolution_note", None)
     return fb
 
 

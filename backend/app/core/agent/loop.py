@@ -641,6 +641,17 @@ class AgentLoop:
             if agents_md_message is not None:
                 messages.append(agents_md_message)
             messages.append({"role": "user", "content": task})
+            # P1-1: 快路径也必须"读"记忆。"记住 X / X 是什么"这类请求几乎全是简单
+            # 问题，恰恰是最依赖记忆的场景；此前快路径完全不召回，记忆形同虚设。
+            # 召回失败由 _recall_memory_preview 内部降级为空，不会破坏本轮回答。
+            memory_preview = await self._recall_memory_preview(context, query=task)
+            if memory_preview:
+                messages.append({
+                    "role": "user",
+                    "content": "Related memory: " + json.dumps(
+                        memory_preview, ensure_ascii=False, default=str
+                    ),
+                })
             resp = await self.llm.chat(
                 messages, [],
                 tenant_id=context.tenant_id,
@@ -649,6 +660,9 @@ class AgentLoop:
             answer = (resp.content or "").strip()
             if not answer:
                 return None  # Fall through to full pipeline
+            # P1-1: 快路径此前从不写记忆（只有 _finalize_execution 写），必须补齐，
+            # 否则本轮问答对后续轮次永远不可见。
+            await self._persist_fast_path_memory(context, task, answer)
             self._emit_trace(context, "agent.fast_path", task=task, answer_preview=answer[:200])
             return AgentRunResponse(
                 trace_id=context.trace_id,
@@ -1495,9 +1509,20 @@ class AgentLoop:
         subtask_done = [s for s, st in trajectory.subtask_status.items() if st == "done"]
         if subtask_done:
             digest_lines.append(f"已完成子任务: {', '.join(subtask_done[:5])}")
+        # 2026-09-08 防虚报：失败工具事实必须进入收尾上下文，指令明确禁止声称完成
+        failed_calls: list[str] = []
+        for _tr in (trajectory.tool_results or []):
+            if isinstance(_tr, dict) and _tr.get("success") is False:
+                failed_calls.append(f"{_tr.get('tool_name', 'tool')}({str(_tr.get('arguments_preview', ''))[:80]}) -> {str(_tr.get('error', ''))[:120]}")
+        failed_calls = failed_calls[:8]
+        if failed_calls:
+            digest_lines.append("失败的工具调用（事实，禁止声称这些操作已成功）:")
+            digest_lines.extend(f"- {f}" for f in failed_calls)
         prompt = (
             "\n".join(digest_lines)
             + "\n\n基于以上执行结果，直接给出面向用户的最终答案（简洁、中文、不要复述过程元数据）。"
+            + ("重要：上面失败的工具调用意味着对应操作【没有完成】——答案必须如实说明哪些操作失败/未完成及其原因，绝对禁止声称它们已成功。"
+               if failed_calls else "")
         )
         try:
             response = await asyncio.wait_for(
@@ -2653,8 +2678,74 @@ class AgentLoop:
             approval_context["pending"] = [record.model_dump(mode="json") for record in self.approval_store.list(limit=3, status=None) if getattr(record, "status", None) is not None][:3]
         return approval_context
 
+    async def _recall_memory_preview(
+        self,
+        context: RunContext,
+        *,
+        query: str,
+        unified_query: str | None = None,
+    ) -> list[dict[str, object]]:
+        """召回相关记忆，产出可直接注入 prompt 的精简预览。
+
+        P1-1：主管线（``_plan``）与简单问题快路径（``_fast_path_answer``）共用本入口，
+        确保"记忆"在**所有**执行路径上都真实可见。
+
+        契约：本方法**不抛异常**。分层记忆检索、PromptGuard 扫描、统一记忆召回三处
+        任一失败都降级为空/部分结果，绝不允许记忆增强拖垮主循环。
+        """
+        # P2-04: PromptGuard — scan recalled memory for injection before injecting into context
+        from backend.app.core.prompt_guard.engine import get_prompt_guard
+
+        guard = get_prompt_guard()
+        preview: list[dict[str, object]] = []
+
+        try:
+            hits = await self.memory.search_with_scores(
+                context, query=query, layers=[3, 4, 5], top_k=4
+            )
+        except Exception as exc:  # noqa: BLE001 - 记忆检索失败不得影响主循环
+            logger.warning("Memory recall failed; continuing without recalled memory: %s", exc)
+            hits = []
+
+        for hit in hits:
+            scan = guard.scan_memory_content(hit.item.id, hit.item.content)
+            if scan.is_malicious:
+                logger.warning(
+                    "P2-04 PromptGuard filtered poisoned memory: id=%s confidence=%.2f",
+                    hit.item.id, scan.confidence,
+                )
+                continue  # skip poisoned memory
+            preview.append({
+                "id": hit.item.id,
+                "content": hit.item.content[:300],
+                "layer": hit.item.layer,
+                "score": hit.score,
+                "tags": hit.item.tags,
+            })
+
+        # P1-13: 统一记忆增强层（真实嵌入向量召回）并入相关记忆，失败不阻断主循环
+        if self.unified_memory is not None:
+            try:
+                um_hits = await self.unified_memory.retrieve_memories(
+                    query=unified_query or query, top_k=2
+                )
+                for record in um_hits:
+                    if guard.scan_memory_content(record.id, record.content).is_malicious:
+                        continue
+                    preview.append({
+                        "id": record.id,
+                        "content": record.content[:300],
+                        "layer": "unified",
+                        "score": record.relevance_score,
+                        "tags": record.tags,
+                    })
+            except Exception:
+                logger.debug("unified memory retrieve failed (non-fatal)", exc_info=True)
+
+        return preview
+
     async def _retrieve_related_memory(self, context: RunContext, trajectory: AgentTrajectory, extra_context: dict[str, object]) -> list[dict[str, object]]:
-        """检索相关的记忆记录。
+        """检索相关的记忆记录（主管线入口，实现见 ``_recall_memory_preview``）。
 
         Args:
             context: 运行上下文
@@ -2665,46 +2756,59 @@ class AgentLoop:
             相关记忆记录列表
         """
         query = " ".join([trajectory.task, trajectory.goal, trajectory.stage, json.dumps(self._compress_context(extra_context), ensure_ascii=False, default=str)])
-        hits = await self.memory.search_with_scores(context, query=query, layers=[3, 4, 5], top_k=4)
-        # P2-04: PromptGuard — scan recalled memory for injection before injecting into context
-        from backend.app.core.prompt_guard.engine import get_prompt_guard
-        _guard = get_prompt_guard()
-        results = []
-        for hit in hits:
-            scan = _guard.scan_memory_content(hit.item.id, hit.item.content)
-            if scan.is_malicious:
-                logger.warning(
-                    "P2-04 PromptGuard filtered poisoned memory: id=%s confidence=%.2f",
-                    hit.item.id, scan.confidence,
-                )
-                continue  # skip poisoned memory
-            results.append({
-                "id": hit.item.id,
-                "content": hit.item.content[:300],
-                "layer": hit.item.layer,
-                "score": hit.score,
-                "tags": hit.item.tags,
-            })
-        # P1-13: 统一记忆增强层（真实嵌入向量召回）并入相关记忆，失败不阻断主循环
+        return await self._recall_memory_preview(
+            context, query=query, unified_query=trajectory.goal or trajectory.task
+        )
+
+    async def _persist_fast_path_memory(self, context: RunContext, task: str, answer: str) -> None:
+        """把快路径的一问一答写入记忆，失败不阻断回答（P1-1）。
+
+        主管线在 ``_finalize_execution`` 里 ``store(answer)``；快路径此前既不读也不写，
+        导致"记住：X"这类请求的事实彻底丢失。此处同时写入**用户诉求**与回答——只存
+        回答会丢掉用户提供的事实（真实 LLM 往往只回"好的，已记住"，不会复述 X）。
+        """
+        content = f"{task}\n{answer}"
+        session_id = getattr(context, "session_id", None)
+        try:
+            memory_id = await self.memory.store(
+                context,
+                content=content,
+                layer=3,
+                importance=0.5,
+                tags=["agent", "fast_path", "qa"],
+                metadata={
+                    "trace_id": context.trace_id,
+                    "request_id": context.request_id,
+                    "session_id": session_id,
+                    "task": task,
+                    "fast_path": True,
+                },
+                session_id=session_id,
+            )
+        except Exception:
+            logger.debug("fast-path memory store failed (non-fatal)", exc_info=True)
+            return
+
+        # P1-13: 镜像到统一记忆增强层，保持快路径与主管线一致，失败不阻断
         if self.unified_memory is not None:
             try:
-                um_hits = await self.unified_memory.retrieve_memories(
-                    query=trajectory.goal or trajectory.task, top_k=2
+                from backend.app.core.unified_memory import MemoryType
+
+                await self.unified_memory.store_memory(
+                    content=content,
+                    memory_type=MemoryType.EXPERIENCE,
+                    metadata={
+                        "trace_id": context.trace_id,
+                        "tenant_id": context.tenant_id,
+                        "session_id": session_id,
+                        "task": task,
+                        "primary_memory_id": memory_id,
+                        "fast_path": True,
+                    },
+                    tags=["agent", "fast_path"],
                 )
-                for record in um_hits:
-                    scan = _guard.scan_memory_content(record.id, record.content)
-                    if scan.is_malicious:
-                        continue
-                    results.append({
-                        "id": record.id,
-                        "content": record.content[:300],
-                        "layer": "unified",
-                        "score": record.relevance_score,
-                        "tags": record.tags,
-                    })
             except Exception:
-                logger.debug("unified memory retrieve failed (non-fatal)", exc_info=True)
-        return results
+                logger.debug("unified memory store failed (non-fatal)", exc_info=True)
 
     def _extract_browser_context(self, extra_context: dict[str, object]) -> dict[str, object]:
         """提取浏览器自动化上下文。
@@ -2807,6 +2911,21 @@ class AgentLoop:
     async def _plan(self, context: RunContext, trajectory: AgentTrajectory, extra_context: dict[str, object]) -> list[AgentPlanStep]:
         tool_manifest = self.tools.manifest()
         platform_context = self._build_platform_context(context, trajectory, extra_context)
+        # P1-1: 让检索到的相关记忆真正进入 prompt。
+        # `_build_user_prompt` 读取的是 platform_context["related_memory_preview"]
+        # （见本文件 3522 行），但此前从无任何地方写入过该键——记忆写入(1944)与检索
+        # (_observe 2996) 都在跑，召回结果却被丢弃，prompt 里的 "Related memory:" 恒为空。
+        # `_build_platform_context` 是同步方法而检索是 async，故在此 async 上下文补齐。
+        # 检索失败不得阻断规划：降级为空列表并告警。
+        try:
+            platform_context["related_memory_preview"] = await self._retrieve_related_memory(
+                context, trajectory, extra_context
+            )
+        except Exception as exc:  # noqa: BLE001 - 记忆检索失败不应影响主循环
+            logger.warning(
+                "Related memory retrieval failed; continuing without it: %s", exc
+            )
+            platform_context["related_memory_preview"] = []
         workflow_context = platform_context.get("workflow", {})
         approval_context = platform_context.get("approval", {})
         browser_context = platform_context.get("browser", {})

@@ -60,14 +60,14 @@ export const ApprovalsPage: React.FC = () => {
     .sort((a, b) => String(b.decided_at ?? b.created_at).localeCompare(String(a.decided_at ?? a.created_at)))
 
   return (
-    <div className={clsx('min-h-full px-8 py-10', theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]')}>
+    <div className={clsx('min-h-full px-8 py-10', theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]')}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
         <header className="mb-8">
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -91,7 +91,7 @@ export const ApprovalsPage: React.FC = () => {
         {loadError && (
           <div
             role="alert"
-            className="mb-6 border px-4 py-3 text-sm border-[#dc2626]/40 text-[#dc2626]"
+            className="mb-6 border px-4 py-3 text-sm border-[color-mix(in_srgb,var(--danger)_40%,transparent)] text-[var(--danger)]"
           >
             {loadError}
           </div>
@@ -245,12 +245,12 @@ const PendingCard: React.FC<{ record: ApprovalRecord; onDecided: () => void }> =
       )}
 
       {actionError && (
-        <div role="alert" className="mb-3 border px-3 py-2 text-xs border-[#dc2626]/40 text-[#dc2626]">
+        <div role="alert" className="mb-3 border px-3 py-2 text-xs border-[color-mix(in_srgb,var(--danger)_40%,transparent)] text-[var(--danger)]">
           {actionError}
         </div>
       )}
       {actionResult && (
-        <div role="status" className="mb-3 border px-3 py-2 text-xs border-[#16a34a]/40 text-[#16a34a]">
+        <div role="status" className="mb-3 border px-3 py-2 text-xs border-[color-mix(in_srgb,var(--success)_40%,transparent)] text-[var(--success)]">
           {actionResult}
         </div>
       )}
@@ -269,7 +269,7 @@ const PendingCard: React.FC<{ record: ApprovalRecord; onDecided: () => void }> =
           <button
             onClick={() => decide('approve')}
             disabled={busy}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#16a34a] border border-current hover:bg-[var(--hover)] transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--success)] border border-current hover:bg-[var(--hover)] transition-colors disabled:opacity-50"
             aria-label={t('approvals.approve', 'Approve')}
           >
             <Check size={16} />
@@ -278,7 +278,7 @@ const PendingCard: React.FC<{ record: ApprovalRecord; onDecided: () => void }> =
           <button
             onClick={() => decide('reject')}
             disabled={busy}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[#dc2626] border border-current hover:bg-[var(--hover)] transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--danger)] border border-current hover:bg-[var(--hover)] transition-colors disabled:opacity-50"
             aria-label={t('approvals.reject', 'Reject')}
           >
             <X size={16} />

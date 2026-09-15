@@ -139,7 +139,8 @@ async def metrics_summary(
     trace_store: TraceStoreDependency,
     workflow_repository: WorkflowRepositoryDependency,
     workflow_schedule_store: WorkflowScheduleStoreDependency,
-) -> dict[str, int | None]:
+) -> dict[str, int | float | None]:
+    # uptime/error_rate 为浮点（取整会让 error_rate 恒为 0），模型需同时放行 int/float
     enforce_scope(principal, "audit:read")
     return await _summary_payload(
         approval_store,

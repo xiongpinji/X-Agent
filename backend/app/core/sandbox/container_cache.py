@@ -122,17 +122,26 @@ class DockerContainerPool:
 
     def _create_container_sync(self) -> str:
         client = self._get_client()
+        # P1-5: 池化路径此前 container_kwargs 默认为空 → 池中容器**完全没有隔离**
+        # （无只读根 fs、无非 root、无 cap_drop、无网络限制）。改为与直连路径
+        # （DockerSandbox._docker_start）共用同一份安全默认，消除两处漂移。
+        # 调用方显式传入的 container_kwargs 放在最后，仍可逐项覆盖。
+        from backend.app.core.sandbox.docker_sandbox import (
+            SandboxSpec,
+            build_container_security_kwargs,
+        )
+
         kwargs = {
             "image": self.image,
             "command": "sleep infinity",
             "detach": True,
             "remove": False,
-            "working_dir": "/workspace",
             "name": f"xagent-pool-{uuid.uuid4().hex[:8]}",
+            **build_container_security_kwargs(
+                SandboxSpec(image=self.image), self._workspace
+            ),
             **self._container_kwargs,
         }
-        if self._workspace is not None and "volumes" not in kwargs:
-            kwargs["volumes"] = {str(self._workspace): {"bind": "/workspace", "mode": "rw"}}
         container = client.containers.run(**kwargs)
         return container.id
 

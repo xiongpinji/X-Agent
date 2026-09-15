@@ -128,7 +128,7 @@ export const WorkflowSchedulesPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -136,7 +136,7 @@ export const WorkflowSchedulesPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />

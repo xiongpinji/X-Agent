@@ -442,18 +442,41 @@ class CronScheduler:
         ]
 
     def _calculate_next_cron_time(self, cron_expression: str) -> datetime:
-        """
-        Calculate next run time for cron expression.
+        """按 cron 表达式算出**下一次**执行时刻。
 
-        Args:
-            cron_expression: Cron expression
+        2026-09-15 修复：此前是桩实现 —— ``return datetime.now(UTC) + timedelta(days=1)``，
+        **完全忽略表达式**。后果是任何非「每 24 小时」的表达式都会静默按错误节奏跑：
+        ``*/5 * * * *`` 会变成每天一次，``0 9 * * *`` 会变成「从注册时刻起每 24 小时」。
+        这正是本仓反复出现的「看起来在跑、实际静默跑错」类型。
 
-        Returns:
-            Next run time
+        现在用 ``croniter`` 真算（已是声明依赖 ``croniter>=6.0.0``，``core/workflows.py``
+        亦在用）。**表达式非法时显式抛 ``ValueError``**，不再返回一个看起来合理的假下次时间
+        —— ``api/scheduler.py`` 的 ``except Exception`` 会把它转成 400，比静默接受坏表达式好。
+
+        ⚠️ 时刻按 **UTC** 解释：本方法的返回值与循环里的 ``datetime.now(UTC)`` 直接比较，
+        所以 ``"0 9 * * *"`` 是 **UTC 09:00**，不是本地 09:00。要本地时刻须先换算时区。
         """
-        # Simplified: just add 1 day for now
-        # In production, use croniter library
-        return datetime.now(UTC) + timedelta(days=1)
+        now = datetime.now(UTC)
+        try:
+            from croniter import croniter as _croniter
+        except ImportError as exc:  # pragma: no cover - 依赖已声明，仅残缺环境触发
+            raise RuntimeError(
+                "croniter is required for cron scheduling but is not installed; "
+                "refusing to fall back to a silently-wrong schedule."
+            ) from exc
+
+        try:
+            next_time = _croniter(cron_expression, now).get_next(datetime)
+        except Exception as exc:
+            raise ValueError(
+                f"Invalid cron expression {cron_expression!r}: {exc}"
+            ) from exc
+
+        # croniter 以 tz-aware base 调用时返回 tz-aware 值；兜底防 naive（否则循环里
+        # 与 datetime.now(UTC) 比较会抛 TypeError，且只在到点那一刻才炸）。
+        if next_time.tzinfo is None:
+            next_time = next_time.replace(tzinfo=UTC)
+        return next_time
 
     def get_scheduler_stats(self) -> dict[str, Any]:
         """

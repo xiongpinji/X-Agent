@@ -48,7 +48,7 @@ export const TasksPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style: 2px rule + 32px/500 title + 50% subtitle */}
@@ -56,7 +56,7 @@ export const TasksPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -113,7 +113,7 @@ export const TasksPage: React.FC = () => {
                           aria-label={`${task.name} ${t('workflows.progress', 'Progress')}`}
                         >
                           <div
-                            className={clsx('h-[3px] transition-all', theme === 'dark' ? 'bg-slate-300' : 'bg-[#333333]')}
+                            className={clsx('h-[3px] transition-all', theme === 'dark' ? 'bg-slate-300' : 'bg-[var(--fg)]')}
                             style={{ width: `${Math.round(task.progress * 100)}%` }}
                           />
                         </div>
@@ -138,7 +138,7 @@ export const TasksPage: React.FC = () => {
                         </button>
                         <button
                           onClick={() => handleDeleteTask(task.id)}
-                          className="p-1.5 text-[#dc2626] opacity-50 hover:opacity-100 transition-opacity"
+                          className="p-1.5 text-[var(--danger)] opacity-50 hover:opacity-100 transition-opacity"
                           title={t('tasks.deleteTask', 'Delete task')}
                           aria-label={t('tasks.deleteTask', 'Delete task')}
                         >
@@ -218,9 +218,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
             <span
               className={clsx(
                 'capitalize',
-                task.status === 'completed' ? 'text-[#16a34a]' :
-                task.status === 'in_progress' ? 'text-[#2563eb]' :
-                task.status === 'failed' ? 'text-[#dc2626]' : ''
+                task.status === 'completed' ? 'text-[var(--success)]' :
+                task.status === 'in_progress' ? 'text-[var(--accent)]' :
+                task.status === 'failed' ? 'text-[var(--danger)]' : ''
               )}
             >
               {task.status}
@@ -241,7 +241,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
               aria-valuemax={100}
             >
               <div
-                className={clsx('h-[3px]', theme === 'dark' ? 'bg-slate-300' : 'bg-[#333333]')}
+                className={clsx('h-[3px]', theme === 'dark' ? 'bg-slate-300' : 'bg-[var(--fg)]')}
                 style={{ width: `${percent}%` }}
               />
             </div>
@@ -250,7 +250,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, onClose }) => {
           {task.error && (
             <div className="py-2.5 border-b" style={{ borderColor: 'var(--divider)' }}>
               <span className="opacity-50">{t('common.error', 'Error')}</span>
-              <p className="text-sm text-[#dc2626] mt-1">{task.error}</p>
+              <p className="text-sm text-[var(--danger)] mt-1">{task.error}</p>
             </div>
           )}
         </div>

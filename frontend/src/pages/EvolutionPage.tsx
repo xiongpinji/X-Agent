@@ -255,7 +255,7 @@ const EvolutionPage: React.FC = () => {
   const sectionTitle = 'text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2'
 
   const renderError = (msg: string | null) => (msg ? (
-    <div className="mt-2 p-2 border border-[#dc2626]/30 text-xs text-[#dc2626]">⚠️ {msg}</div>
+    <div className="mt-2 p-2 border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-xs text-[var(--danger)]">⚠️ {msg}</div>
   ) : null)
 
   const renderJson = (data: Record<string, unknown>) => (
@@ -328,7 +328,7 @@ const EvolutionPage: React.FC = () => {
         </header>
 
         {error && (
-          <div className="mb-6 p-3 border border-[#dc2626]/30 text-sm text-[#dc2626]" role="alert">
+          <div className="mb-6 p-3 border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-sm text-[var(--danger)]" role="alert">
             ⚠️ {error}
           </div>
         )}
@@ -417,7 +417,7 @@ const EvolutionPage: React.FC = () => {
                   {cycleOutcome && (
                     <div className="mt-3 text-xs space-y-2">
                       {cycleOutcome.error ? (
-                        <div className="p-2 border border-[#dc2626]/30 text-[#dc2626]">⚠️ {cycleOutcome.error}</div>
+                        <div className="p-2 border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-[var(--danger)]">⚠️ {cycleOutcome.error}</div>
                       ) : (
                         <>
                           <div className="flex flex-wrap gap-2 items-center">
@@ -526,7 +526,7 @@ const EvolutionPage: React.FC = () => {
                   {optOutcome && (
                     <div className="mt-2 text-xs space-y-1">
                       {optOutcome.error ? (
-                        <div className="p-2 border border-[#dc2626]/30 text-[#dc2626]">⚠️ {optOutcome.error}</div>
+                        <div className="p-2 border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-[var(--danger)]">⚠️ {optOutcome.error}</div>
                       ) : (
                         <>
                           <p className="opacity-50">
@@ -562,7 +562,7 @@ const EvolutionPage: React.FC = () => {
                   {distillOutcome && (
                     <div className="mt-2 text-xs space-y-1">
                       {distillOutcome.error ? (
-                        <div className="p-2 border border-[#dc2626]/30 text-[#dc2626]">⚠️ {distillOutcome.error}</div>
+                        <div className="p-2 border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-[var(--danger)]">⚠️ {distillOutcome.error}</div>
                       ) : distillOutcome.skill ? (
                         <>
                           <p className="opacity-50">

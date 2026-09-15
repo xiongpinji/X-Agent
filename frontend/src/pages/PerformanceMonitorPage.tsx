@@ -50,7 +50,7 @@ const StatItem: React.FC<{
   >
     <dd
       className={`font-data text-[20px] leading-none order-2 ${
-        status === 'danger' ? 'text-[#dc2626]' : status === 'warn' ? 'text-[#d97706]' : ''
+        status === 'danger' ? 'text-[var(--danger)]' : status === 'warn' ? 'text-[var(--warning)]' : ''
       }`}
     >
       {value}
@@ -115,7 +115,7 @@ export const PerformanceMonitorPage: React.FC = () => {
         </header>
 
         {error && (
-          <div className="mb-6 p-3 border border-[#dc2626]/30 text-sm text-[#dc2626]" role="alert">
+          <div className="mb-6 p-3 border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-sm text-[var(--danger)]" role="alert">
             {error}
           </div>
         )}
@@ -214,11 +214,11 @@ export const PerformanceMonitorPage: React.FC = () => {
             <h3 className={sectionTitle}>💡 Recommendation</h3>
             {health ? (
               <>
-                <p className={`text-base font-medium ${health.recommendation === 'scale_down' ? 'text-[#dc2626]' : health.recommendation === 'scale_up' ? 'text-[#16a34a]' : ''}`}>
+                <p className={`text-base font-medium ${health.recommendation === 'scale_down' ? 'text-[var(--danger)]' : health.recommendation === 'scale_up' ? 'text-[var(--success)]' : ''}`}>
                   {health.recommendation === 'scale_down' ? '⚠️ Scale Down' : health.recommendation === 'scale_up' ? '🚀 Scale Up' : '✅ Stable'}
                 </p>
                 {queue?.queue.backpressure && (
-                  <p className="text-xs text-[#dc2626] mt-2">⚠️ Backpressure active</p>
+                  <p className="text-xs text-[var(--danger)] mt-2">⚠️ Backpressure active</p>
                 )}
               </>
             ) : <p className="empty-state">Loading…</p>}

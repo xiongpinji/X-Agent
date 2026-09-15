@@ -149,12 +149,12 @@ const UsersAdminPage: React.FC = () => {
     return (
       <div className={clsx(
         'min-h-full px-8 py-10',
-        isDark ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+        isDark ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
       )}>
         <div className="max-w-3xl">
           <header className="mb-8">
             <div
-              className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[#333333]')}
+              className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[var(--fg)]')}
               aria-hidden="true"
             />
             <h1 className="page-title">{t('admin.forbidden.title', 'Admin access required')}</h1>
@@ -177,13 +177,13 @@ const UsersAdminPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      isDark ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      isDark ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-5xl">
         {/* Header — Dashboard-style */}
         <header className="mb-8">
           <div
-            className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[#333333]')}
+            className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[var(--fg)]')}
             aria-hidden="true"
           />
           <h1 className="page-title">{t('admin.usersAdmin.title', 'User Administration')}</h1>
@@ -194,8 +194,8 @@ const UsersAdminPage: React.FC = () => {
           <div className={clsx(
             'mb-4 px-3 py-2 border text-sm',
             message.type === 'success'
-              ? 'border-[#16a34a]/30 text-[#16a34a]'
-              : 'border-[#dc2626]/30 text-[#dc2626]'
+              ? 'border-[color-mix(in_srgb,var(--success)_30%,transparent)] text-[var(--success)]'
+              : 'border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-[var(--danger)]'
           )} role="alert">
             {message.text}
           </div>
@@ -327,7 +327,7 @@ const UsersAdminPage: React.FC = () => {
                             </button>
                             <button
                               onClick={() => handleDeleteUser(u.id)}
-                              className="px-2 py-1 text-xs font-medium text-[#dc2626] opacity-60 hover:opacity-100 transition-opacity"
+                              className="px-2 py-1 text-xs font-medium text-[var(--danger)] opacity-60 hover:opacity-100 transition-opacity"
                             >
                               {t('common.delete', 'Delete')}
                             </button>

@@ -96,7 +96,7 @@ export const CheckpointsPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -104,7 +104,7 @@ export const CheckpointsPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -221,7 +221,7 @@ export const CheckpointsPage: React.FC = () => {
                       disabled={acting}
                       className={clsx(
                         'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border transition-colors disabled:opacity-50',
-                        'text-[#dc2626]'
+                        'text-[var(--danger)]'
                       )}
                       style={{ borderColor: 'rgba(220,38,38,.35)' }}
                     >

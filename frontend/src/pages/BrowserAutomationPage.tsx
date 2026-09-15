@@ -50,7 +50,7 @@ export const BrowserAutomationPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -58,7 +58,7 @@ export const BrowserAutomationPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -71,7 +71,7 @@ export const BrowserAutomationPage: React.FC = () => {
         {backendUnavailable && (
           <div
             role="alert"
-            className="mb-6 border border-[#d97706]/30 px-4 py-3 text-sm text-[#d97706] flex items-start justify-between gap-4"
+            className="mb-6 border border-[color-mix(in_srgb,var(--warning)_30%,transparent)] px-4 py-3 text-sm text-[var(--warning)] flex items-start justify-between gap-4"
           >
             <span>
               <strong>{t('automation.unavailable', 'Browser backend unavailable')}</strong>
@@ -151,7 +151,7 @@ const ActionButton: React.FC<{
         'flex items-center justify-center gap-2 px-3 py-2 border text-sm font-medium transition-colors disabled:opacity-50',
         primary
           ? 'bg-blue-600 hover:bg-blue-700 text-white border-transparent'
-          : clsx('border-[var(--divider)] bg-transparent hover:bg-[var(--hover)]', danger && 'text-[#dc2626]')
+          : clsx('border-[var(--divider)] bg-transparent hover:bg-[var(--hover)]', danger && 'text-[var(--danger)]')
       )}
     >
       {icon}
@@ -189,7 +189,7 @@ const ResultBox: React.FC<{ result: string | null; error?: boolean }> = ({ resul
       className={clsx(
         'mt-3 border px-3 py-2 text-xs whitespace-pre-wrap break-words max-h-64 overflow-auto cell-data',
         error
-          ? 'border-[#dc2626]/30 text-[#dc2626]'
+          ? 'border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-[var(--danger)]'
           : 'border-[rgba(163,169,177,.25)] opacity-80'
       )}
     >

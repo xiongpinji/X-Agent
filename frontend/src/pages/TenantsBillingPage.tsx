@@ -54,7 +54,7 @@ const UsageBar: React.FC<{
       <div
         className={clsx(
           'h-[3px] transition-all',
-          percent >= 90 ? 'bg-[#dc2626]' : percent >= 70 ? 'bg-[#d97706]' : isDark ? 'bg-slate-300' : 'bg-[#333333]'
+          percent >= 90 ? 'bg-[var(--danger)]' : percent >= 70 ? 'bg-[var(--warning)]' : isDark ? 'bg-slate-300' : 'bg-[var(--fg)]'
         )}
         style={{ width: `${Math.min(100, percent)}%` }}
       />
@@ -252,12 +252,12 @@ const TenantsBillingPage: React.FC = () => {
     return (
       <div className={clsx(
         'min-h-full px-8 py-10',
-        isDark ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+        isDark ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
       )}>
         <div className="max-w-3xl">
           <header className="mb-8">
             <div
-              className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[#333333]')}
+              className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[var(--fg)]')}
               aria-hidden="true"
             />
             <h1 className="page-title">{t('admin.forbidden.title', 'Admin access required')}</h1>
@@ -291,13 +291,13 @@ const TenantsBillingPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      isDark ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      isDark ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-5xl">
         {/* Header — Dashboard-style */}
         <header className="mb-8">
           <div
-            className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[#333333]')}
+            className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[var(--fg)]')}
             aria-hidden="true"
           />
           <h1 className="page-title">{t('admin.tenantsBilling.title', 'Tenants & Billing')}</h1>
@@ -308,8 +308,8 @@ const TenantsBillingPage: React.FC = () => {
           <div className={clsx(
             'mb-4 px-3 py-2 border text-sm',
             message.type === 'success'
-              ? 'border-[#16a34a]/30 text-[#16a34a]'
-              : 'border-[#dc2626]/30 text-[#dc2626]'
+              ? 'border-[color-mix(in_srgb,var(--success)_30%,transparent)] text-[var(--success)]'
+              : 'border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-[var(--danger)]'
           )} role="alert">
             {message.text}
           </div>
@@ -410,7 +410,7 @@ const TenantsBillingPage: React.FC = () => {
                         </span>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeleteTenant(tn.id) }}
-                          className="text-xs text-[#dc2626] opacity-60 hover:opacity-100 transition-opacity font-medium"
+                          className="text-xs text-[var(--danger)] opacity-60 hover:opacity-100 transition-opacity font-medium"
                         >
                           {t('common.delete', 'Delete')}
                         </button>

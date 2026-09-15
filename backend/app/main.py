@@ -431,6 +431,15 @@ try:
         from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
         from starlette.responses import Response
 
+        # P1-4: 刷新 saturation（CPU/内存/磁盘）—— 修复前无人采集，
+        # xagent_cpu_usage_percent / xagent_memory_usage_bytes 恒为 0（假信号）。
+        try:
+            from backend.app.monitoring.resource_monitor import refresh_saturation_metrics
+
+            refresh_saturation_metrics()
+        except Exception as e:  # 观测能力故障不得影响 scrape 本身
+            logger.warning(f"saturation refresh failed: {e}")
+
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     logger.info("Prometheus metrics endpoint mounted at /metrics")
@@ -831,6 +840,36 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     # agent_run 后台执行 + JSONL 持久化；sandbox/stream 既有端点不动，source 字段预留聚合。
     # 注：规划时的 /api/v1/tasks 前缀已被 tasks_ui 占用（前端在用），与 owner 确认后改用 agent/tasks）
     "tasks",
+    # 2026-09-14 功能恢复：用户反馈 API。前端 FeedbackDashboard +
+    # services/feedback.ts 依赖的 trends / sentiment-analysis /
+    # category-distribution / search / export / DELETE 均已实现于此模块
+    # （真实存储：FeedbackStorePostgres / FeedbackStoreFile 双后端 + feedback_analyzer）。
+    # 此前未进白名单 → 14 条路由零可达，页面整体不可用。
+    "feedback",
+    # 2026-09-14 通知渠道配置：/feedback 页 Notifications tab 的 CRUD + 手动投递
+    # 测试（6 条端点）。此前该 tab 点「添加」必报错——后端连配置存哪都没有。
+    # 注：与 api/notifications.py（WebSocket 实时推送 + Web Push 订阅）是两个功能，
+    # 刻意不复用；那个模块是否挂载是另一个独立决策，本次不顺带决定。
+    "notification_configs",
+    # 2026-09-15 #42 接线：工作区与目录挂载（9 条：POST /mount、GET /mounts、
+    # /validate-path、/audit-logs 等）。前端 components/FolderSelector.tsx 的
+    # fetch 目标此前全部 404 —— 后端源码在、路由从未进白名单。
+    # 承载页 = AgentWorkspace 组件化工作台（簇2）。
+    "workspace",
+
+    # 2026-09-15 #42 接线：文件预览（5 条，均为 GET /{path:path} 形态：
+    # preview / metadata / download / directory / code）。
+    # 前端 components/FilePreview.tsx 的调用目标此前全部 404。
+    # 注意：全是贪婪 catch-all，挂载前已用 route_baseline.py 确认
+    # /api/v1/files 前缀在既有 503 条路由中零占用。
+    "file_preview",
+
+    # 2026-09-15 #42 接线：实时通知（4 条：WS /ws、GET /status、
+    # POST /subscribe、POST /broadcast/test）。前端 NotificationCenter.tsx
+    # 经 services/websocketClient 消费；该 client 目前唯一消费方就是它。
+    # 注：与 notification_configs（渠道配置 CRUD）是两个功能，刻意并存。
+    "notifications",
+
 )
 
 
@@ -898,6 +937,22 @@ async def startup_event():
 
     初始化MCP管理器和其他必要的服务。
     """
+    # 缺口补齐：结构化日志接线（最先执行，使其后所有日志沿用所选格式/级别）。
+    # 此前全应用从未配置 logging → INFO 日志被丢弃、XAGENT_LOG_FORMAT 不生效。
+    try:
+        from backend.app.core.logger_factory import configure_root_logging
+        from backend.app.settings import get_settings as _get_log_settings
+
+        _log_settings = _get_log_settings()
+        _log_level = getattr(
+            logging, str(getattr(_log_settings, "log_level", "INFO")).upper(), logging.INFO
+        )
+        configure_root_logging(
+            level=_log_level, format_type=getattr(_log_settings, "log_format", "plain")
+        )
+    except Exception as e:
+        logger.warning("Logging configuration failed; keeping defaults: %s", e)
+
     logger.info("Starting X-Agent application...")
 
     # Phase 0: Initialize lifecycle manager (graceful shutdown orchestration)
@@ -1133,7 +1188,9 @@ async def startup_event():
             app.state.otel_exporter = otel
             logger.info("P2-06: OTel exporter active")
         else:
-            logger.info("P2-06: OTel disabled or SDK not installed (XAGENT_OTEL_ENABLED=false)")
+            # 显式化不可达原因：当 enabled=true 但缺 OTLP exporter 子包时，旧消息
+            # 会误导性打印 "(XAGENT_OTEL_ENABLED=false)"，让人以为是自己没开开关。
+            logger.info("P2-06: OTel export inactive — %s", otel.status)
     except Exception as e:
         logger.error(f"Failed to initialize OTel exporter: {e}", exc_info=True)
         logger.warning("Application startup continuing without OTel")
@@ -1142,6 +1199,7 @@ async def startup_event():
     #   1. task_queue 注册 "agent.run" handler + 启动 worker（定时任务的真实执行体）
     #   2. cron_scheduler 循环（/api/scheduler 创建的 cron/interval/once 到点投递）
     #   3. workflow run_due 循环（workflow_schedules 表的 lease 抢占调度）
+    #   4. daily_summary 每日摘要（2026-09-15；注册进同一个 cron_scheduler）
     # XAGENT_SCHEDULER_ENABLED=false 可整体关闭（测试/纯 CLI 场景）。
     # 幂等：进程内只接线一次；TestClient 反复启动时旧事件循环已销毁，
     # 守卫跳过重启（调度任务随宿主事件循环消亡，无泄漏）。
@@ -1190,6 +1248,32 @@ async def startup_event():
         except Exception as e:
             logger.error(f"B3: cron scheduler start failed: {e}", exc_info=True)
             logger.warning("Application startup continuing without cron scheduler")
+
+        try:
+            from backend.app.core.daily_summary import (
+                DEFAULT_CRON as _daily_summary_default_cron,
+            )
+            from backend.app.core.daily_summary import register_daily_summary_job
+            from backend.app.core.scheduler import cron_scheduler as _cron_scheduler
+
+            # 触发时刻按 **UTC** 解释（croniter 配 tz-aware 的 now）："0 9 * * *"
+            # 是 UTC 09:00，不是本地 9 点。要换时刻用这个环境变量，别改代码。
+            # 非法表达式会在注册期抛错（_calculate_next_cron_time 校验），被下面
+            # 的 except 兜住 —— 配置写错不该让整个进程起不来。
+            _daily_summary_cron = os.environ.get(
+                "XAGENT_DAILY_SUMMARY_CRON", _daily_summary_default_cron
+            )
+            _daily_summary_task_id = register_daily_summary_job(
+                _cron_scheduler, cron_expression=_daily_summary_cron
+            )
+            logger.info(
+                "B3: daily_summary job registered (task=%s, cron=%r, UTC 解释)",
+                _daily_summary_task_id,
+                _daily_summary_cron,
+            )
+        except Exception as e:
+            logger.error(f"B3: daily_summary wiring failed: {e}", exc_info=True)
+            logger.warning("Application startup continuing without daily_summary job")
 
         try:
             from backend.app.workflow_worker import run_forever as _workflow_worker_forever

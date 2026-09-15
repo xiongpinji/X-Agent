@@ -134,7 +134,7 @@ export const ObservabilityPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -142,7 +142,7 @@ export const ObservabilityPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -221,7 +221,7 @@ export const ObservabilityPage: React.FC = () => {
             {/* 失败 trace 提示 (来自 /ops/summary) */}
             {ops && ops.failure_traces.length > 0 && (
               <div className="row-line mb-4 text-sm" style={{ padding: '12px 0' }}>
-                <p className="font-medium mb-1 text-[#dc2626]">
+                <p className="font-medium mb-1 text-[var(--danger)]">
                   {t('obs.recentFailures', 'Recent failures')}
                 </p>
                 <ul className="space-y-1 cell-data opacity-70">
@@ -355,11 +355,11 @@ export const ObservabilityPage: React.FC = () => {
                     traceDetail.events.map((ev, idx) => (
                       <div key={`${ev.timestamp}-${idx}`} className="row-line flex items-start gap-2">
                         <span
-                          className={clsx('mt-1.5 h-2 w-2 rounded-full shrink-0', eventIsFailure(ev.event) ? 'bg-[#dc2626]' : 'bg-[#16a34a]')}
+                          className={clsx('mt-1.5 h-2 w-2 rounded-full shrink-0', eventIsFailure(ev.event) ? 'bg-[var(--danger)]' : 'bg-[var(--success)]')}
                           aria-hidden="true"
                         />
                         <div className="min-w-0">
-                          <p className={clsx('font-mono text-xs font-medium', eventIsFailure(ev.event) && 'text-[#dc2626]')}>
+                          <p className={clsx('font-mono text-xs font-medium', eventIsFailure(ev.event) && 'text-[var(--danger)]')}>
                             {ev.event}
                           </p>
                           <p className="cell-data opacity-50">

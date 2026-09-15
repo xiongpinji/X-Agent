@@ -3,7 +3,7 @@ import clsx from 'clsx'
 import { AriaBuilder } from '@/utils/accessibility'
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'success' | 'warning'
+  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'success' | 'warning'
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   isLoading?: boolean
   isDisabled?: boolean
@@ -15,24 +15,59 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   ariaDescribedBy?: string
 }
 
-const baseStyles = 'inline-flex items-center justify-center gap-2 font-medium transition-all duration-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95'
+/**
+ * Focus is handled by the `.focus-ring` class (outline-based, themed via
+ * --accent) rather than a ring utility, so it survives on both themes and on
+ * any surface without per-variant `ring-offset` colours.
+ *
+ * Colour comes from the design tokens in src/design/language.css; only the
+ * semantic status variants (success/warning/danger) keep their own scale,
+ * because re-pointing those at the brand accent would destroy their meaning.
+ */
+const baseStyles =
+  'focus-ring inline-flex items-center justify-center gap-2 font-medium rounded-lg ' +
+  'transition-[background-color,border-color,color,transform,opacity] duration-150 ease-smooth ' +
+  'disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]'
 
-const variantStyles = {
-  primary: 'bg-primary-600 hover:bg-primary-700 text-white focus:ring-primary-500 dark:bg-primary-500 dark:hover:bg-primary-600',
-  secondary: 'bg-slate-200 hover:bg-slate-300 text-slate-900 focus:ring-slate-500 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-white',
-  danger: 'bg-error-600 hover:bg-error-700 text-white focus:ring-error-500 dark:bg-error-500 dark:hover:bg-error-600',
-  ghost: 'hover:bg-slate-100 text-slate-900 focus:ring-slate-500 dark:hover:bg-slate-800 dark:text-white',
-  success: 'bg-success-600 hover:bg-success-700 text-white focus:ring-success-500 dark:bg-success-500 dark:hover:bg-success-600',
-  warning: 'bg-warning-600 hover:bg-warning-700 text-white focus:ring-warning-500 dark:bg-warning-500 dark:hover:bg-warning-600',
+const variantStyles: Record<NonNullable<ButtonProps['variant']>, string> = {
+  primary:
+    'sheen bg-[var(--accent)] text-[var(--accent-fg)] hover:bg-[var(--accent-strong)]',
+  secondary:
+    'bg-[var(--surface-raised)] text-[var(--fg)] border border-[var(--divider)] ' +
+    'hover:bg-[var(--surface-raised-hover)] hover:border-[var(--accent-line)]',
+  outline:
+    'bg-transparent text-[var(--fg)] border border-[var(--divider)] ' +
+    'hover:border-[var(--accent-line)] hover:text-[var(--accent)]',
+  ghost: 'bg-transparent text-[var(--fg)] hover:bg-[var(--hover)]',
+  danger: 'bg-error-600 text-white hover:bg-error-700',
+  success: 'bg-success-600 text-white hover:bg-success-700',
+  warning: 'bg-warning-600 text-white hover:bg-warning-700',
 }
 
-const sizeStyles = {
-  xs: 'px-2 py-1 text-xs',
-  sm: 'px-3 py-1.5 text-sm',
-  md: 'px-4 py-2 text-base',
-  lg: 'px-6 py-3 text-lg',
-  xl: 'px-8 py-4 text-xl',
+/**
+ * Sizes set an explicit height instead of padding-derived height, so buttons on
+ * one row align even when their font sizes differ.
+ */
+const sizeStyles: Record<NonNullable<ButtonProps['size']>, string> = {
+  xs: 'h-7 px-2.5 text-xs',
+  sm: 'h-8 px-3 text-[13px]',
+  md: 'h-10 px-4 text-sm',
+  lg: 'h-11 px-5 text-[15px]',
+  xl: 'h-12 px-6 text-base',
 }
+
+/**
+ * CSS ring spinner. Sized in `em` and coloured with `currentColor` so it
+ * inherits the variant's text colour and font size — no per-variant overrides,
+ * and no emoji (the previous implementation rendered a literal "⏳").
+ */
+const SpinnerGlyph: React.FC = () => (
+  <span
+    className="inline-block shrink-0 rounded-full border-2 border-current border-t-transparent animate-spin"
+    style={{ width: '1em', height: '1em' }}
+    aria-hidden="true"
+  />
+)
 
 export const Button = memo(
   forwardRef<HTMLButtonElement, ButtonProps>(
@@ -69,13 +104,7 @@ export const Button = memo(
         ariaAttrs.describedBy(ariaDescribedBy)
       }
 
-      const iconElement = isLoading ? (
-        <span className="animate-spin" aria-hidden="true">
-          ⏳
-        </span>
-      ) : icon && !isLoading ? (
-        icon
-      ) : null
+      const iconElement = isLoading ? <SpinnerGlyph /> : icon ?? null
 
       return (
         <button
@@ -101,4 +130,3 @@ export const Button = memo(
 )
 
 Button.displayName = 'Button'
-

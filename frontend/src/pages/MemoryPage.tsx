@@ -76,7 +76,7 @@ export const MemoryPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -84,7 +84,7 @@ export const MemoryPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -117,7 +117,7 @@ export const MemoryPage: React.FC = () => {
             aria-label={t('memory.searchMemories', 'Search memories')}
             className={clsx(
               'flex-1 bg-transparent outline-none text-sm',
-              theme === 'dark' ? 'text-slate-200 placeholder-slate-500' : 'text-[#333333] placeholder-slate-400'
+              theme === 'dark' ? 'text-slate-200 placeholder-slate-500' : 'text-[var(--fg)] placeholder-slate-400'
             )}
           />
         </div>
@@ -204,7 +204,7 @@ const MemoryRow: React.FC<MemoryRowProps> = ({ memory, onEdit, onDelete }) => {
           </button>
           <button
             onClick={() => onDelete(memory)}
-            className="p-1.5 text-[#dc2626] opacity-50 hover:opacity-100 transition-opacity"
+            className="p-1.5 text-[var(--danger)] opacity-50 hover:opacity-100 transition-opacity"
             title={t('memory.deleteMemory', 'Delete')}
             aria-label={t('memory.deleteMemory', 'Delete')}
           >

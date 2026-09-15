@@ -5,10 +5,24 @@ import clsx from 'clsx'
 
 interface NotificationSettingsProps {
   notifications: NotificationConfig[]
-  onAdd: (data: Partial<NotificationConfig>) => void
-  onUpdate: (id: string, data: Partial<NotificationConfig>) => void
-  onDelete: (id: string) => void
-  onTest: (id: string) => void
+  /**
+   * Resolve to `true` when the channel was saved, `false` when it was not.
+   * The page owns error reporting, so a failed save reports the outcome rather
+   * than throwing — the form must stay open in that case instead of closing
+   * and silently discarding what the user typed.
+   */
+  onAdd: (data: Partial<NotificationConfig>) => Promise<boolean>
+  /** Same contract as `onAdd`: `true` = saved, `false` = failed. */
+  onUpdate: (id: string, data: Partial<NotificationConfig>) => Promise<boolean>
+  onDelete: (id: string) => Promise<void>
+  /**
+   * Returns the delivery outcome rather than throwing on a failed delivery.
+   * The backend answers 200 with `success: false` when the channel exists but
+   * nothing could be delivered (e.g. no SMTP configured). That is a business
+   * outcome, not a transport error, and the UI must be able to tell the two
+   * apart — transport/auth failures still reject and land in the catch below.
+   */
+  onTest: (id: string) => Promise<{ success: boolean; message: string }>
   theme: 'light' | 'dark'
 }
 
@@ -36,13 +50,13 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
       return
     }
 
-    if (editingId) {
-      await onUpdate(editingId, formData)
-      setEditingId(null)
-    } else {
-      await onAdd(formData)
-    }
+    const saved = editingId ? await onUpdate(editingId, formData) : await onAdd(formData)
 
+    // The page reports the failure in its own error banner; closing the form
+    // here would throw away the user's input on top of that.
+    if (!saved) return
+
+    setEditingId(null)
     setFormData({
       type: 'email',
       enabled: true,
@@ -54,8 +68,14 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   const handleTest = async (id: string) => {
     setTestingId(id)
     try {
-      await onTest(id)
-      setTestResult({ id, success: true, message: 'Test notification sent successfully' })
+      // The backend distinguishes "request failed" (reject) from "delivery
+      // failed" (200 + success:false). Both must read as a failure, but only the
+      // rejected case carries an exception to pull a message from.
+      const result = await onTest(id)
+      const fallback = result.success
+        ? 'Test notification sent successfully'
+        : 'Test notification failed'
+      setTestResult({ id, success: result.success, message: result.message || fallback })
     } catch (error) {
       setTestResult({
         id,

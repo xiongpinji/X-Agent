@@ -117,7 +117,7 @@ const AgentsPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      isDark ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      isDark ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -125,7 +125,7 @@ const AgentsPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              isDark ? 'border-slate-200' : 'border-[#333333]'
+              isDark ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -146,7 +146,7 @@ const AgentsPage: React.FC = () => {
 
         {/* Error */}
         {error && (
-          <div className="mb-4 px-3 py-2.5 border text-[#dc2626] text-sm" role="alert" style={{ borderColor: 'rgba(220,38,38,.3)' }}>
+          <div className="mb-4 px-3 py-2.5 border text-[var(--danger)] text-sm" role="alert" style={{ borderColor: 'rgba(220,38,38,.3)' }}>
             {error}
             <button onClick={() => setError(null)} className="ml-2 underline">{t('common.dismiss', 'Dismiss')}</button>
           </div>
@@ -205,7 +205,7 @@ const AgentsPage: React.FC = () => {
                         </button>
                         <button
                           onClick={() => handleDelete(agent.id)}
-                          className="text-[#dc2626] opacity-60 hover:opacity-100 transition-opacity"
+                          className="text-[var(--danger)] opacity-60 hover:opacity-100 transition-opacity"
                         >
                           {t('common.delete', 'Delete')}
                         </button>
@@ -242,7 +242,7 @@ const AgentsPage: React.FC = () => {
                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 className={clsx(
                   'mt-1.5 w-full px-3 py-2 border text-sm bg-transparent',
-                  isDark ? 'text-white' : 'text-[#333333]'
+                  isDark ? 'text-white' : 'text-[var(--fg)]'
                 )}
                 style={{ borderColor: 'var(--divider)' }}
                 placeholder={t('agents.namePlaceholder', 'e.g. Research Assistant')}
@@ -260,7 +260,7 @@ const AgentsPage: React.FC = () => {
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCapability() } }}
                   className={clsx(
                     'flex-1 px-3 py-2 border text-sm bg-transparent',
-                    isDark ? 'text-white' : 'text-[#333333]'
+                    isDark ? 'text-white' : 'text-[var(--fg)]'
                   )}
                   style={{ borderColor: 'var(--divider)' }}
                   placeholder={t('agents.capabilityPlaceholder', 'e.g. web_search, code_gen')}
@@ -290,7 +290,7 @@ const AgentsPage: React.FC = () => {
                 onChange={e => setFormData(prev => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))}
                 className={clsx(
                   'mt-1.5 w-full px-3 py-2 border text-sm bg-transparent',
-                  isDark ? 'text-white' : 'text-[#333333]'
+                  isDark ? 'text-white' : 'text-[var(--fg)]'
                 )}
                 style={{ borderColor: 'var(--divider)' }}
               >

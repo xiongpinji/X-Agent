@@ -412,16 +412,22 @@ class MetricsCollector:
 
     def set_resource_metrics(
         self,
-        cpu_percent: float = 0,
-        memory_bytes: int = 0,
+        cpu_percent: float | None = None,
+        memory_bytes: int | None = None,
         disk_bytes: dict[str, int] | None = None,
     ) -> None:
-        """Set resource usage metrics."""
+        """Set resource usage metrics.
+
+        P1-4: 参数默认值由 ``0`` 改为 ``None``，判定由 ``> 0`` 改为 ``is not None``。
+        旧实现 ``if cpu_percent > 0`` 会把**合法的 0 值**（空闲 CPU、已释放的内存）
+        静默丢弃，仪表盘于是永远停留在旧读数上 —— 这是"饱和度假信号"的根因。
+        用 ``None`` 表示"本次不更新"，从而同时保留"可选参数"语义与 0 值可写。
+        """
         if not self.enabled:
             return
-        if cpu_percent > 0:
+        if cpu_percent is not None:
             self.cpu_usage_percent.set(cpu_percent)
-        if memory_bytes > 0:
+        if memory_bytes is not None:
             self.memory_usage_bytes.set(memory_bytes)
         if disk_bytes:
             for mount_point, size in disk_bytes.items():

@@ -501,8 +501,9 @@ class TestFileTools:
 
     async def test_read_file_nonexistent(self, tmp_path):
         with patch("backend.app.core.tools._resolve_tool_path", return_value=tmp_path / "nope.txt"):
-            result = await read_file(path="nope.txt")
-            assert result == ""
+            # 2026-09-08 语义修复：不存在必须显式失败（旧行为返回 "" 是虚报帮凶）
+            with pytest.raises(FileNotFoundError):
+                await read_file(path="nope.txt")
 
     async def test_write_file(self, tmp_path):
         f = tmp_path / "out.txt"

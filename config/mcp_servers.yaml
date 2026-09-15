@@ -1,0 +1,71 @@
+# X-Agent MCP 服务器配置（运行时读取）
+#
+# 由 MCPManager 在应用启动时加载（settings.mcp_config_path，默认指向本文件）。
+# 占位符：${VAR} 与 ${VAR:-默认值}；另有两个内建伪变量使本文件与机器无关：
+#   ${XAGENT_PYTHON}        → 运行本应用的解释器（已安装 mcp 依赖，直接复用）
+#   ${XAGENT_PROJECT_ROOT}  → 项目根目录
+#
+# 传输方式：
+#   transport: "stdio" — 子进程 stdio（官方 MCP 协议；需 command，可配 args/env/cwd）
+#   transport: "http"  — Streamable HTTP（需 url 指向 MCP 端点，如 http://host:8000/mcp）
+#
+# 失败策略：单个 server 连接失败不阻断启动（global.on_discovery_error: warn）。
+# 生产环境若要求"MCP 起不来就不许上线"，改为 fail。
+
+global:
+  on_discovery_error: warn
+
+monitoring:
+  enable_health_check: true
+
+mcp_servers:
+  # ── 本地文件系统 MCP（仓库自带，真实 stdio server，开箱可用）───────────────
+  # 实现：plugins/filesystem-mcp/main.py（官方 mcp SDK / FastMCP）
+  # 工具：read_file / write_file / list_files / search_files / delete_file / get_file_info
+  # 契约：allowed_paths 为空时子进程 fail-closed 退出（不会退化为"可访问任意路径"）。
+  #       默认放开项目根目录；如只需读某个数据目录，改 XAGENT_MCP_ALLOWED_PATHS。
+  - name: "filesystem"
+    transport: "stdio"
+    command: "${XAGENT_PYTHON}"
+    args: ["main.py"]
+    cwd: "${XAGENT_PROJECT_ROOT}/plugins/filesystem-mcp"
+    env:
+      XAGENT_PLUGIN_CONFIG: '{"allowed_paths": ${XAGENT_MCP_ALLOWED_PATHS:-["."]}}'
+    enabled: true
+    auto_register: true
+    timeout: 30.0
+    max_retries: 1
+    risk_level: "medium"
+    tags: ["filesystem", "local"]
+    description: "本地文件系统读写/搜索工具（仓库自带 stdio MCP server）"
+
+  # ── 本地数据库 MCP（仓库自带，默认关闭）────────────────────────────────────
+  # 需数据库连接信息（见 plugins/database-mcp/manifest.json 的 configuration）。
+  # 未配置时子进程 fail-closed 退出，故默认关闭以避免启动噪音；
+  # 启用前请先用 XAGENT_MCP_DATABASE_CONFIG 注入连接配置 JSON。
+  - name: "database"
+    transport: "stdio"
+    command: "${XAGENT_PYTHON}"
+    args: ["main.py"]
+    cwd: "${XAGENT_PROJECT_ROOT}/plugins/database-mcp"
+    env:
+      XAGENT_PLUGIN_CONFIG: "${XAGENT_MCP_DATABASE_CONFIG}"
+    enabled: false
+    auto_register: true
+    timeout: 30.0
+    max_retries: 1
+    risk_level: "high"
+    tags: ["database", "sql"]
+    description: "数据库查询工具（需先注入连接配置后启用）"
+
+  # ── 远程 HTTP MCP 服务器（示例，默认关闭）──────────────────────────────────
+  # 启用前把 XAGENT_MCP_WEB_SEARCH_URL 指向真实 MCP 端点（/mcp 路径）。
+  - name: "web-search"
+    transport: "http"
+    url: "${XAGENT_MCP_WEB_SEARCH_URL:-http://localhost:8003/mcp}"
+    enabled: false
+    auto_register: true
+    timeout: 30.0
+    max_retries: 1
+    tags: ["search", "web"]
+    description: "Web 搜索 MCP 服务器（需自备端点后启用）"

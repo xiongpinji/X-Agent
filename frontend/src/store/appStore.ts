@@ -75,6 +75,7 @@ export const useAppStore = create<AppState>()(
           localStorage.removeItem('auth_token')
           localStorage.removeItem('refresh_token')
           localStorage.removeItem('user_role')
+          localStorage.removeItem('user_email')
         } catch {
           /* localStorage 不可用时忽略 */
         }

@@ -8,6 +8,8 @@
 
 import { useCallback, useRef, useState } from 'react';
 
+import { resolveApiBaseUrl } from '../lib/tauri';
+
 export interface TraceEvent {
   event_type?: string;
   type?: string;
@@ -119,7 +121,10 @@ export function useAgentStream(options?: {
         headers['X-API-Key'] = apiKey;
       }
 
-      const response = await fetch('/api/v1/agents/run/stream', {
+      // P0-3: 通过 resolveApiBaseUrl() 解析基址——浏览器模式返回相对路径 /api/v1
+      // （走 vite 代理/反代），Tauri 桌面壳内返回 http://localhost:8000/api/v1。
+      // 此前硬编码相对路径会在桌面壳内直接失败（壳内无同源后端）。
+      const response = await fetch(`${resolveApiBaseUrl()}/agents/run/stream`, {
         method: 'POST',
         headers,
         body: JSON.stringify({

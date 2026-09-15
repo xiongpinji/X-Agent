@@ -6,13 +6,18 @@ is unavailable (e.g. no daemon, no root, CI without DinD) so the rest of
 the pipeline keeps working in degraded mode.
 
 Design notes:
-- Lazy Docker client: we never import the docker SDK at module top so the
-  whole backend still imports on machines without it. `is_docker_available()`
-  probes once and caches the result.
+- CLI backend (P1-5): the container path shells out to the `docker` CLI and
+  does NOT import the `docker` Python SDK. The SDK is an optional dependency
+  that may be absent (offline installs), and when it was missing the old probe
+  silently returned False, degrading the sandbox to unisolated subprocess
+  execution. `is_docker_available()` now probes the CLI once and caches it.
+  (`DockerContainerPool` in container_cache.py still uses the SDK; see
+  `is_docker_sdk_available()`.)
 - Two backends behind one API: DockerSandbox.run() either spins a real
   container or shells out to a subprocess. Callers don't branch.
-- Security defaults: network disabled, read-only root fs (except the
-  mounted workspace), memory/CPU caps, auto-remove on exit.
+- Security defaults: read-only root fs (except the mounted workspace), non-root
+  user, no-new-privileges, all capabilities dropped, pids/memory/CPU caps and
+  network disabled — all built by `build_container_security_kwargs()`.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ import asyncio
 import logging
 import shlex
 import shutil
+import subprocess
 import tempfile
 import uuid
 from dataclasses import dataclass, field
@@ -46,6 +52,17 @@ class SandboxSpec:
     env: dict[str, str] = field(default_factory=dict)
     name_prefix: str = "xagent-sbx"
 
+    # ─── P1-5 沙箱硬化（安全默认，可逐项放宽）───────────────────────────────
+    # 硬化前实测缺口：仅设置了 mem_limit / nano_cpus / network_mode，缺少
+    # 只读根文件系统、非 root 用户、no-new-privileges、capability 降权与
+    # pids 限额 —— 容器内进程可改镜像文件系统、可提权、可 fork 炸弹。
+    read_only_root: bool = True          # 根 fs 只读；/workspace 单独挂载 rw
+    tmpfs_size_mb: int = 64              # /tmp 可写 tmpfs（只读根 fs 下仍需临时空间）
+    run_as_user: str | None = "65534:65534"  # nobody:nogroup，非 root
+    drop_all_capabilities: bool = True   # cap_drop=ALL
+    no_new_privileges: bool = True       # security_opt: no-new-privileges:true
+    pids_limit: int = 256                # 防 fork 炸弹
+
 
 @dataclass
 class SandboxResult:
@@ -61,28 +78,181 @@ class SandboxResult:
     error: str | None = None
 
 
+def docker_cli_bin() -> str:
+    """Path to the ``docker`` CLI binary (``"docker"`` if not resolvable)."""
+    return shutil.which("docker") or "docker"
+
+
 def is_docker_available() -> bool:
-    """Probe whether a usable Docker daemon is reachable. Cached after first call."""
+    """Probe whether a usable Docker daemon is reachable **via the docker CLI**.
+
+    P1-5: 探测从 Python SDK 改为 **CLI**。原因：``docker>=7.0.0`` 是 optional 依赖，
+    可能未安装（本机 pip 离线就是这种情况），而 CLI 由 Docker Desktop 随附。
+    旧实现里 SDK 缺失 → 恒返回 False → 沙箱静默退化到 subprocess，**容器硬化
+    参数全部形同虚设**。CLI 后端不依赖任何 Python 包，故可用性只应取决于
+    「CLI 可执行文件 + 守护进程可达」。Cached after first call.
+    """
     global _DOCKER_AVAILABLE
     if _DOCKER_AVAILABLE is not None:
         return _DOCKER_AVAILABLE
+
+    cli = shutil.which("docker")
+    if not cli:
+        _DOCKER_AVAILABLE = False
+        logger.warning(
+            "docker CLI not found on PATH; sandbox falls back to the subprocess "
+            "backend with NO container isolation."
+        )
+        return _DOCKER_AVAILABLE
+
+    try:
+        proc = subprocess.run(
+            [cli, "info", "--format", "{{.ServerVersion}}"],
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+    except Exception as e:  # timeout, permission, OSError
+        _DOCKER_AVAILABLE = False
+        logger.warning(
+            "docker CLI probe failed (%s); sandbox falls back to the subprocess "
+            "backend with NO container isolation.",
+            e,
+        )
+        return _DOCKER_AVAILABLE
+
+    if proc.returncode == 0:
+        _DOCKER_AVAILABLE = True
+        logger.info("Docker CLI + daemon available; sandbox will use container isolation.")
+    else:
+        _DOCKER_AVAILABLE = False
+        logger.warning(
+            "docker daemon unreachable (rc=%s: %s); sandbox falls back to the "
+            "subprocess backend with NO container isolation.",
+            proc.returncode,
+            (proc.stderr or b"").decode("utf-8", errors="replace").strip()[:200],
+        )
+    return _DOCKER_AVAILABLE
+
+
+def is_docker_sdk_available() -> bool:
+    """Probe the **Python SDK** (used by the container pool, not by the sandbox).
+
+    ``DockerSandbox`` 已改造为走 CLI，但 ``DockerContainerPool`` 仍基于 SDK
+    （其测试注入的是假 SDK client）。把两者探测分开，避免"CLI 在、SDK 不在"时
+    误判池可用。
+    """
     try:
         import docker  # type: ignore
 
-        client = docker.from_env()
-        client.ping()
-        _DOCKER_AVAILABLE = True
-        logger.info("Docker daemon available; sandbox will use container isolation.")
-    except Exception as e:  # ImportError, DockerException, connection errors
-        _DOCKER_AVAILABLE = False
-        logger.info("Docker unavailable (%s); sandbox falls back to subprocess.", type(e).__name__)
-    return _DOCKER_AVAILABLE
+        docker.from_env().ping()
+        return True
+    except Exception:
+        return False
+
 
 
 def reset_docker_probe() -> None:
     """Reset the cached probe (test hook)."""
     global _DOCKER_AVAILABLE
     _DOCKER_AVAILABLE = None
+
+
+def build_container_security_kwargs(
+    spec: "SandboxSpec", workspace: str | Path | None = None
+) -> dict[str, Any]:
+    """构造容器创建的隔离参数（P1-5，**单一事实源**）。
+
+    直连路径（``DockerSandbox._docker_start``）与池化路径
+    （``ContainerPool._create_container_sync``）共用本函数，避免两处硬化参数漂移
+    ——硬化前池化路径的 ``container_kwargs`` 默认为空，等于**完全没有隔离**。
+
+    设计取舍：根文件系统只读 + ``/workspace`` 单独挂载 rw。这样既能让沙箱正常
+    读写工作目录，又能阻止进程篡改镜像自带的可执行文件/配置（持久化后门）。
+    需要临时可写空间时由 ``/tmp`` 的 tmpfs 提供。
+    """
+    kwargs: dict[str, Any] = {
+        "network_mode": "bridge" if spec.enable_network else "none",
+        "mem_limit": f"{spec.memory_limit_mb}m",
+        "nano_cpus": int(spec.cpu_limit * 1_000_000_000),
+        "working_dir": "/workspace",
+    }
+
+    if spec.pids_limit:
+        kwargs["pids_limit"] = spec.pids_limit
+
+    if spec.read_only_root:
+        kwargs["read_only"] = True
+        if spec.tmpfs_size_mb:
+            kwargs["tmpfs"] = {"/tmp": f"size={spec.tmpfs_size_mb}m"}
+
+    if spec.run_as_user:
+        kwargs["user"] = spec.run_as_user
+
+    if spec.no_new_privileges:
+        kwargs["security_opt"] = ["no-new-privileges:true"]
+
+    if spec.drop_all_capabilities:
+        kwargs["cap_drop"] = ["ALL"]
+
+    if workspace:
+        kwargs["volumes"] = {str(workspace): {"bind": "/workspace", "mode": "rw"}}
+
+    return kwargs
+
+
+def container_security_kwargs_to_cli(kwargs: dict[str, Any]) -> list[str]:
+    """把 ``build_container_security_kwargs()`` 的输出翻译成 ``docker run`` 参数。
+
+    P1-5：这是 **CLI 后端的单一事实源**。生产路径（``DockerSandbox._docker_start``）
+    与测试消费的是同一份翻译逻辑，杜绝"生产一套、测试再抄一套"的漂移 —— 一旦
+    有人弱化硬化参数，两侧会同时反映出来。
+    """
+    args: list[str] = []
+
+    if kwargs.get("read_only"):
+        args.append("--read-only")
+
+    for target, spec in (kwargs.get("tmpfs") or {}).items():
+        args += ["--tmpfs", f"{target}:{spec}"]
+
+    if kwargs.get("user"):
+        args += ["--user", str(kwargs["user"])]
+
+    for opt in kwargs.get("security_opt") or []:
+        args += ["--security-opt", str(opt)]
+
+    for cap in kwargs.get("cap_drop") or []:
+        args += ["--cap-drop", str(cap)]
+
+    if kwargs.get("pids_limit"):
+        args += ["--pids-limit", str(kwargs["pids_limit"])]
+
+    args += ["--network", str(kwargs.get("network_mode") or "none")]
+
+    if kwargs.get("mem_limit"):
+        args += ["--memory", str(kwargs["mem_limit"])]
+
+    nano_cpus = kwargs.get("nano_cpus")
+    if nano_cpus:
+        # docker CLI 用小数 CPU 数（--cpus 1.5），SDK 用 nano_cpus 整数。
+        args += ["--cpus", f"{int(nano_cpus) / 1_000_000_000:g}"]
+
+    for host, mount in (kwargs.get("volumes") or {}).items():
+        if isinstance(mount, dict):
+            bind = mount.get("bind")
+            mode = mount.get("mode") or "rw"
+        else:  # 宽松兼容："host:bind" 字符串形式
+            bind, mode = str(mount), "rw"
+        if bind:
+            # Docker Desktop 接受正斜杠形式的 Windows 路径（D:/a/b）。
+            host_posix = str(host).replace("\\", "/")
+            args += ["-v", f"{host_posix}:{bind}:{mode}"]
+
+    if kwargs.get("working_dir"):
+        args += ["-w", str(kwargs["working_dir"])]
+
+    return args
 
 
 def _windows_bash() -> str | None:
@@ -289,51 +459,102 @@ class DockerSandbox:
             env["http_proxy"] = env["https_proxy"] = "http://127.0.0.1:1"
         return env
 
-    # ----- docker backend -----
+    # ----- docker backend (CLI-first; no Python SDK required) -----
+    #
+    # 容器管理遵循"谁创建谁管理"：
+    #   · 专用容器 —— 由本类通过 `docker` CLI 创建/exec/移除，**不需要 Python SDK**；
+    #   · 池化容器 —— 由基于 SDK 的 DockerContainerPool 创建，exec/release 沿用其
+    #     SDK client（池本身就要求 SDK 可用）。
+    # 这样 CLI 后端让沙箱在"无 SDK"环境下也能真正隔离，同时不破坏池化语义。
 
     async def _docker_start(self) -> None:
         """Start a long-lived container that sleeps; we exec commands into it.
 
-        With a pool attached, acquire a warm pooled container instead of
-        creating one (falls back to create when the pool is exhausted).
+        P1-5：专用容器改用 ``docker run`` **CLI** 创建，不再依赖 ``docker``
+        Python SDK。旧实现走 SDK，而 SDK 是 optional 依赖且可能未安装（本机 pip
+        离线），导致 ``is_docker_available()`` 恒 False、沙箱静默退化为 subprocess，
+        **硬化参数一个都没生效**。CLI 由 Docker Desktop 随附，无需任何 Python 包。
         """
         if self._pool is not None:
-            pooled_id = await self._pool.acquire()
+            pooled_id = None
+            try:
+                pooled_id = await self._pool.acquire()
+            except Exception as e:
+                # 池基于 SDK；SDK 缺失时不应拖垮沙箱，落到 CLI 创建即可。
+                logger.warning(
+                    "Container pool acquire failed (%s); creating a dedicated container.",
+                    e,
+                )
             if pooled_id:
                 self._container_id = pooled_id
                 self._pooled = True
-                self._client = self._pool._get_client()
+                # 池化容器归 pool 管理，exec 用它自己的 SDK client。
+                self._client = getattr(self._pool, "_get_client", lambda: None)()
                 logger.info("Reusing pooled sandbox container %s", pooled_id[:12])
                 return
-            logger.info("Container pool exhausted; creating dedicated container")
+            logger.info("Container pool exhausted or unavailable; creating dedicated container")
 
-        def _start_sync() -> str:
-            import docker  # type: ignore
-
-            self._client = docker.from_env()
-            container = self._client.containers.run(
-                image=self.spec.image,
-                command="sleep infinity",
-                detach=True,
-                remove=False,
-                network_mode="bridge" if self.spec.enable_network else "none",
-                mem_limit=f"{self.spec.memory_limit_mb}m",
-                nano_cpus=int(self.spec.cpu_limit * 1_000_000_000),
-                volumes=(
-                    {str(self._workspace): {"bind": "/workspace", "mode": "rw"}}
-                    if self._workspace else None
-                ),
-                working_dir="/workspace",
-                environment=self.spec.env,
-                name=f"{self.spec.name_prefix}-{uuid.uuid4().hex[:8]}",
-            )
-            return container.id
-
-        self._container_id = await asyncio.to_thread(_start_sync)
+        self._container_id = await self._create_dedicated_container()
         logger.info("Started sandbox container %s", self._container_id[:12])
 
+    async def _create_dedicated_container(self) -> str:
+        """Create a dedicated sandbox container via the ``docker`` CLI.
+
+        隔离参数由单一事实源 ``build_container_security_kwargs`` 构造，再经
+        ``container_security_kwargs_to_cli`` 翻译 —— 两处都不复制参数。
+        """
+        name = f"{self.spec.name_prefix}-{uuid.uuid4().hex[:8]}"
+        cmd: list[str] = [docker_cli_bin(), "run", "-d", "--name", name]
+        cmd += container_security_kwargs_to_cli(
+            build_container_security_kwargs(self.spec, self._workspace)
+        )
+        for key, value in self.spec.env.items():
+            cmd += ["-e", f"{key}={value}"]
+        cmd += [self.spec.image, "sleep", "infinity"]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout_b, stderr_b = await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(
+                "docker run failed (rc={}): {}".format(
+                    proc.returncode,
+                    (stderr_b or b"").decode("utf-8", errors="replace").strip()[:500],
+                )
+            )
+        container_id = (stdout_b or b"").decode("utf-8", errors="replace").strip()
+        if not container_id:
+            raise RuntimeError("docker run produced no container id")
+        return container_id
+
+    async def _remove_container(self, container_id: str) -> None:
+        """Force-remove a container via the ``docker`` CLI."""
+        proc = await asyncio.create_subprocess_exec(
+            docker_cli_bin(), "rm", "-f", container_id,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr_b = await proc.communicate()
+        if proc.returncode != 0:
+            logger.warning(
+                "Failed to remove container %s: %s",
+                container_id,
+                (stderr_b or b"").decode("utf-8", errors="replace").strip()[:300],
+            )
+
     async def _docker_run(self, command: str, timeout: float) -> SandboxResult:
-        """Exec a command in the running container."""
+        """Exec a command in the running container (SDK for pooled, CLI otherwise)."""
+        if not self._container_id:
+            raise RuntimeError("sandbox container is not running")
+        if self._pooled and self._client is not None:
+            return await self._docker_run_sdk(command, timeout)
+        return await self._docker_run_cli(command, timeout)
+
+    async def _docker_run_sdk(self, command: str, timeout: float) -> SandboxResult:
+        """Exec into a pooled container through the pool's SDK client."""
         def _exec_sync() -> tuple[int, bytes, bytes]:
             container = self._client.containers.get(self._container_id)
             exec_result = container.exec_run(
@@ -356,6 +577,48 @@ class DockerSandbox:
             container_id=self._container_id,
         )
 
+    async def _docker_run_cli(self, command: str, timeout: float) -> SandboxResult:
+        """Exec into a dedicated container via ``docker exec`` (no SDK)."""
+        cmd = [
+            docker_cli_bin(),
+            "exec",
+            "-w",
+            "/workspace",
+            self._container_id,
+            "sh",
+            "-c",
+            command,
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        # 与 _subprocess_run 保持一致：不取消 communicate 任务，超时后先 kill 再收割。
+        # （取消 communicate 在 Linux asyncio 子进程管道上有竞态，CI xdist 曾致 worker 崩溃。）
+        communicate_task = asyncio.create_task(proc.communicate())
+        done, _ = await asyncio.wait({communicate_task}, timeout=timeout)
+        if not done:
+            # 杀掉 docker exec 客户端；残余的容器内进程受容器 pids_limit / mem_limit
+            # 约束，并会在 stop() 移除容器时一并终止。
+            await _kill_process_tree(proc)
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(communicate_task, timeout=5.0)
+            raise TimeoutError(f"Command timed out after {timeout}s")
+
+        stdout_b, stderr_b = communicate_task.result()
+        exit_code = proc.returncode or 0
+        return SandboxResult(
+            success=exit_code == 0,
+            exit_code=exit_code,
+            stdout=(stdout_b or b"").decode("utf-8", errors="replace"),
+            stderr=(stderr_b or b"").decode("utf-8", errors="replace"),
+            backend="docker",
+            container_id=self._container_id,
+        )
+
     async def _docker_stop(self) -> None:
         """Stop and remove the container — or release it back to the pool."""
         if self._pooled and self._pool is not None:
@@ -366,12 +629,9 @@ class DockerSandbox:
                 await self._pool.release(cid)
             return
 
-        def _stop_sync() -> None:
-            try:
-                container = self._client.containers.get(self._container_id)
-                container.remove(force=True)
-            except Exception as e:
-                logger.warning("Failed to remove container %s: %s", self._container_id, e)
-
-        await asyncio.to_thread(_stop_sync)
+        cid = self._container_id
         self._container_id = None
+        if cid:
+            await self._remove_container(cid)
+
+

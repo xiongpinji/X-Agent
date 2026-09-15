@@ -6,8 +6,19 @@ import clsx from 'clsx'
 interface FeedbackDetailProps {
   feedback: Feedback
   onClose: () => void
-  onUpdate: (id: string, data: Partial<Feedback>) => void
-  onResolve: (id: string, response: string) => void
+  /**
+   * Resolve to `true` when the change was persisted, `false` when it was not.
+   * The page owns error reporting, so a failed update resolves `false` rather
+   * than throwing. The editor must stay open in that case: closing it would
+   * make a discarded change look saved.
+   */
+  onUpdate: (id: string, data: Partial<Feedback>) => Promise<boolean>
+  /**
+   * Same contract as `onUpdate`: `true` = the note was stored, `false` = it was
+   * not. On `false` the typed note must survive so the user can retry instead
+   * of retyping it.
+   */
+  onResolve: (id: string, response: string) => Promise<boolean>
   theme: 'light' | 'dark'
 }
 
@@ -25,10 +36,14 @@ export const FeedbackDetail: React.FC<FeedbackDetailProps> = ({
   const [isSubmittingResponse, setIsSubmittingResponse] = useState(false)
 
   const handleSaveChanges = async () => {
-    await onUpdate(feedback.id, {
+    const saved = await onUpdate(feedback.id, {
       status: editedStatus,
       priority: editedPriority,
     })
+    // The page reports the failure in its own banner; leaving the editor open
+    // keeps the user's selection on screen instead of falling back to the old
+    // badges as though the change had gone through.
+    if (!saved) return
     setIsEditing(false)
   }
 
@@ -37,8 +52,10 @@ export const FeedbackDetail: React.FC<FeedbackDetailProps> = ({
 
     setIsSubmittingResponse(true)
     try {
-      await onResolve(feedback.id, responseText)
-      setResponseText('')
+      const saved = await onResolve(feedback.id, responseText)
+      // Clear the box only once the note is actually stored. Clearing on failure
+      // would destroy the resolution note the user just typed.
+      if (saved) setResponseText('')
     } finally {
       setIsSubmittingResponse(false)
     }

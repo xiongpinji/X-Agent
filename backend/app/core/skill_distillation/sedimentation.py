@@ -45,6 +45,23 @@ def _skill_main_py_exists(safe_name: str, base_dir: str | Path | None) -> bool:
     return (skill_dir / "main.py").is_file()
 
 
+def _resolve_auto_promote(auto_promote: bool | None) -> bool:
+    """解析自动 promote 开关：显式入参优先，否则读 settings（默认 True）。
+
+    P1-2: 此前默认 False，沉淀出的技能草稿只存在于 curator 内存里，进程重启即丢；
+    磁盘上什么都没有，下一轮自然也无从加载——"技能自学习闭环"从未真正闭合。
+    现默认开启（可用 ``XAGENT_SKILL_AUTO_PROMOTE=false`` 或显式入参关闭）。
+    """
+    if auto_promote is not None:
+        return bool(auto_promote)
+    try:
+        from backend.app.settings import get_settings
+
+        return bool(getattr(get_settings(), "skill_auto_promote", True))
+    except Exception:  # pragma: no cover - settings 不可用时的保守兜底
+        return True
+
+
 @dataclass
 class SedimentationEvent:
     """一次沉淀事件记录."""
@@ -73,7 +90,7 @@ class SkillSedimentationEngine:
         min_sequence_length: int = 2,
         max_skills: int = 200,
         similarity_threshold: float = 0.75,
-        auto_promote: bool = False,
+        auto_promote: bool | None = None,
         custom_skills_dir: str | Path | None = None,
     ):
         self._harvester = PatternHarvester(
@@ -85,7 +102,7 @@ class SkillSedimentationEngine:
             max_skills=max_skills,
             similarity_threshold=similarity_threshold,
         )
-        self._auto_promote = auto_promote
+        self._auto_promote = _resolve_auto_promote(auto_promote)
         self._events: list[SedimentationEvent] = []
         self._trajectory_buffer: list[list[dict[str, Any]]] = []
         # P2-12: promote 落盘目录与热加载注册目标

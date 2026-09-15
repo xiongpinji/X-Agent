@@ -424,16 +424,28 @@ async def get_sandbox_status(principal: PrincipalDependency = None) -> dict[str,
     """Sandbox environment status: Docker availability, pool, execution history."""
     enforce_scope(principal, "agent:run")
     from backend.app.core.sandbox.container_cache import pool_size_from_env, pre_pull_enabled
-    from backend.app.core.sandbox.docker_sandbox import is_docker_available
+    from backend.app.core.sandbox.docker_sandbox import (
+        is_docker_available,
+        is_docker_sdk_available,
+    )
 
-    docker_ok = is_docker_available()
+    # Two distinct probes (P1-5): the sandbox backend runs on the docker **CLI**,
+    # while the container pool is built on the **Python SDK**. Coupling the pool
+    # check to the CLI probe made the endpoint report "pool not initialized"
+    # whenever the CLI existed but the SDK did not.
+    docker_ok = is_docker_available()      # CLI + daemon → drives the sandbox backend
+    sdk_ok = is_docker_sdk_available()     # Python SDK → required by the container pool
     sandbox_mode = os.environ.get("XAGENT_SANDBOX_MODE", "auto")
     sandbox_image = os.environ.get("XAGENT_SANDBOX_IMAGE", "python:3.11-slim")
     pool_size = pool_size_from_env()
 
-    # Container pool stats if available
-    pool_stats: dict[str, object] = {"configured_size": pool_size, "pre_pull_enabled": pre_pull_enabled()}
-    if docker_ok and pool_size > 0:
+    # Container pool stats — gate on the SDK probe, which is what the pool actually needs.
+    pool_stats: dict[str, object] = {
+        "configured_size": pool_size,
+        "pre_pull_enabled": pre_pull_enabled(),
+        "sdk_available": sdk_ok,
+    }
+    if sdk_ok and pool_size > 0:
         try:
             from backend.app.core.sandbox.container_cache import get_container_pool
             pool = get_container_pool(sandbox_image)
@@ -441,25 +453,33 @@ async def get_sandbox_status(principal: PrincipalDependency = None) -> dict[str,
             pool_stats["available_containers"] = pool.available_count if hasattr(pool, "available_count") else 0
         except Exception:
             pool_stats["error"] = "pool not initialized"
+    elif pool_size > 0:
+        pool_stats["error"] = "docker python sdk unavailable; pool disabled"
 
     # Execution history from sandbox manager
     exec_history: list[dict[str, object]] = []
     try:
         from backend.app.core.sandbox.manager import get_sandbox_manager
-        mgr = get_sandbox_manager()
+        # get_sandbox_manager() is async: without await, `mgr` was a coroutine and
+        # `hasattr(mgr, "_execution_history")` was always False, so this block
+        # silently reported an empty history (and leaked a never-awaited coroutine).
+        mgr = await get_sandbox_manager()
         exec_history = mgr._execution_history[-20:] if hasattr(mgr, "_execution_history") else []
     except Exception:
         pass
 
     return {
         "docker_available": docker_ok,
+        "pool_sdk_available": sdk_ok,
         "sandbox_mode": sandbox_mode,
         "sandbox_image": sandbox_image,
         "effective_backend": "docker" if docker_ok else "subprocess",
         "pool": pool_stats,
         "recent_executions": exec_history,
         "security": {
-            "network_isolated": not docker_ok or True,  # Docker disables network by default
+            # Only docker mode gives real isolation (`--network none`); the
+            # subprocess fallback merely redirects proxies to a dead address.
+            "network_isolated": docker_ok,
             "filesystem_isolated": docker_ok,
             "code_validation": True,
         },

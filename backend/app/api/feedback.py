@@ -12,11 +12,16 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 from backend.app.core.feedback_analyzer import feedback_analyzer
 from backend.app.core.feedback_store_file import FeedbackStoreFile
+from backend.app.core.notification_dispatch import (
+    FeedbackEvent,
+    dispatch_created_feedback,
+    dispatch_feedback_event,
+)
 from backend.app.core.security import Principal
 from backend.app.dependencies import enforce_scope, get_current_principal
 from backend.app.models.feedback import (
@@ -126,6 +131,9 @@ class FeedbackResponse(BaseModel):
     created_at: str
     updated_at: str
     resolved_at: str | None
+    # 「解决说明」。前端 Feedback.response 一直有这个字段，但后端从未承接，
+    # 于是 resolveFeedback 传的值被静默丢弃。
+    resolution_note: str | None = None
 
     class Config:
         from_attributes = True
@@ -174,6 +182,16 @@ class FeedbackUpdateRequest(BaseModel):
     metadata: dict | None = Field(None, description="额外元数据")
 
 
+class ResolveFeedbackRequest(BaseModel):
+    """解决反馈请求（``POST /{id}/resolve`` 的可选请求体）。
+
+    说明文本可选：不发请求体、发空体、或发 ``{"resolution_note": null}`` 都表示
+    「只解决、不附说明」。这三种情况都**不会**覆盖记录上已有的说明 ——
+    调用方没说删除，就不该被删除。
+    """
+    resolution_note: str | None = Field(None, max_length=5000, description="解决说明")
+
+
 class FeedbackTrendPoint(BaseModel):
     """趋势数据点(按日聚合)"""
     date: str
@@ -218,6 +236,26 @@ def _to_response(feedback: FeedbackModel) -> FeedbackResponse:
         created_at=feedback.created_at.isoformat(),
         updated_at=feedback.updated_at.isoformat(),
         resolved_at=feedback.resolved_at.isoformat() if feedback.resolved_at else None,
+        resolution_note=feedback.resolution_note,
+    )
+
+
+def _to_dispatch_event(feedback: FeedbackModel) -> FeedbackEvent:
+    """把反馈记录压成分发用的事件快照。
+
+    只有分发需要的那几个字段 —— 事件对象刻意不含 user_id / tenant_id, 避免
+    把租户与用户标识顺手带进通知正文和投递记录。
+    """
+    return FeedbackEvent(
+        feedback_id=feedback.id,
+        title=feedback.title,
+        description=feedback.description or "",
+        feedback_type=feedback.feedback_type,
+        severity=feedback.severity or "",
+        status=feedback.status or "",
+        sentiment=feedback.sentiment,
+        category=feedback.category,
+        tags=list(feedback.tags or []),
     )
 
 
@@ -245,6 +283,7 @@ def _enforce_owner_or_admin(feedback: FeedbackModel, principal: Principal) -> No
 @router.post("/", response_model=FeedbackResponse, status_code=status.HTTP_201_CREATED)
 async def create_feedback(
     request: FeedbackCreateRequest,
+    background_tasks: BackgroundTasks,
     principal: Annotated[Principal, Depends(get_current_principal)],
 ) -> FeedbackResponse:
     """
@@ -329,23 +368,25 @@ async def create_feedback(
         # 重新获取反馈以获取最新数据
         feedback = await store.get_feedback_by_id(feedback_id)
 
-        return FeedbackResponse(
-            id=feedback.id,
-            user_id=feedback.user_id,
-            feedback_type=feedback.feedback_type,
-            title=feedback.title,
-            description=feedback.description,
-            severity=feedback.severity,
-            status=feedback.status,
-            sentiment=feedback.sentiment,
-            sentiment_score=feedback.sentiment_score,
-            priority_score=feedback.priority_score,
-            category=feedback.category,
-            tags=feedback.tags,
-            created_at=feedback.created_at.isoformat(),
-            updated_at=feedback.updated_at.isoformat(),
-            resolved_at=feedback.resolved_at.isoformat() if feedback.resolved_at else None,
-        )
+        # 事件分发接线点。放在分析**之后**: sentiment 由分析器算出,
+        # sentiment_negative 这个 trigger 只有到这里才判得准。
+        #
+        # 用 BackgroundTasks 而非同步 await —— Webhook provider 超时 10s, 同步
+        # 会把创建反馈的响应一起拖住。dispatch_* 自带失败隔离, 通知发不出去
+        # 绝不会把「反馈已创建」这个事实弄失败。
+        if feedback is not None:
+            background_tasks.add_task(
+                dispatch_created_feedback,
+                tenant_id=tenant_id,
+                event=_to_dispatch_event(feedback),
+            )
+
+        # 复用手写构造点 _to_response。此前 create / get / update / replace 四个
+        # 端点各自手抄了一份与它逐字段相同的构造，list_feedback 的列表推导里还藏了
+        # 第五份 —— 给 FeedbackResponse 加字段必须记得改满 5 处。本轮加
+        # resolution_note 就是实例：漏掉 get_feedback，刚存进去的解决说明会在
+        # 重新拉取时凭空消失。
+        return _to_response(feedback)
 
     except HTTPException:
         raise
@@ -600,23 +641,12 @@ async def get_feedback(
                 detail="Access denied"
             )
 
-        return FeedbackResponse(
-            id=feedback.id,
-            user_id=feedback.user_id,
-            feedback_type=feedback.feedback_type,
-            title=feedback.title,
-            description=feedback.description,
-            severity=feedback.severity,
-            status=feedback.status,
-            sentiment=feedback.sentiment,
-            sentiment_score=feedback.sentiment_score,
-            priority_score=feedback.priority_score,
-            category=feedback.category,
-            tags=feedback.tags,
-            created_at=feedback.created_at.isoformat(),
-            updated_at=feedback.updated_at.isoformat(),
-            resolved_at=feedback.resolved_at.isoformat() if feedback.resolved_at else None,
-        )
+        # 复用手写构造点 _to_response。此前 create / get / update / replace 四个
+        # 端点各自手抄了一份与它逐字段相同的构造，list_feedback 的列表推导里还藏了
+        # 第五份 —— 给 FeedbackResponse 加字段必须记得改满 5 处。本轮加
+        # resolution_note 就是实例：漏掉 get_feedback，刚存进去的解决说明会在
+        # 重新拉取时凭空消失。
+        return _to_response(feedback)
 
     except HTTPException:
         raise
@@ -659,26 +689,7 @@ async def list_feedback(
             severity=severity,
         )
 
-        items = [
-            FeedbackResponse(
-                id=f.id,
-                user_id=f.user_id,
-                feedback_type=f.feedback_type,
-                title=f.title,
-                description=f.description,
-                severity=f.severity,
-                status=f.status,
-                sentiment=f.sentiment,
-                sentiment_score=f.sentiment_score,
-                priority_score=f.priority_score,
-                category=f.category,
-                tags=f.tags,
-                created_at=f.created_at.isoformat(),
-                updated_at=f.updated_at.isoformat(),
-                resolved_at=f.resolved_at.isoformat() if f.resolved_at else None,
-            )
-            for f in feedbacks
-        ]
+        items = [_to_response(f) for f in feedbacks]
 
         return FeedbackListResponse(
             total=total,
@@ -774,23 +785,12 @@ async def update_feedback(
 
         feedback = await store.update_feedback(feedback_id, **update_data)
 
-        return FeedbackResponse(
-            id=feedback.id,
-            user_id=feedback.user_id,
-            feedback_type=feedback.feedback_type,
-            title=feedback.title,
-            description=feedback.description,
-            severity=feedback.severity,
-            status=feedback.status,
-            sentiment=feedback.sentiment,
-            sentiment_score=feedback.sentiment_score,
-            priority_score=feedback.priority_score,
-            category=feedback.category,
-            tags=feedback.tags,
-            created_at=feedback.created_at.isoformat(),
-            updated_at=feedback.updated_at.isoformat(),
-            resolved_at=feedback.resolved_at.isoformat() if feedback.resolved_at else None,
-        )
+        # 复用手写构造点 _to_response。此前 create / get / update / replace 四个
+        # 端点各自手抄了一份与它逐字段相同的构造，list_feedback 的列表推导里还藏了
+        # 第五份 —— 给 FeedbackResponse 加字段必须记得改满 5 处。本轮加
+        # resolution_note 就是实例：漏掉 get_feedback，刚存进去的解决说明会在
+        # 重新拉取时凭空消失。
+        return _to_response(feedback)
 
     except HTTPException:
         raise
@@ -900,9 +900,14 @@ async def delete_feedback(
 @router.post("/{feedback_id}/resolve", response_model=FeedbackResponse)
 async def resolve_feedback(
     feedback_id: str,
-    principal: Annotated[Principal, Depends(get_current_principal)],
+    background_tasks: BackgroundTasks,
+    payload: ResolveFeedbackRequest | None = None,
+    principal: Annotated[Principal, Depends(get_current_principal)] = None,
 ) -> FeedbackResponse:
     """将反馈标记为已解决(status=resolved 并记录 resolved_at)。
+
+    请求体可选，承载「解决说明」resolution_note。不发体 = 只解决不附说明，
+    此时记录上已有的说明保持不变。
 
     仅反馈所有者或管理员可操作, 强制 tenant 收敛。
     """
@@ -911,13 +916,28 @@ async def resolve_feedback(
         feedback = await _get_tenant_feedback_or_404(feedback_id, principal)
         _enforce_owner_or_admin(feedback, principal)
 
+        updates = {"status": "resolved", "resolved_at": datetime.now(UTC)}
+        # 只有显式带了说明才写入。否则一次不带说明的「重新解决」会抹掉上一次填的
+        # 说明 —— 调用方从未要求删除它。
+        # 注: store.update_feedback 走 hasattr 过滤, 未知键被静默忽略, 所以
+        # resolution_note 必须真的存在于 FeedbackModel 上(本轮已加)。
+        if payload is not None and payload.resolution_note is not None:
+            updates["resolution_note"] = payload.resolution_note
+
         store = get_feedback_store()
-        updated = await store.update_feedback(
-            feedback_id,
-            status="resolved",
-            resolved_at=datetime.now(UTC),
-        )
+        updated = await store.update_feedback(feedback_id, **updates)
         logger.info(f"反馈已解决: {feedback_id} (by {principal.user_id})")
+
+        # 事件分发。刻意**只**在这个专用端点上触发 feedback_resolved, 不认
+        # PATCH {status:"resolved"} —— 两条路径会让同一次「解决」投递两次通知。
+        if updated is not None:
+            background_tasks.add_task(
+                dispatch_feedback_event,
+                tenant_id=principal.tenant_id,
+                trigger="feedback_resolved",
+                event=_to_dispatch_event(updated),
+            )
+
         return _to_response(updated)
 
     except HTTPException:

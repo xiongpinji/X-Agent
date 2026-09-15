@@ -79,6 +79,9 @@ class FeedbackModel(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False, index=True)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+    # 「解决说明」：resolve 时可选的说明文本。前端 resolveFeedback 一直在传这个值，
+    # 但此前没有任何字段承接，被 FastAPI 当作未知查询参数静默丢弃。
+    resolution_note = Column(Text, nullable=True)
 
     __table_args__ = (
         Index("idx_feedback_user_tenant", "user_id", "tenant_id"),
@@ -161,8 +164,13 @@ class FeedbackStorePostgres:
         severity: str | None = None,
         skip: int = 0,
         limit: int = 100,
+        created_after: datetime | None = None,
     ) -> list[FeedbackModel]:
-        """列出反馈"""
+        """列出反馈
+
+        ``created_after`` 用于「过去 N 小时」这类窗口（见 ``core/daily_summary.py``）。
+        与 ``FeedbackStoreFile.list_feedback`` 保持同一签名（该文件头声明接口完全一致）。
+        """
         async with SessionManager.get_session() as session:
             stmt = select(FeedbackModel).where(FeedbackModel.tenant_id == tenant_id)
 
@@ -174,6 +182,8 @@ class FeedbackStorePostgres:
                 stmt = stmt.where(FeedbackModel.status == status)
             if severity:
                 stmt = stmt.where(FeedbackModel.severity == severity)
+            if created_after is not None:
+                stmt = stmt.where(FeedbackModel.created_at >= created_after)
 
             stmt = stmt.order_by(FeedbackModel.created_at.desc()).offset(skip).limit(limit)
             result = await session.execute(stmt)
@@ -252,8 +262,9 @@ class FeedbackStorePostgres:
         tenant_id: str,
         status: str | None = None,
         severity: str | None = None,
+        created_after: datetime | None = None,
     ) -> int:
-        """统计反馈数量"""
+        """统计反馈数量（``created_after`` 给定时只数窗口内的，见 list_feedback）"""
         async with SessionManager.get_session() as session:
             stmt = select(FeedbackModel).where(FeedbackModel.tenant_id == tenant_id)
 
@@ -261,6 +272,8 @@ class FeedbackStorePostgres:
                 stmt = stmt.where(FeedbackModel.status == status)
             if severity:
                 stmt = stmt.where(FeedbackModel.severity == severity)
+            if created_after is not None:
+                stmt = stmt.where(FeedbackModel.created_at >= created_after)
 
             result = await session.execute(stmt)
             return len(result.scalars().all())

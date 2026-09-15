@@ -80,6 +80,8 @@ export const LoginPage: React.FC = () => {
       // 角色供侧栏导航过滤（Layout.currentRoleFilter；后端 scope 鉴权仍是权威）
       const role = (response.user as { role?: string } | undefined)?.role
       localStorage.setItem('user_role', role || 'user')
+      // 邮箱供 chat.html 账户区展示（/auth/me 只返回 user_id 不含邮箱）
+      localStorage.setItem('user_email', email.trim())
 
       // Set user in store
       setUser({
@@ -127,7 +129,7 @@ export const LoginPage: React.FC = () => {
         {error && (
           <div
             role="alert"
-            className="mb-4 flex items-center gap-2 border px-3 py-2 text-sm text-[#dc2626]"
+            className="mb-4 flex items-center gap-2 border px-3 py-2 text-sm text-[var(--danger)]"
             style={{ borderColor: 'rgba(220,38,38,.35)' }}
           >
             <AlertTriangle size={15} />

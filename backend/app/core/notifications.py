@@ -114,19 +114,33 @@ class SMTPNotificationProvider(NotificationProvider):
 class WebhookNotificationProvider(NotificationProvider):
     """Sends notifications via HTTP webhook."""
 
-    def __init__(self, url: str, headers: dict[str, str] | None = None):
+    def __init__(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        payload_format: str = "generic",
+    ):
         self._url = url
         self._headers = headers or {}
+        # "generic" 是历史行为, 默认值即零回归; "slack" 用于 Incoming Webhook。
+        self._payload_format = payload_format
+
+    def _build_payload(self, message: NotificationMessage) -> dict[str, Any]:
+        if self._payload_format == "slack":
+            # Slack Incoming Webhook 只认 {"text": ...}, 发通用结构会被
+            # 拒为 invalid_payload。
+            return {"text": f"{message.subject}\n{message.body}".strip()}
+        return {
+            "to": message.to,
+            "subject": message.subject,
+            "body": message.body,
+            "channel": message.channel,
+            "metadata": message.metadata,
+        }
 
     async def send(self, message: NotificationMessage) -> DeliveryResult:
         try:
-            payload = {
-                "to": message.to,
-                "subject": message.subject,
-                "body": message.body,
-                "channel": message.channel,
-                "metadata": message.metadata,
-            }
+            payload = self._build_payload(message)
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(self._url, json=payload, headers=self._headers)
                 resp.raise_for_status()

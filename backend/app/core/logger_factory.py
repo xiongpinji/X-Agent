@@ -276,3 +276,32 @@ def configure_logging(
         log_dir: Optional log directory
     """
     LoggerFactory.configure(level=level, format_type=format_type, log_dir=log_dir)
+
+
+# Marks the handler this module installs on the root logger, so repeated startup
+# calls replace it instead of stacking duplicates.
+_XAGENT_ROOT_HANDLER = "_xagent_root_handler"
+
+
+def configure_root_logging(level: int = logging.INFO, format_type: str = "plain") -> None:
+    """Install one process-wide root handler honouring ``format_type``.
+
+    Wiring gap this closes: the whole application logs via
+    ``logging.getLogger(__name__)``, yet nothing ever attached a root handler, so
+    records only reached :data:`logging.lastResort` (WARNING+ → stderr) and a
+    ``XAGENT_LOG_FORMAT=json`` switch had no effect. Idempotent: calling it again
+    removes the handler it installed before re-adding, so the app can wire it on
+    every startup without leaking handlers.
+    """
+    root = logging.getLogger()
+    root.setLevel(level)
+    for existing in list(root.handlers):
+        if getattr(existing, _XAGENT_ROOT_HANDLER, False):
+            root.removeHandler(existing)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(level)
+    handler.setFormatter(
+        StructuredFormatter() if str(format_type).lower() == "json" else PlainFormatter()
+    )
+    setattr(handler, _XAGENT_ROOT_HANDLER, True)
+    root.addHandler(handler)

@@ -419,6 +419,13 @@ class ApiClient {
     return response.data
   }
 
+  // 通用 GET（走认证拦截器）：AnalyticsDashboard 等聚合页用。
+  // 此前裸 fetch('/api/v1/...') 不带 Authorization，analytics 全 401。
+  async getRaw<T = unknown>(path: string): Promise<T> {
+    const response = await this.client.get<T>(path)
+    return response.data
+  }
+
   // Agents API — GET /api/v1/agents returns { data: [...] }
   async listAgents(): Promise<Agent[]> {
     const response = await this.client.get('/agents')

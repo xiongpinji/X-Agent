@@ -612,4 +612,8 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.21.0.0/16
+        # Overridable: 172.21.0.0/16 may already be allocated by another Docker
+        # network on the host, which makes `docker compose up` fail with
+        # "invalid pool request: Pool overlaps". Set TEST_NET_SUBNET to a free
+        # range (e.g. TEST_NET_SUBNET=172.31.0.0/16) when that happens.
+        - subnet: ${TEST_NET_SUBNET:-172.21.0.0/16}

@@ -62,11 +62,11 @@ const GoalModePage: React.FC = () => {
 
   return (
     <div className="min-h-full px-8 py-10">
-      <div className={clsx('max-w-4xl', isDark ? 'text-slate-200' : 'text-[#333333]')}>
+      <div className={clsx('max-w-4xl', isDark ? 'text-slate-200' : 'text-[var(--fg)]')}>
         {/* Header — Dashboard-style */}
         <header className="mb-8">
           <div
-            className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[#333333]')}
+            className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[var(--fg)]')}
             aria-hidden="true"
           />
           <h1 className="page-title">Goal Mode</h1>
@@ -85,7 +85,7 @@ const GoalModePage: React.FC = () => {
             placeholder={t('goals.placeholder', 'Describe your goal (e.g. "Refactor auth module to use JWT")')}
             className={clsx(
               'flex-1 px-3 py-2 border text-sm bg-transparent',
-              isDark ? 'text-white' : 'text-[#333333]'
+              isDark ? 'text-white' : 'text-[var(--fg)]'
             )}
             style={{ borderColor: 'var(--divider)' }}
           />
@@ -122,7 +122,7 @@ const GoalModePage: React.FC = () => {
                 <div className="space-y-1">
                   {(goal.checkpoints || []).map((cp, i: number) => (
                     <div key={i} className="flex items-center gap-2 text-xs">
-                      <span className={cp.done ? 'text-[#16a34a]' : 'opacity-40'}>{cp.done ? '✓' : '○'}</span>
+                      <span className={cp.done ? 'text-[var(--success)]' : 'opacity-40'}>{cp.done ? '✓' : '○'}</span>
                       <span className="opacity-60">{cp.label}</span>
                     </div>
                   ))}

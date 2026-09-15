@@ -1234,7 +1234,9 @@ async def preview_batch_patches(patches: list[dict[str, Any]], root: str = ".") 
 async def read_file(path: str, limit: int = 4000) -> str:
     file_path = _resolve_tool_path(path)
     if not file_path.exists() or not file_path.is_file():
-        return ""
+        # 2026-09-08 实测修复：此前返回 ""（success=True），LLM 误以为文件存在/为空，
+        # 是"已创建文件"虚报链的一环。不存在必须显式失败。
+        raise FileNotFoundError(f"File not found: {file_path}")
     return file_path.read_text(encoding="utf-8", errors="ignore")[: max(0, limit)]
 
 

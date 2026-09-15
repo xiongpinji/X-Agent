@@ -142,7 +142,7 @@ export const SecurityAuthPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -150,7 +150,7 @@ export const SecurityAuthPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -195,7 +195,7 @@ export const SecurityAuthPage: React.FC = () => {
                 <p className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-2">
                   {t('security.secretLabel', 'Secret')}
                 </p>
-                <code className="block break-all mb-3 cell-data text-[#16a34a]">
+                <code className="block break-all mb-3 cell-data text-[var(--success)]">
                   {mfaSetup.secret}
                 </code>
                 <p className="text-[11px] uppercase tracking-[0.06em] opacity-50 mb-2">
@@ -208,7 +208,7 @@ export const SecurityAuthPage: React.FC = () => {
                   onClick={handleCopyURI}
                   className={clsx(ghostBtnCls, 'py-1.5 text-xs')}
                 >
-                  {copied ? <Check size={14} className="text-[#16a34a]" /> : <Copy size={14} />}
+                  {copied ? <Check size={14} className="text-[var(--success)]" /> : <Copy size={14} />}
                   {copied ? t('common.copied', 'Copied') : t('common.copy', 'Copy URI')}
                 </button>
               </div>
@@ -238,7 +238,7 @@ export const SecurityAuthPage: React.FC = () => {
                 </button>
               </div>
               {verifyResult !== null && (
-                <p className={clsx('text-sm font-medium', verifyResult ? 'text-[#16a34a]' : 'text-[#dc2626]')}>
+                <p className={clsx('text-sm font-medium', verifyResult ? 'text-[var(--success)]' : 'text-[var(--danger)]')}>
                   {verifyResult
                     ? t('security.verifySuccess', 'MFA code verified successfully')
                     : t('security.verifyFailed', 'Verification failed')}
@@ -392,7 +392,7 @@ export const SecurityAuthPage: React.FC = () => {
                       <td className="text-right">
                         <button
                           onClick={() => handleRevokeSession(s.session_id)}
-                          className="text-sm text-[#dc2626] opacity-60 hover:opacity-100 transition-opacity font-medium"
+                          className="text-sm text-[var(--danger)] opacity-60 hover:opacity-100 transition-opacity font-medium"
                         >
                           {t('security.revoke', 'Revoke')}
                         </button>

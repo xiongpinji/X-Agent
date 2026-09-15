@@ -114,14 +114,14 @@ export const AuditLogsPage: React.FC = () => {
   )
 
   return (
-    <div className={clsx('min-h-full px-8 py-10', theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]')}>
+    <div className={clsx('min-h-full px-8 py-10', theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]')}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
         <header className="mb-8">
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -187,8 +187,8 @@ export const AuditLogsPage: React.FC = () => {
             className={clsx(
               'mb-6 border px-4 py-3 text-sm',
               verification.valid
-                ? 'border-[#16a34a]/30 text-[#16a34a]'
-                : 'border-[#dc2626]/30 text-[#dc2626]'
+                ? 'border-[color-mix(in_srgb,var(--success)_30%,transparent)] text-[var(--success)]'
+                : 'border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-[var(--danger)]'
             )}
           >
             {verification.valid
@@ -206,7 +206,7 @@ export const AuditLogsPage: React.FC = () => {
         {loadError && (
           <div
             role="alert"
-            className="mb-6 border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626]"
+            className="mb-6 border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] px-4 py-3 text-sm text-[var(--danger)]"
           >
             {loadError}
           </div>

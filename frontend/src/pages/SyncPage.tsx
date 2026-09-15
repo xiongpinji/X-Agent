@@ -102,13 +102,13 @@ const SyncPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      isDark ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      isDark ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
         <header className="mb-8">
           <div
-            className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[#333333]')}
+            className={clsx('w-12 border-t-2 mb-5', isDark ? 'border-slate-200' : 'border-[var(--fg)]')}
             aria-hidden="true"
           />
           <div className="flex items-end justify-between gap-4 flex-wrap">
@@ -148,7 +148,7 @@ const SyncPage: React.FC = () => {
         </header>
 
         {loadError && (
-          <div role="alert" className="mb-6 border border-[#dc2626]/40 px-4 py-3 text-sm text-[#dc2626]">
+          <div role="alert" className="mb-6 border border-[color-mix(in_srgb,var(--danger)_40%,transparent)] px-4 py-3 text-sm text-[var(--danger)]">
             {loadError}
           </div>
         )}
@@ -164,8 +164,8 @@ const SyncPage: React.FC = () => {
               >
                 <dd className={clsx(
                   'font-data text-[26px] leading-none order-2',
-                  item.alert && 'text-[#dc2626]',
-                  item.warn && 'text-[#d97706]'
+                  item.alert && 'text-[var(--danger)]',
+                  item.warn && 'text-[var(--warning)]'
                 )}>
                   {item.badge ? (
                     <span className={clsx('badge-status', item.badge)}>{item.badgeText}</span>

@@ -751,8 +751,8 @@ class TestBuiltinTools:
     async def test_read_file_nonexistent(self, tmp_path):
         token = set_tool_root_override(str(tmp_path))
         try:
-            result = await read_file(str(tmp_path / "nope.txt"))
-            assert result == ""
+            with pytest.raises(FileNotFoundError):
+                await read_file(str(tmp_path / "nope.txt"))
         finally:
             reset_tool_root_override(token)
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import sys
 from datetime import UTC
 from pathlib import Path
 from typing import Any
@@ -149,6 +150,11 @@ class MCPManager:
                 # YAML 文件若内容为 mcpServers map（.mcp.json 内容改后缀），同样兼容
                 if "mcpServers" in self.config and "mcp_servers" not in self.config:
                     self.config = self._convert_mcp_servers_map(self.config["mcpServers"])
+                else:
+                    # P1-3: 原生 ``mcp_servers`` 列表此前**不做**占位符展开，导致
+                    # config/mcp_servers.yaml 只能写死解释器/仓库绝对路径，无法进版本库
+                    # 跨机器复用。现与 .mcp.json 路径行为对齐。
+                    self.config = self._expand_env_vars(self.config)
 
             logger.info(f"Loaded MCP configuration from {self.config_path}")
             return True
@@ -159,12 +165,36 @@ class MCPManager:
 
     @staticmethod
     def _expand_env_vars(value: Any) -> Any:
-        """递归展开字符串中的 ${VAR} 环境变量占位（.mcp.json 生态惯例）。"""
+        """递归展开字符串中的 ``${VAR}`` / ``${VAR:-默认值}`` 占位符。
+
+        P1-3 扩展（原实现只支持 ``${VAR}``，且仅作用于 ``.mcp.json`` 转换路径）：
+
+        - 支持 ``${VAR:-default}``：变量缺失时回落到默认值（避免写死机器绝对路径）；
+        - 支持两个内建伪变量，使仓库内配置文件与机器无关：
+            ``${XAGENT_PYTHON}``        → 运行本应用的解释器（按定义已装 ``mcp`` 依赖，
+                                          stdio 插件子进程复用它即可，无需写死 venv 路径）
+            ``${XAGENT_PROJECT_ROOT}``  → 项目根目录（相对本文件解析，不受 cwd 影响）
+        - 未知变量且无默认值时**保持原样**（沿用旧行为，便于运维从日志看出漏配项）。
+        """
         import os
         import re
 
         if isinstance(value, str):
-            return re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", lambda m: os.environ.get(m.group(1), m.group(0)), value)
+            pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
+
+            def _substitute(match: re.Match[str]) -> str:
+                name = match.group(1)
+                default = match.group(2)
+                if name == "XAGENT_PYTHON":
+                    return sys.executable
+                if name == "XAGENT_PROJECT_ROOT":
+                    return str(Path(__file__).resolve().parents[4])
+                env_value = os.environ.get(name)
+                if env_value:
+                    return env_value
+                return default if default is not None else match.group(0)
+
+            return pattern.sub(_substitute, value)
         if isinstance(value, list):
             return [MCPManager._expand_env_vars(item) for item in value]
         if isinstance(value, dict):

@@ -8,19 +8,41 @@ export default {
     extend: {
       // Enhanced Color Palette
       colors: {
-        // Primary Brand Colors
+        // ── Accent: "signal" teal-cyan ─────────────────────────────────────
+        // Single source of truth for the brand accent. To re-skin the app,
+        // change these 11 values only. Chosen over the default blue/violet
+        // because: (a) success=green / warning=amber / error=red are already
+        // taken, so a warm accent would collide; (b) it stays clear of the
+        // generic "AI purple/blue" look the design skill bans.
         primary: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c3d66',
-          950: '#051e3e',
+          50: '#eefcfd',
+          100: '#cff7fa',
+          200: '#a5eef3',
+          300: '#66dee8',
+          400: '#29c3d3',
+          500: '#199aab',
+          600: '#147d90',
+          700: '#156476',
+          800: '#175362',
+          900: '#174553',
+          950: '#092c38',
+        },
+        // Legacy alias: the app historically used `blue-*` as its accent
+        // (205 `bg-blue-*` + 78 `text-blue-*` usages). Remapping the scale here
+        // re-skins those pages without a ~600-site refactor. Revert = delete
+        // this key to fall back to Tailwind's stock blue.
+        blue: {
+          50: '#eefcfd',
+          100: '#cff7fa',
+          200: '#a5eef3',
+          300: '#66dee8',
+          400: '#29c3d3',
+          500: '#199aab',
+          600: '#147d90',
+          700: '#156476',
+          800: '#175362',
+          900: '#174553',
+          950: '#092c38',
         },
         // Secondary Colors
         secondary: {
@@ -172,7 +194,8 @@ export default {
           '100%': { backgroundPosition: '1000px 0' },
         },
       },
-      // Enhanced Shadows
+      // Enhanced Shadows — elevation ramp for "bold" depth without neon glows.
+      // Layered (ambient + key) shadows read as premium; single big blurs do not.
       boxShadow: {
         'xs': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
         'sm': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
@@ -181,7 +204,15 @@ export default {
         'xl': '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
         '2xl': '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
         'inner': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)',
-        'focus': '0 0 0 3px rgba(59, 130, 246, 0.1)',
+        'focus': '0 0 0 3px rgba(25, 154, 171, 0.28)',
+        // Elevation ramp (light theme)
+        'e1': '0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06)',
+        'e2': '0 2px 4px rgba(16, 24, 40, 0.04), 0 6px 16px -4px rgba(16, 24, 40, 0.10)',
+        'e3': '0 4px 8px rgba(16, 24, 40, 0.05), 0 18px 36px -8px rgba(16, 24, 40, 0.16)',
+        // Dark theme: shadows need more opacity to register on dark surfaces
+        'e1-dark': '0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5)',
+        'e2-dark': '0 2px 4px rgba(0, 0, 0, 0.4), 0 8px 20px -6px rgba(0, 0, 0, 0.6)',
+        'e3-dark': '0 4px 10px rgba(0, 0, 0, 0.45), 0 24px 48px -12px rgba(0, 0, 0, 0.7)',
       },
       // Border Radius
       borderRadius: {
@@ -203,6 +234,12 @@ export default {
         '500': '500ms',
         '700': '700ms',
         '1000': '1000ms',
+      },
+      // Easings — `spring`/`smooth` approximate motion-library feel in pure CSS.
+      transitionTimingFunction: {
+        'smooth': 'cubic-bezier(0.16, 1, 0.3, 1)',
+        'in-smooth': 'cubic-bezier(0.7, 0, 0.84, 0)',
+        'spring': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
       },
       // Z-index Scale
       zIndex: {

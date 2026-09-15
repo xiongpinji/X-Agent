@@ -37,6 +37,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path,
       },
+      // /health 必须显式代理：否则命中 SPA fallback 返回 200+index.html，
+      // 前端健康检查解析不出 status（chat.html 设置页曾误报"异常"）
+      '/health': {
+        target: process.env.VITE_API_URL || 'http://localhost:8000',
+        changeOrigin: true,
+      },
       '/ws': {
         target: process.env.VITE_WS_URL || 'ws://localhost:8000',
         ws: true,
@@ -44,10 +50,8 @@ export default defineConfig({
       },
     },
     middlewareMode: false,
-    // Enable compression in dev
-    headers: {
-      'Cache-Control': 'public, max-age=3600',
-    },
+    // 注意：不设全局 Cache-Control——vite dev 的 HTR/HMR 依赖协商缓存，
+    // 全局 max-age 会缓存旧模块与 SPA fallback（曾致 /health 返回 index.html）
   },
 
   build: {

@@ -94,7 +94,7 @@ export const BackupPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -102,7 +102,7 @@ export const BackupPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -154,12 +154,12 @@ export const BackupPage: React.FC = () => {
         </header>
 
         {loadError && (
-          <div role="alert" className="mb-6 border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626]">
+          <div role="alert" className="mb-6 border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] px-4 py-3 text-sm text-[var(--danger)]">
             {loadError}
           </div>
         )}
         {notice && (
-          <div role="status" className="mb-6 border border-[#16a34a]/30 px-4 py-3 text-sm text-[#16a34a]">
+          <div role="status" className="mb-6 border border-[color-mix(in_srgb,var(--success)_30%,transparent)] px-4 py-3 text-sm text-[var(--success)]">
             {notice}
           </div>
         )}
@@ -190,7 +190,7 @@ export const BackupPage: React.FC = () => {
               <div className="text-sm font-medium mb-2">
                 <span className="cell-data">{runResult.backup_id}</span>
                 {' — '}
-                <span className={runResult.success ? 'text-[#16a34a]' : 'text-[#dc2626]'}>
+                <span className={runResult.success ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>
                   {runResult.success ? '✓' : '✗'}
                 </span>
                 {' '}
@@ -199,10 +199,10 @@ export const BackupPage: React.FC = () => {
               <div className="space-y-1">
                 {runResult.components.map((c) => (
                   <div key={c.component} className="cell-data opacity-70 flex gap-2">
-                    <span className={c.success ? 'text-[#16a34a]' : 'text-[#dc2626]'}>{c.success ? '✓' : '✗'}</span>
+                    <span className={c.success ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>{c.success ? '✓' : '✗'}</span>
                     <span className="font-medium">{c.component}</span>
                     <span>{fmtSize(c.size_bytes)} · {c.duration_seconds}s</span>
-                    {c.error && <span className="text-[#dc2626]">{c.error}</span>}
+                    {c.error && <span className="text-[var(--danger)]">{c.error}</span>}
                   </div>
                 ))}
               </div>

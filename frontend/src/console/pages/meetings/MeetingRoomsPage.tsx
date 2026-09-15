@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
 
+import { httpErrorMessage, sendFailure, type SendOutcome } from "../../sendOutcome";
+
 export type MeetingRoomsPageProps = {
   rooms: MeetingRoomSummary[];
   activeRoomId?: string | null;
@@ -26,25 +28,39 @@ export function MeetingRoomsPage(props: MeetingRoomsPageProps) {
     [roomMessages, localMessages],
   );
 
-  const handleSendMessage = async (payload: SendMessagePayload) => {
-    if (!payload.roomId) return;
-    const created = await postCollaborationMessage({
-      roomId: payload.roomId,
-      senderId: props.currentSenderId,
-      senderType: "agent",
-      content: payload.content,
-      messageType: "text",
-      mentions: [],
-      metadata: {},
-    });
-    setLocalMessages((prev) => [...prev, created]);
-    props.onRoomMessageSent?.();
+  const handleSendMessage = async (payload: SendMessagePayload): Promise<SendOutcome> => {
+    if (!payload.roomId) {
+      return { ok: false, error: "缺少会议室 ID，消息未发出。" };
+    }
+    try {
+      const created = await postCollaborationMessage({
+        roomId: payload.roomId,
+        senderId: props.currentSenderId,
+        senderType: "agent",
+        content: payload.content,
+        messageType: "text",
+        mentions: [],
+        metadata: {},
+      });
+      setLocalMessages((prev) => [...prev, created]);
+      props.onRoomMessageSent?.();
+      return { ok: true };
+    } catch (cause) {
+      return sendFailure("发送消息", cause);
+    }
   };
 
-  const handleInviteAgent = async (agentId: string) => {
-    if (!activeRoom) return;
-    await addCollaborationMember({ roomId: activeRoom.room_id, memberId: agentId });
-    props.onInviteMemberSent?.();
+  const handleInviteAgent = async (agentId: string): Promise<SendOutcome> => {
+    if (!activeRoom) {
+      return { ok: false, error: "请先选择一个会议室，再邀请成员。" };
+    }
+    try {
+      await addCollaborationMember({ roomId: activeRoom.room_id, memberId: agentId });
+      props.onInviteMemberSent?.();
+      return { ok: true };
+    } catch (cause) {
+      return sendFailure("邀请成员", cause);
+    }
   };
 
   return (
@@ -131,15 +147,17 @@ function MeetingRoomMessageStream({ messages, avatars }: { messages: RealtimeMes
   );
 }
 
-function MeetingRoomActionBar({ roomId, onSendMessage }: { roomId: string; onSendMessage: (payload: SendMessagePayload) => Promise<void>; }) {
+function MeetingRoomActionBar({ roomId, onSendMessage }: { roomId: string; onSendMessage: (payload: SendMessagePayload) => Promise<SendOutcome>; }) {
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
   return (
     <div className="border bg-gray-50 p-3">
       <textarea className="min-h-[88px] w-full border bg-white p-3 text-sm" value={value} onChange={(e) => setValue(e.target.value)} placeholder="输入会议消息，支持 @ 某个智能体、引用任务、发起确认..." />
+      {error ? <p role="alert" className="mt-2 text-sm text-red-600">{error}</p> : null}
       <div className="mt-3 flex justify-end gap-2">
         <button className="border px-3 py-2 text-sm">引用</button>
-        <button className="bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50" disabled={sending} onClick={async () => { if (!value.trim()) return; setSending(true); try { await onSendMessage({ roomId, content: value, references: [] }); setValue(""); } finally { setSending(false); } }}>
+        <button className="bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50" disabled={sending} onClick={async () => { if (!value.trim()) return; setSending(true); setError(""); try { const outcome = await onSendMessage({ roomId, content: value, references: [] }); if (outcome.ok) { setValue(""); } else { setError(outcome.error); } } catch (cause) { setError(sendFailure("发送消息", cause).error); } finally { setSending(false); } }}>
           {sending ? "发送中..." : "发送"}
         </button>
       </div>
@@ -147,8 +165,10 @@ function MeetingRoomActionBar({ roomId, onSendMessage }: { roomId: string; onSen
   );
 }
 
-function MeetingRoomMemberPanel({ room, avatars, onInviteAgent }: { room: MeetingRoomSummary; avatars: RoleAvatar[]; onInviteAgent?: (agentId: string) => void; }) {
+function MeetingRoomMemberPanel({ room, avatars, onInviteAgent }: { room: MeetingRoomSummary; avatars: RoleAvatar[]; onInviteAgent: (agentId: string) => Promise<SendOutcome>; }) {
   const [inviteId, setInviteId] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteError, setInviteError] = useState("");
   return (
     <section>
       <h3 className="font-semibold">成员</h3>
@@ -170,8 +190,9 @@ function MeetingRoomMemberPanel({ room, avatars, onInviteAgent }: { room: Meetin
         <div className="text-xs text-gray-500">邀请成员</div>
         <div className="mt-2 flex gap-2">
           <input className="min-w-0 flex-1 border px-3 py-2 text-sm" placeholder="输入 member_id" value={inviteId} onChange={(e) => setInviteId(e.target.value)} />
-          <button className="bg-blue-600 px-3 py-2 text-sm text-white" onClick={() => { if (!inviteId.trim()) return; onInviteAgent?.(inviteId.trim()); setInviteId(""); }}>邀请</button>
+          <button className="bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50" disabled={inviting} onClick={async () => { const memberId = inviteId.trim(); if (!memberId) return; setInviting(true); setInviteError(""); try { const outcome = await onInviteAgent(memberId); if (outcome.ok) { setInviteId(""); } else { setInviteError(outcome.error); } } catch (cause) { setInviteError(sendFailure("邀请成员", cause).error); } finally { setInviting(false); } }}>{inviting ? "邀请中..." : "邀请"}</button>
         </div>
+        {inviteError ? <p role="alert" className="mt-2 text-sm text-red-600">{inviteError}</p> : null}
       </div>
     </section>
   );
@@ -199,7 +220,7 @@ async function postCollaborationMessage(params: { roomId: string; senderId: stri
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sender_id: params.senderId, sender_type: params.senderType ?? "agent", content: params.content, message_type: params.messageType ?? "text", mentions: params.mentions ?? [], metadata: params.metadata ?? {} }),
   });
-  if (!response.ok) throw new Error(`Failed to send collaboration message: ${response.status}`);
+  if (!response.ok) throw new Error(httpErrorMessage(response.status));
   return response.json();
 }
 
@@ -209,6 +230,6 @@ async function addCollaborationMember(params: { roomId: string; memberId: string
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ member_id: params.memberId }),
   });
-  if (!response.ok) throw new Error(`Failed to add collaboration member: ${response.status}`);
+  if (!response.ok) throw new Error(httpErrorMessage(response.status));
   return response.json();
 }

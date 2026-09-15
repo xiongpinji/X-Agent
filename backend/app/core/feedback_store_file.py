@@ -55,6 +55,20 @@ def _serialize_dt(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
+def _in_window(value: Any, created_after: datetime | None) -> bool:
+    """记录是否落在 ``created_after`` 之后（含等于）。
+
+    ``created_after is None`` 时恒真 —— 不加窗口即全量，保持既有调用方语义不变。
+    记录缺时间戳时**保守排除**：本次调用方声称的是「某时间窗内」，没有时间戳的
+    记录无法判定它是否在内，宁可少报也不要多报（``created_at`` 在模型里非空，
+    正常不会走到这一支）。
+    """
+    if created_after is None:
+        return True
+    dt = _parse_dt(value)
+    return dt is not None and dt >= created_after
+
+
 def _feedback_to_dict(f: FeedbackModel) -> dict[str, Any]:
     return {
         "id": f.id,
@@ -74,6 +88,7 @@ def _feedback_to_dict(f: FeedbackModel) -> dict[str, Any]:
         "created_at": _serialize_dt(f.created_at),
         "updated_at": _serialize_dt(f.updated_at),
         "resolved_at": _serialize_dt(f.resolved_at),
+        "resolution_note": f.resolution_note,
     }
 
 
@@ -96,6 +111,8 @@ def _feedback_from_dict(d: dict[str, Any]) -> FeedbackModel:
         created_at=_parse_dt(d.get("created_at")),
         updated_at=_parse_dt(d.get("updated_at")),
         resolved_at=_parse_dt(d.get("resolved_at")),
+        # .get() 而非 []: 2026-09-15 之前落盘的 JSON 没有这个键，旧数据必须能加载。
+        resolution_note=d.get("resolution_note"),
     )
 
 
@@ -230,8 +247,13 @@ class FeedbackStoreFile:
         severity: str | None = None,
         skip: int = 0,
         limit: int = 100,
+        created_after: datetime | None = None,
     ) -> list[FeedbackModel]:
-        """列出反馈(created_at 倒序, 强制 tenant 收敛)"""
+        """列出反馈(created_at 倒序, 强制 tenant 收敛)
+
+        ``created_after`` 用于「过去 N 小时」这类窗口（见 ``core/daily_summary.py``）。
+        刻意放在参数表**末尾**：既有调用方可能按位置传参，插在中间会静默改变语义。
+        """
         with self._lock:
             data = self._load()
         items = [
@@ -242,6 +264,7 @@ class FeedbackStoreFile:
             and (feedback_type is None or r.get("feedback_type") == feedback_type)
             and (status is None or r.get("status") == status)
             and (severity is None or r.get("severity") == severity)
+            and _in_window(r.get("created_at"), created_after)
         ]
         items.sort(key=lambda f: f.created_at or datetime.min.replace(tzinfo=UTC), reverse=True)
         return items[skip : skip + limit]
@@ -325,8 +348,9 @@ class FeedbackStoreFile:
         tenant_id: str,
         status: str | None = None,
         severity: str | None = None,
+        created_after: datetime | None = None,
     ) -> int:
-        """统计反馈数量"""
+        """统计反馈数量（``created_after`` 给定时只数窗口内的，见 list_feedback）"""
         with self._lock:
             data = self._load()
         return sum(
@@ -335,6 +359,7 @@ class FeedbackStoreFile:
             if r.get("tenant_id") == tenant_id
             and (status is None or r.get("status") == status)
             and (severity is None or r.get("severity") == severity)
+            and _in_window(r.get("created_at"), created_after)
         )
 
     async def delete_feedback(self, feedback_id: str) -> bool:

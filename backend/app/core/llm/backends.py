@@ -764,15 +764,30 @@ def build_llm_router(
         elif name == "mock":
             backends.append(MockLLMBackend())
 
-    if not backends:
-        if llm_backend == "mock" or "mock" in requested:
-            backends.append(MockLLMBackend())
-        else:
+    # P0-2 零配置兜底：没有任何"带凭据"的 provider 时，dev/test 追加 mock 作为最后兜底并 WARN，
+    # 让"装上就能跑"成立。注意 ollama 分支无需凭据会被无条件加入，所以不能只看 `not backends`。
+    # production 仍 fail-fast：生产静默降级会让用户误以为在调真实模型，不可接受。
+    explicit_mock = llm_backend == "mock" or "mock" in requested
+    has_credentialed = any(
+        backend.name in ("openai", "deepseek", "anthropic") for backend in backends
+    )
+    if not has_credentialed and not explicit_mock:
+        from backend.app.settings import get_settings
+
+        app_mode = getattr(get_settings(), "app_mode", "development")
+        if app_mode == "production":
             raise RuntimeError(
                 "No LLM API key configured. Set XAGENT_OPENAI_API_KEY or "
                 "XAGENT_DEEPSEEK_API_KEY or XAGENT_ANTHROPIC_API_KEY. "
                 "Use XAGENT_LLM_BACKEND=mock for testing."
             )
+        logger.warning(
+            "No LLM API credential configured; appending MockLLMBackend as "
+            "last-resort fallback (app_mode=%s). Set XAGENT_OPENAI_API_KEY / "
+            "XAGENT_DEEPSEEK_API_KEY / XAGENT_ANTHROPIC_API_KEY for real output.",
+            app_mode,
+        )
+        backends.append(MockLLMBackend())
 
     # --- Quota wiring (token-metered, stored in the existing cache layer) ---
     if quota_manager is None:

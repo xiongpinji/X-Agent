@@ -25,11 +25,14 @@ class AgentRunRequest(BaseModel):
     task: str = Field(..., min_length=1, max_length=20_000)
     extra_context: dict[str, Any] = Field(default_factory=dict)
     resume_trace_id: str | None = None
+    # 本次运行的工具授权（按"可收窄不可放大"与 principal scope 取交集后生效）
+    permission_scope: list[str] = Field(default_factory=list)
 
 
 class AgentRunStreamRequest(BaseModel):
     task: str = Field(..., min_length=1, max_length=20_000)
     extra_context: dict[str, Any] = Field(default_factory=dict)
+    permission_scope: list[str] = Field(default_factory=list)
 
 
 class AgentRunResponseModel(BaseModel):
@@ -121,7 +124,7 @@ async def run_agent(
     run_store: RunStoreDependency,
 ) -> AgentRunResponseModel:
     enforce_scope(principal, "agent:run")
-    context = _context_from_principal(principal)
+    context = _context_from_principal(principal, getattr(request, "permission_scope", None))
     result: AgentRunResponse = await agent.run(context, request.task, request.extra_context)
     if request.resume_trace_id:
         previous = run_store.continue_from(request.resume_trace_id, result)
@@ -140,7 +143,7 @@ async def run_agent_stream(
     run_store: RunStoreDependency,
 ) -> AgentRunResponseModel:
     enforce_scope(principal, "agent:run")
-    context = _context_from_principal(principal)
+    context = _context_from_principal(principal, getattr(request, "permission_scope", None))
     result: AgentRunResponse = await agent.run(context, request.task, request.extra_context)
     if request.resume_trace_id:
         previous = run_store.continue_from(request.resume_trace_id, result)
@@ -374,12 +377,21 @@ async def delegate_agent_task(agent_id: str, payload: dict[str, Any] | None = No
     }
 
 
-def _context_from_principal(principal: Principal) -> RunContext:
+def _context_from_principal(principal: Principal, requested_scope: list[str] | None = None) -> RunContext:
+    # 2026-09-08 实测修复：此前请求体 permission_scope 被完全忽略——前端的
+    # 执行模式（完全访问/只读）形同虚设。现按"可收窄不可放大"语义生效：
+    # 请求 scope 与 principal scope 取交集；交集为空或未请求时回退 principal 全量。
+    allowed = list(dict.fromkeys(principal.permission_scope))
+    if requested_scope:
+        allowed_set = set(allowed)
+        narrowed = [s for s in dict.fromkeys(requested_scope) if s in allowed_set]
+        if narrowed:
+            allowed = narrowed
     return RunContext(
         tenant_id=principal.tenant_id,
         user_id=principal.user_id,
         agent_id=principal.agent_id,
         request_id=principal.request_id,
         trace_id=principal.trace_id,
-        permission_scope=principal.permission_scope,
+        permission_scope=allowed,
     )

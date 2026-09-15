@@ -24,7 +24,12 @@ def registry():
 
 
 async def _run(registry, command: str) -> dict:
-    rec = await registry.execute(RunContext(), "run_command", {"command": command})
+    # run_command 属写类工具：空 scope 会被 policy 拒绝（越权守卫），需显式授权
+    rec = await registry.execute(
+        RunContext(trace_id="t-run-cmd-env", request_id="r-run-cmd-env", permission_scope=["tools:write"]),
+        "run_command",
+        {"command": command},
+    )
     out = rec.output if isinstance(rec.output, dict) else {}
     return out
 

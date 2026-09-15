@@ -13,6 +13,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { apiClient } from '../services/api';
 
 interface RealtimeStats {
   timestamp: string;
@@ -56,20 +57,11 @@ export const AnalyticsDashboard: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [realtimeRes, costRes, perfRes] = await Promise.all([
-          fetch('/api/v1/analytics/realtime'),
-          fetch('/api/v1/analytics/costs'),
-          fetch('/api/v1/analytics/performance'),
-        ]);
-
-        if (!realtimeRes.ok || !costRes.ok || !perfRes.ok) {
-          throw new Error('Failed to fetch analytics data');
-        }
-
+        // 走 apiClient（带 Bearer/x-api-key 拦截器）；裸 fetch 曾致 analytics 永远 401
         const [realtimeData, costData, perfData] = await Promise.all([
-          realtimeRes.json(),
-          costRes.json(),
-          perfRes.json(),
+          apiClient.getRaw<RealtimeStats>('/analytics/realtime'),
+          apiClient.getRaw<CostAnalysis>('/analytics/costs'),
+          apiClient.getRaw<PerformanceAnalysis>('/analytics/performance'),
         ]);
 
         setRealtimeStats(realtimeData);

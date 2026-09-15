@@ -7,9 +7,9 @@ import { AlertTriangle, CheckCircle2, Paperclip } from 'lucide-react'
 import clsx from 'clsx'
 import './ChatPage.css'
 
-const DIVIDER = 'rgba(163,169,177,.15)'
-const TIMELINE_GREY = 'rgba(163,169,177,.55)'
-const ACCENT = '#2563eb'
+const DIVIDER = 'var(--divider)' // == :root --divider exactly; now theme-aware
+const TIMELINE_GREY = 'rgba(163,169,177,.55)' // timeline mid-grey — no token equivalent (chart-adjacent, L3)
+const ACCENT = 'var(--accent)' // user-message identity colour; was #2563eb (pre-reskin blue)
 
 interface ParallelTaskCard {
   agent_id: string
@@ -298,7 +298,7 @@ export const ChatPage: React.FC = () => {
   return (
     <div className={clsx(
       'flex flex-col h-full',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       {/* Header — editorial rule + hairline divider, no card */}
       <header
@@ -308,7 +308,7 @@ export const ChatPage: React.FC = () => {
         <div
           className={clsx(
             'w-10 border-t-2 mb-4',
-            theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+            theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
           )}
           aria-hidden="true"
         />
@@ -447,7 +447,7 @@ export const ChatPage: React.FC = () => {
                     <span
                       className={clsx(
                         'chat-cursor inline-block align-text-bottom w-[8px] h-[16px] ml-0.5',
-                        theme === 'dark' ? 'bg-slate-300' : 'bg-[#333333]'
+                        theme === 'dark' ? 'bg-slate-300' : 'bg-[var(--fg)]'
                       )}
                       aria-hidden="true"
                     />
@@ -512,7 +512,7 @@ export const ChatPage: React.FC = () => {
         <form onSubmit={handleSendMessage} className="max-w-3xl">
           <div className={clsx(
             'flex items-end gap-3 px-4 py-3',
-            theme === 'dark' ? 'bg-slate-900' : 'bg-[#f5f5f5]'
+            theme === 'dark' ? 'bg-slate-900' : 'bg-[var(--surface-raised)]'
           )}>
             {/* File upload has no backend endpoint yet — disabled and labelled. */}
             <button
@@ -567,7 +567,7 @@ export const ChatPage: React.FC = () => {
 }
 
 /* ── Content rendering ────────────────────────────────────────────────────
-   Fenced code blocks → mono on flat #f5f5f5 (no coloured border);
+   Fenced code blocks → mono on flat --surface-raised (no coloured border);
    inline `code` → same treatment at smaller size. Plain text keeps
    15px/1.7 via the parent. */
 
@@ -578,7 +578,7 @@ const renderInline = (text: string, baseKey: string, dark: boolean): React.React
         key={`${baseKey}-c${i}`}
         className={clsx(
           'font-data text-[0.85em] px-1.5 py-0.5 rounded',
-          dark ? 'bg-slate-800' : 'bg-[#f5f5f5]'
+          dark ? 'bg-slate-800' : 'bg-[var(--surface-raised)]'
         )}
       >
         {seg}
@@ -603,7 +603,7 @@ const renderMessageContent = (content: string, dark: boolean): React.ReactNode =
         key={`pre${n++}`}
         className={clsx(
           'font-data text-[13px] leading-relaxed my-3 p-4 rounded-lg overflow-x-auto',
-          dark ? 'bg-slate-900' : 'bg-[#f5f5f5]'
+          dark ? 'bg-slate-900' : 'bg-[var(--surface-raised)]'
         )}
       >
         <code className="bg-transparent p-0">{match[2].replace(/\n$/, '')}</code>

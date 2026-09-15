@@ -21,23 +21,33 @@ export const FeedbackDashboard: React.FC = () => {
   const [showDetailModal, setShowDetailModal] = useState(false)
 
   const loadData = useCallback(async () => {
+    // Notifications are loaded separately from the core dataset. They now have
+    // real backend endpoints (api/notification_configs.py, mounted 2026-09-14),
+    // but the split stays: a notifications failure should degrade the tab to its
+    // empty state, not take the whole page down (and re-fail on the 30s interval).
     try {
       setLoading(true)
-      const [feedbacksData, statsData, trendsData, notificationsData] = await Promise.all([
+      const [feedbacksData, statsData, trendsData] = await Promise.all([
         feedbackService.listFeedback(1, 50),
         feedbackService.getStats(),
-        feedbackService.getTrends(30, 'day'),
-        feedbackService.listNotifications(),
+        feedbackService.getTrends(30),
       ])
 
       setFeedbacks(feedbacksData.items)
       setStats(statsData)
       setTrends(trendsData)
-      setNotifications(notificationsData)
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to load feedback data')
     } finally {
       setLoading(false)
+    }
+
+    try {
+      setNotifications(await feedbackService.listNotifications())
+    } catch {
+      // Transient failure only (network / 403 / 404): the tab renders its empty
+      // state rather than taking the whole page down.
+      setNotifications([])
     }
   }, [setLoading, setError])
 
@@ -64,45 +74,61 @@ export const FeedbackDashboard: React.FC = () => {
     }
   }
 
-  const handleUpdateFeedback = async (id: string, data: Partial<Feedback>) => {
+  // Returns whether the change was persisted so the detail view does not leave
+  // its edit mode on failure. This page reports the error itself.
+  const handleUpdateFeedback = async (id: string, data: Partial<Feedback>): Promise<boolean> => {
     try {
       const updated = await feedbackService.updateFeedback(id, data)
       setFeedbacks(feedbacks.map((f) => (f.id === id ? updated : f)))
       if (selectedFeedback?.id === id) {
         setSelectedFeedback(updated)
       }
+      return true
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to update feedback')
+      return false
     }
   }
 
-  const handleResolveFeedback = async (id: string, response: string) => {
+  // Same contract as handleUpdateFeedback: the boolean drives the editor state.
+  const handleResolveFeedback = async (id: string, response: string): Promise<boolean> => {
     try {
       const updated = await feedbackService.resolveFeedback(id, response)
       setFeedbacks(feedbacks.map((f) => (f.id === id ? updated : f)))
       if (selectedFeedback?.id === id) {
         setSelectedFeedback(updated)
       }
+      return true
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to resolve feedback')
+      return false
     }
   }
 
-  const handleAddNotification = async (data: Partial<NotificationConfig>) => {
+  // Returns whether the channel was saved so the form does not close on failure.
+  const handleAddNotification = async (data: Partial<NotificationConfig>): Promise<boolean> => {
     try {
       const created = await feedbackService.createNotification(data)
       setNotifications([...notifications, created])
+      return true
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to create notification')
+      return false
     }
   }
 
-  const handleUpdateNotification = async (id: string, data: Partial<NotificationConfig>) => {
+  // Same contract as handleAddNotification: the boolean drives form visibility.
+  const handleUpdateNotification = async (
+    id: string,
+    data: Partial<NotificationConfig>
+  ): Promise<boolean> => {
     try {
       const updated = await feedbackService.updateNotification(id, data)
       setNotifications(notifications.map((n) => (n.id === id ? updated : n)))
+      return true
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to update notification')
+      return false
     }
   }
 
@@ -115,11 +141,17 @@ export const FeedbackDashboard: React.FC = () => {
     }
   }
 
-  const handleTestNotification = async (id: string) => {
-    await feedbackService.testNotification(id)
+  // Returns the delivery outcome to NotificationSettings. The backend answers
+  // 200 with success:false when the channel is configured but nothing could be
+  // delivered; discarding that is exactly how the UI used to report a false
+  // "sent successfully".
+  const handleTestNotification = async (
+    id: string
+  ): Promise<{ success: boolean; message: string }> => {
+    return feedbackService.testNotification(id)
   }
 
-  const handleExport = async (format: 'csv' | 'pdf') => {
+  const handleExport = async (format: 'csv' | 'json') => {
     try {
       setLoading(true)
       const blob = await feedbackService.exportFeedback(format)
@@ -171,11 +203,11 @@ export const FeedbackDashboard: React.FC = () => {
                 CSV
               </button>
               <button
-                onClick={() => handleExport('pdf')}
+                onClick={() => handleExport('json')}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
               >
                 <Download size={18} />
-                PDF
+                JSON
               </button>
             </div>
           </div>

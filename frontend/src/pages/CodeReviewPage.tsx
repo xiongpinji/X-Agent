@@ -119,7 +119,7 @@ const CodeReviewPage: React.FC = () => {
 
         {/* Error — thin border, transparent background */}
         {error && (
-          <div className="mb-6 p-3 border border-[#dc2626]/30 text-sm text-[#dc2626]" role="alert">
+          <div className="mb-6 p-3 border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-sm text-[var(--danger)]" role="alert">
             ⚠️ {error}
           </div>
         )}

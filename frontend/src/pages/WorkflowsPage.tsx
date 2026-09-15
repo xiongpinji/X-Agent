@@ -68,14 +68,14 @@ export const WorkflowsPage: React.FC = () => {
   }
 
   return (
-    <div className={clsx('min-h-full px-8 py-10', theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]')}>
+    <div className={clsx('min-h-full px-8 py-10', theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]')}>
       <div className="max-w-7xl">
         {/* Header — Dashboard-style */}
         <header className="mb-8">
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -127,7 +127,7 @@ export const WorkflowsPage: React.FC = () => {
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleRun(wf.id) }}
-                        className="flex items-center gap-1 px-2.5 py-1 text-[12px] shrink-0 text-[#16a34a] border border-current hover:bg-[var(--hover)] hover:opacity-80 transition-opacity"
+                        className="flex items-center gap-1 px-2.5 py-1 text-[12px] shrink-0 text-[var(--success)] border border-current hover:bg-[var(--hover)] hover:opacity-80 transition-opacity"
                       >
                         <Play size={12} />
                         Run

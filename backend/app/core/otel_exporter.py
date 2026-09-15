@@ -70,16 +70,37 @@ class OTelExporter:
         self._meter = None
         self._counters: dict[str, Any] = {}
         self._histograms: dict[str, Any] = {}
+        # Why export is on/off — surfaced by ``status`` so startup logs the real
+        # reason instead of conflating three very different states.
+        self._status = "disabled"
 
-        if self._config.enabled and _otel_available:
-            self._initialize()
+        if not self._config.enabled:
+            return
+        if not _otel_available:
+            self._status = "sdk-not-installed"
+            logger.info(
+                "P2-06: XAGENT_OTEL_ENABLED=true but the OpenTelemetry SDK is not "
+                "installed; export stays off."
+            )
+            return
+        self._initialize()
 
     def _initialize(self) -> None:
         """Initialize OTel providers and exporters."""
         try:
             from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
             from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-
+        except ImportError as e:
+            # The SDK core can be present while the OTLP *exporter* subpackage is
+            # not — the exact case that made export silently unreachable.
+            self._status = "otlp-exporter-missing"
+            logger.warning(
+                "P2-06: OTLP exporter subpackage missing (%s); install "
+                "'opentelemetry-exporter-otlp-proto-grpc' to enable export.",
+                e,
+            )
+            return
+        try:
             resource = Resource.create({
                 SERVICE_NAME: self._config.service_name,
                 "deployment.environment": self._config.environment,
@@ -135,18 +156,26 @@ class OTelExporter:
             )
 
             self._initialized = True
+            self._status = "active"
             logger.info(
                 "P2-06: OTel exporter initialized (endpoint=%s, service=%s)",
                 self._config.endpoint,
                 self._config.service_name,
             )
         except Exception as e:
+            self._status = f"init-failed: {e}"
             logger.warning("P2-06: OTel initialization failed (degraded to no-op): %s", e)
             self._initialized = False
 
     @property
     def is_active(self) -> bool:
         return self._initialized
+
+    @property
+    def status(self) -> str:
+        """Reason export is active or not: active | disabled | sdk-not-installed |
+        otlp-exporter-missing | init-failed: ... ."""
+        return self._status
 
     # --- Tracing ---
 

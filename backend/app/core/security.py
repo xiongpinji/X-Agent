@@ -31,6 +31,12 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "feedback:write",
         "notifications:subscribe",
         "notifications:manage",
+        # 2026-09-14 通知渠道配置 API（/api/v1/notification-configs）配套。
+        # 此前只有 manage(仅 admin): developer 进 /feedback 的 Notifications tab
+        # 会 403 —— 而该页与侧栏入口对 admin + developer 都可见(79f5dd2),
+        # 那就是「又一个坏 tab」。照 feedback:read/write 先例补齐。
+        "notifications:read",
+        "notifications:write",
         "sync:read",
         "sync:write",
         "sync:admin",
@@ -52,6 +58,7 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "agent:run",
         "agent:read",
         "tools:read",
+        "tools:write",  # 2026-09-08 实测修复：写类工具 policy 要求 tools:write，此前仅有单数 tool:* 致写工具全拒后虚报
         "tool:*",  # singular form used by agent loop permission checks
         "memory:read",
         "memory:write",
@@ -62,6 +69,10 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "feedback:read",
         "feedback:write",
         "notifications:subscribe",
+        # 2026-09-14 通知渠道配置 API 配套（方案 A）：/feedback 页 Notifications tab
+        # 对 admin + developer 都可见, 只给 admin 会让 developer 撞 403。
+        "notifications:read",
+        "notifications:write",
         "sync:read",
         "sync:write",
         # 2026-08-14: developer 只读管理面
@@ -78,6 +89,7 @@ ROLE_SCOPES: dict[str, list[str]] = {
         "agent:run",
         "agent:read",
         "tools:read",
+        "tools:write",  # 2026-09-08 同 developer：agent 运行需要写工具能力
         "tool:*",  # singular form used by agent loop permission checks
         "memory:read",
         "memory:write",

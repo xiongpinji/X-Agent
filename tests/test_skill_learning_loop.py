@@ -83,9 +83,11 @@ class TestSedimentationToRegistry:
         assert event.skill_names
 
         # 2. promote 落盘 custom-skills/<name>/
+        #    P1-2 起 auto_promote 默认开启：try_sediment 已自动 promote 了**全部**
+        #    被接受的草稿，因此这里断言的是落盘结果，而非"手工 promote 后才落盘"。
         skill_name = event.skill_names[0]
         safe_name = sanitize_skill_name(skill_name)
-        assert engine.promote_skill(skill_name) is True
+        assert engine.promote_skill(skill_name) is True  # 幂等：重复 promote 仍成功
         skill_dir = custom_dir / safe_name
         assert (skill_dir / "SKILL.md").is_file()
         assert (skill_dir / "main.py").is_file()
@@ -93,11 +95,13 @@ class TestSedimentationToRegistry:
         assert "class SkillImplementation" in main_py
         assert safe_name in (skill_dir / "SKILL.md").read_text(encoding="utf-8")
 
-        # 3. 热加载 + 增量注册进 ToolRegistry
+        # 3. 热加载 + 增量注册进 ToolRegistry（全部已 promote 的草稿都应挂上）
         registry = ToolRegistry()
         engine.bind_tool_registry(registry)
         mounted = await engine.mount_promoted_skills()
-        assert mounted == [f"skill__{safe_name}"]
+        expected_tools = {f"skill__{sanitize_skill_name(n)}" for n in event.skill_names}
+        assert set(mounted) == expected_tools
+        assert len(event.skill_names) == event.drafts_accepted
 
         tool_name = f"skill__{safe_name}"
         assert registry.get(tool_name) is not None

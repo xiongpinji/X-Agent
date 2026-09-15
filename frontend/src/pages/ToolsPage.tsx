@@ -32,7 +32,7 @@ export const ToolsPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -40,7 +40,7 @@ export const ToolsPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -167,7 +167,7 @@ const ToolRow: React.FC<ToolRowProps> = ({ tool }) => {
           disabled={busy}
           className={clsx(
             'inline-flex items-center transition-opacity disabled:opacity-50',
-            enabled ? 'text-[#16a34a]' : 'opacity-40'
+            enabled ? 'text-[var(--success)]' : 'opacity-40'
           )}
           title={enabled ? t('tools.disable', 'Disable') : t('tools.enable', 'Enable')}
           aria-label={enabled ? t('tools.disable', 'Disable') : t('tools.enable', 'Enable')}

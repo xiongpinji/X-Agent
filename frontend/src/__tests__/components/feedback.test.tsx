@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { FeedbackList } from '@/components/feedback/FeedbackList'
 import { FeedbackDetail } from '@/components/feedback/FeedbackDetail'
@@ -37,14 +37,12 @@ const mockTrends: FeedbackTrend[] = [
   {
     date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
     count: 10,
-    byType: { bug: 5, feature: 3, improvement: 2, other: 0 },
-    bySentiment: { positive: 3, neutral: 4, negative: 3 },
+    resolved: 4,
   },
   {
     date: new Date().toISOString(),
     count: 15,
-    byType: { bug: 7, feature: 5, improvement: 2, other: 1 },
-    bySentiment: { positive: 5, neutral: 6, negative: 4 },
+    resolved: 6,
   },
 ]
 
@@ -125,10 +123,18 @@ describe('FeedbackDetail Component', () => {
   const mockProps = {
     feedback: mockFeedback,
     onClose: vi.fn(),
-    onUpdate: vi.fn(),
-    onResolve: vi.fn(),
+    // onUpdate/onResolve resolve the save outcome, so `true` is the success
+    // default. A bare `vi.fn()` resolves `undefined`, which under this contract
+    // reports every save as failed and would leave the editor open by accident.
+    onUpdate: vi.fn(async () => true),
+    onResolve: vi.fn(async () => true),
     theme: 'light' as const,
   }
+
+  beforeEach(() => {
+    // Without this, `toHaveBeenCalled()` passes on leakage from an earlier test.
+    vi.clearAllMocks()
+  })
 
   it('renders feedback details', () => {
     render(<FeedbackDetail {...mockProps} />)
@@ -168,6 +174,70 @@ describe('FeedbackDetail Component', () => {
     fireEvent.click(sendButton)
 
     expect(mockProps.onResolve).toHaveBeenCalledWith('1', 'We are working on this issue')
+  })
+
+  it('closes the editor after a successful save', async () => {
+    render(<FeedbackDetail {...mockProps} />)
+
+    fireEvent.click(screen.getByText('Edit'))
+    fireEvent.click(screen.getByText('Save'))
+
+    // The labelled <select> only exists in edit mode; the read-only view renders
+    // a <span> instead. Removing `setIsEditing(false)` makes this fail.
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Status')).not.toBeInTheDocument()
+    })
+  })
+
+  it('keeps the editor open with the chosen values when the save fails', async () => {
+    /*
+     * The regression this guards: the page swallows the API error into its own
+     * error banner and never re-throws, so `await onUpdate(...)` could not fail
+     * and the editor closed regardless — the discarded change looked saved. Only
+     * a `false` outcome can make this assertion fail.
+     */
+    const failing = { ...mockProps, onUpdate: vi.fn(async () => false) }
+    render(<FeedbackDetail {...failing} />)
+
+    fireEvent.click(screen.getByText('Edit'))
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'resolved')
+    fireEvent.click(screen.getByText('Save'))
+
+    await waitFor(() => {
+      expect(failing.onUpdate).toHaveBeenCalled()
+    })
+    expect(screen.getByLabelText('Status')).toHaveValue('resolved')
+  })
+
+  it('clears the response box only after a successful submit', async () => {
+    render(<FeedbackDetail {...mockProps} />)
+
+    const textarea = screen.getByPlaceholderText('Type your response here...')
+    await userEvent.type(textarea, 'We are working on this issue')
+    fireEvent.click(screen.getByText('Send Response'))
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue('')
+    })
+  })
+
+  it('keeps the response text when the submit fails', async () => {
+    /*
+     * The regression this guards: on a failed resolve the box was cleared
+     * anyway, destroying the resolution note the user had just typed on top of
+     * the failure. Only a `false` outcome can make this assertion fail.
+     */
+    const failing = { ...mockProps, onResolve: vi.fn(async () => false) }
+    render(<FeedbackDetail {...failing} />)
+
+    const textarea = screen.getByPlaceholderText('Type your response here...')
+    await userEvent.type(textarea, 'keep this note')
+    fireEvent.click(screen.getByText('Send Response'))
+
+    await waitFor(() => {
+      expect(failing.onResolve).toHaveBeenCalled()
+    })
+    expect(screen.getByPlaceholderText('Type your response here...')).toHaveValue('keep this note')
   })
 
   it('closes modal when clicking close button', () => {
@@ -218,12 +288,23 @@ describe('FeedbackVisualization Component', () => {
 describe('NotificationSettings Component', () => {
   const mockProps = {
     notifications: [mockNotification],
-    onAdd: vi.fn(),
-    onUpdate: vi.fn(),
-    onDelete: vi.fn(),
-    onTest: vi.fn(),
+    // onAdd/onUpdate resolve the save outcome, so `true` is the success default.
+    // A bare `vi.fn()` resolves `undefined`, which under this contract reports
+    // every save as failed and would leave the form open by accident.
+    onAdd: vi.fn(async () => true),
+    onUpdate: vi.fn(async () => true),
+    onDelete: vi.fn(async () => undefined),
+    // The delivery outcome is *returned*, not thrown — the backend answers 200
+    // with success:false when the channel is configured but nothing could be
+    // delivered. See NotificationSettingsProps.onTest.
+    onTest: vi.fn(async () => ({ success: true, message: 'Delivered via smtp.' })),
     theme: 'light' as const,
   }
+
+  beforeEach(() => {
+    // Without this, `toHaveBeenCalled()` passes on leakage from an earlier test.
+    vi.clearAllMocks()
+  })
 
   it('renders notification channels', () => {
     render(<NotificationSettings {...mockProps} />)
@@ -239,7 +320,7 @@ describe('NotificationSettings Component', () => {
     expect(screen.getByText('Channel Type')).toBeInTheDocument()
   })
 
-  it('allows adding new notification', async () => {
+  it('closes the form only after a successful save', async () => {
     render(<NotificationSettings {...mockProps} />)
 
     const addButton = screen.getByText('Add Channel')
@@ -257,6 +338,35 @@ describe('NotificationSettings Component', () => {
     fireEvent.click(submitButton)
 
     expect(mockProps.onAdd).toHaveBeenCalled()
+    // Closing the form is the observable half of "saved": asserting only
+    // `onAdd` was called would pass even if the save had failed.
+    await waitFor(() => {
+      expect(screen.queryByText('Channel Type')).not.toBeInTheDocument()
+    })
+  })
+
+  it('keeps the form open with the input intact when the save fails', async () => {
+    /*
+     * The regression this guards: the page swallows the API error into its own
+     * error banner and never re-throws, so `await onAdd(...)` could not fail.
+     * The form then closed regardless, discarding what the user typed on top of
+     * the failure. Only a `false` outcome can make this assertion fail.
+     */
+    const failing = { ...mockProps, onAdd: vi.fn(async () => false) }
+    render(<NotificationSettings {...failing} />)
+
+    fireEvent.click(screen.getByText('Add Channel'))
+
+    const emailInput = screen.getByPlaceholderText('user@example.com')
+    await userEvent.type(emailInput, 'keepme@example.com')
+    fireEvent.click(screen.getByRole('checkbox', { name: /new feedback/i }))
+    fireEvent.click(screen.getAllByText('Add Channel')[1])
+
+    await waitFor(() => {
+      expect(failing.onAdd).toHaveBeenCalled()
+    })
+    expect(screen.getByText('Channel Type')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('user@example.com')).toHaveValue('keepme@example.com')
   })
 
   it('allows testing notification', async () => {
@@ -266,6 +376,43 @@ describe('NotificationSettings Component', () => {
     fireEvent.click(testButton)
 
     expect(mockProps.onTest).toHaveBeenCalledWith('1')
+  })
+
+  it('shows the message the backend returned for a successful test', async () => {
+    render(<NotificationSettings {...mockProps} />)
+
+    fireEvent.click(screen.getByText('Test'))
+
+    expect(await screen.findByText('Delivered via smtp.')).toBeInTheDocument()
+  })
+
+  it('reports a failed delivery instead of a false success', async () => {
+    /*
+     * The regression this guards: the page used to discard testNotification's
+     * return value, so a backend `success: false` still rendered "Test
+     * notification sent successfully". Only a success:false response can make
+     * this assertion fail — a mock that always resolves true would pass even
+     * with the bug in place.
+     */
+    mockProps.onTest.mockResolvedValueOnce({
+      success: false,
+      message: '未配置真实邮件通道（当前 provider=ConsoleNotificationProvider），本次未实际投递。',
+    })
+
+    render(<NotificationSettings {...mockProps} />)
+    fireEvent.click(screen.getByText('Test'))
+
+    expect(await screen.findByText(/未配置真实邮件通道/)).toBeInTheDocument()
+    expect(screen.queryByText('Test notification sent successfully')).not.toBeInTheDocument()
+  })
+
+  it('still reports transport failures caught from onTest', async () => {
+    mockProps.onTest.mockRejectedValueOnce(new Error('Request failed with status code 403'))
+
+    render(<NotificationSettings {...mockProps} />)
+    fireEvent.click(screen.getByText('Test'))
+
+    expect(await screen.findByText('Request failed with status code 403')).toBeInTheDocument()
   })
 
   it('allows deleting notification', async () => {

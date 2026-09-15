@@ -28,11 +28,15 @@ export interface FeedbackStats {
   resolutionRate: number
 }
 
+/**
+ * Mirrors the backend `FeedbackTrendPoint` (api/feedback.py) exactly:
+ * `{ date, count, resolved }`. The previous shape declared `byType` /
+ * `bySentiment`, which the backend cannot supply — nothing ever read them.
+ */
 export interface FeedbackTrend {
   date: string
   count: number
-  byType: Record<string, number>
-  bySentiment: Record<string, number>
+  resolved: number
 }
 
 export interface NotificationConfig {
@@ -83,7 +87,8 @@ function adaptFeedback(raw: any): Feedback {
     createdAt: String(raw.created_at ?? raw.createdAt ?? ''),
     updatedAt: String(raw.updated_at ?? raw.updatedAt ?? ''),
     resolvedAt: raw.resolved_at ?? raw.resolvedAt ?? undefined,
-    response: raw.response ?? undefined,
+    // Backend field is `resolution_note`; the UI model calls it `response`.
+    response: raw.resolution_note ?? undefined,
   }
 }
 
@@ -103,9 +108,22 @@ function adaptStats(raw: any): FeedbackStats {
   }
 }
 
-/** Error thrown for endpoints that have no backend counterpart (B7). */
-function unsupported(feature: string): Error {
-  return new Error(`Feedback ${feature} is not supported by the backend (no such endpoint).`)
+/**
+ * Backend NotificationConfigResponse (snake_case) -> frontend model.
+ * Backend reference: api/notification_configs.py (mounted 2026-09-14).
+ * The backend deliberately does not return tenant_id, so the frontend model
+ * does not carry it either.
+ */
+function adaptNotificationConfig(raw: any): NotificationConfig {
+  return {
+    id: String(raw?.id ?? ''),
+    type: (raw?.type ?? 'email') as NotificationConfig['type'],
+    enabled: Boolean(raw?.enabled),
+    target: String(raw?.target ?? ''),
+    triggers: Array.isArray(raw?.triggers) ? raw.triggers.map(String) : [],
+    createdAt: String(raw?.created_at ?? raw?.createdAt ?? ''),
+    updatedAt: String(raw?.updated_at ?? raw?.updatedAt ?? ''),
+  }
 }
 
 class FeedbackService {
@@ -151,16 +169,25 @@ class FeedbackService {
 
   // Feedback CRUD operations — backend: api/feedback.py, prefix /api/v1/feedback.
   // Real endpoints: POST /, GET /, GET /{id}, PATCH /{id}?status=...,
-  // GET /{id}/analysis, GET /stats/summary.
+  // PUT /{id}, DELETE /{id}, POST /{id}/resolve, GET /{id}/analysis,
+  // GET /stats/summary, GET /trends, GET /sentiment-analysis,
+  // GET /category-distribution, GET /search, GET /export.
+  /**
+   * Only declare filters that are really forwarded. `sentiment` and `search` used
+   * to be declared here but were never mapped to query params, so a caller that
+   * passed them silently got an unfiltered list. They are removed rather than
+   * forwarded because `GET /feedback` accepts no such parameters at all — the
+   * backend serves server-side search via a separate `GET /feedback/search?q=`.
+   * (Everything still declared here does get sent; `tsc` proves no caller
+   * depended on the two that were dropped.)
+   */
   async listFeedback(
     page: number = 1,
     pageSize: number = 20,
     filters?: {
       type?: string
       status?: string
-      sentiment?: string
       priority?: string
-      search?: string
     }
   ): Promise<PaginatedFeedback> {
     const response = await this.client.get('/feedback/', {
@@ -208,15 +235,18 @@ class FeedbackService {
     return adaptFeedback(response.data)
   }
 
-  // No DELETE /feedback/{id} exists in the backend (B7).
-  async deleteFeedback(_id: string): Promise<void> {
-    throw unsupported('deletion')
+  // DELETE /feedback/{id} → 204 No Content (cascades to analysis records).
+  async deleteFeedback(id: string): Promise<void> {
+    await this.client.delete(`/feedback/${id}`)
   }
 
-  // No POST /{id}/resolve exists; PATCH ?status=resolved sets resolved_at.
+  // POST /feedback/{id}/resolve, body { resolution_note }. That dedicated action
+  // endpoint sets status=resolved + resolved_at, and it is the only path that can
+  // carry the note: PATCH /{id} reads just the `status` query param and drops
+  // everything else, which is why the old `PATCH ?response=...` silently lost it.
   async resolveFeedback(id: string, response: string): Promise<Feedback> {
-    const result = await this.client.patch(`/feedback/${id}`, null, {
-      params: { status: 'resolved', response },
+    const result = await this.client.post(`/feedback/${id}/resolve`, {
+      resolution_note: response,
     })
     return adaptFeedback(result.data)
   }
@@ -227,62 +257,104 @@ class FeedbackService {
     return adaptStats(response.data)
   }
 
-  // The following endpoints have no backend counterpart (B7): trends,
-  // sentiment-analysis, category-distribution, notifications CRUD, export,
-  // and search. They fail fast with a clear error instead of calling
-  // endpoints that can only 404.
-  async getTrends(
-    _days: number = 30,
-    _groupBy: 'day' | 'week' | 'month' = 'day'
-  ): Promise<FeedbackTrend[]> {
-    throw unsupported('trends')
+  // Daily aggregates — GET /feedback/trends?days=N →
+  // { period_days, data_points: [{ date, count, resolved }] }.
+  // The backend aggregates by day only, so the old `groupBy` argument is gone
+  // rather than silently ignored.
+  async getTrends(days: number = 30): Promise<FeedbackTrend[]> {
+    const response = await this.client.get('/feedback/trends', { params: { days } })
+    const points: any[] = response.data?.data_points ?? []
+    return points.map((p) => ({
+      date: String(p?.date ?? ''),
+      count: Number(p?.count ?? 0),
+      resolved: Number(p?.resolved ?? 0),
+    }))
   }
 
-  async getSentimentAnalysis(
-    _dateRange?: { startDate: string; endDate: string }
-  ): Promise<Record<string, number>> {
-    throw unsupported('sentiment analysis')
+  // GET /feedback/sentiment-analysis → { total, distribution, average_sentiment_score }.
+  // The declared return contract is the distribution map; `total` and
+  // `average_sentiment_score` have no consumer in the UI today.
+  async getSentimentAnalysis(): Promise<Record<string, number>> {
+    const response = await this.client.get('/feedback/sentiment-analysis')
+    return response.data?.distribution ?? {}
   }
 
+  // GET /feedback/category-distribution → { total, distribution }.
   async getCategoryDistribution(): Promise<Record<string, number>> {
-    throw unsupported('category distribution')
+    const response = await this.client.get('/feedback/category-distribution')
+    return response.data?.distribution ?? {}
   }
 
-  // Notifications — no backend endpoints exist.
+  // Notification channel configs — backend: api/notification_configs.py,
+  // prefix /api/v1/notification-configs. Real endpoints:
+  // GET /, POST /, GET /{id}, PATCH /{id}, DELETE /{id}, POST /{id}/test.
   async listNotifications(): Promise<NotificationConfig[]> {
-    throw unsupported('notifications')
+    const response = await this.client.get('/notification-configs/')
+    const items: any[] = Array.isArray(response.data) ? response.data : []
+    return items.map(adaptNotificationConfig)
   }
 
-  async createNotification(_data: Partial<NotificationConfig>): Promise<NotificationConfig> {
-    throw unsupported('notifications')
+  async createNotification(data: Partial<NotificationConfig>): Promise<NotificationConfig> {
+    const response = await this.client.post('/notification-configs/', {
+      type: data.type ?? 'email',
+      target: data.target ?? '',
+      triggers: data.triggers ?? [],
+      enabled: data.enabled ?? true,
+    })
+    return adaptNotificationConfig(response.data)
   }
 
+  // PATCH is partial by design: only the keys actually provided are sent, so an
+  // untouched field is never overwritten. id / createdAt / updatedAt are
+  // server-owned and are not forwarded.
   async updateNotification(
-    _id: string,
-    _data: Partial<NotificationConfig>
+    id: string,
+    data: Partial<NotificationConfig>
   ): Promise<NotificationConfig> {
-    throw unsupported('notifications')
+    const payload: Record<string, unknown> = {}
+    if (data.type !== undefined) payload.type = data.type
+    if (data.target !== undefined) payload.target = data.target
+    if (data.triggers !== undefined) payload.triggers = data.triggers
+    if (data.enabled !== undefined) payload.enabled = data.enabled
+
+    const response = await this.client.patch(`/notification-configs/${id}`, payload)
+    return adaptNotificationConfig(response.data)
   }
 
-  async deleteNotification(_id: string): Promise<void> {
-    throw unsupported('notifications')
+  // DELETE /notification-configs/{id} -> 204 No Content.
+  async deleteNotification(id: string): Promise<void> {
+    await this.client.delete(`/notification-configs/${id}`)
   }
 
-  async testNotification(_id: string): Promise<{ success: boolean; message: string }> {
-    throw unsupported('notifications')
+  // POST /notification-configs/{id}/test -> { success, message }.
+  // The backend answers 200 even when delivery failed (success:false) — the
+  // request succeeded, the delivery did not. Callers must read `success`
+  // rather than treating a resolve as a successful delivery.
+  async testNotification(id: string): Promise<{ success: boolean; message: string }> {
+    const response = await this.client.post(`/notification-configs/${id}/test`)
+    const payload = response.data ?? {}
+    return {
+      success: payload.success === true,
+      message: String(payload.message ?? ''),
+    }
   }
 
-  // Export — no backend endpoint exists.
-  async exportFeedback(
-    _format: 'csv' | 'pdf',
-    _filters?: Record<string, any>
-  ): Promise<Blob> {
-    throw unsupported('export')
+  // GET /feedback/export?format=csv|json — the backend serves CSV or JSON
+  // only; there is no PDF renderer, so 'pdf' was never a reachable format.
+  async exportFeedback(format: 'csv' | 'json' = 'csv'): Promise<Blob> {
+    const response = await this.client.get('/feedback/export', {
+      params: { format },
+      responseType: 'blob',
+    })
+    return response.data as Blob
   }
 
-  // Search — no backend endpoint exists.
-  async searchFeedback(_query: string): Promise<Feedback[]> {
-    throw unsupported('search')
+  // GET /feedback/search?q=... → FeedbackListResponse; the backend scans
+  // title/description and narrows to the caller's own items for non-admins.
+  async searchFeedback(query: string): Promise<Feedback[]> {
+    const response = await this.client.get('/feedback/search', { params: { q: query } })
+    const items: any[] = response.data?.items ?? []
+    return items.map(adaptFeedback)
   }
 }
 

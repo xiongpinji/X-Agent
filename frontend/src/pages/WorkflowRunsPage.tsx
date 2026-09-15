@@ -89,7 +89,7 @@ export const WorkflowRunsPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -97,7 +97,7 @@ export const WorkflowRunsPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -173,7 +173,7 @@ export const WorkflowRunsPage: React.FC = () => {
                           aria-valuemax={100}
                         >
                           <div
-                            className={clsx('h-[3px] transition-all', run.status === 'failed' ? 'bg-[#dc2626]' : theme === 'dark' ? 'bg-slate-300' : 'bg-[#333333]')}
+                            className={clsx('h-[3px] transition-all', run.status === 'failed' ? 'bg-[var(--danger)]' : theme === 'dark' ? 'bg-slate-300' : 'bg-[var(--fg)]')}
                             style={{ width: `${Math.min(100, (cursor / total) * 100)}%` }}
                           />
                         </div>
@@ -218,7 +218,7 @@ export const WorkflowRunsPage: React.FC = () => {
                     </span>
                   </div>
                   {selected.run.error && (
-                    <p className="mt-2 text-xs text-[#dc2626] font-mono break-all">{selected.run.error}</p>
+                    <p className="mt-2 text-xs text-[var(--danger)] font-mono break-all">{selected.run.error}</p>
                   )}
                   {/* needs_approval 时提供审批恢复入口 */}
                   {selected.run.status === 'needs_approval' && (
@@ -260,7 +260,7 @@ export const WorkflowRunsPage: React.FC = () => {
                             {node.compensated ? ' · compensated' : ''}
                           </span>
                         </div>
-                        {node.error && <p className="mt-1 text-[#dc2626] font-mono break-all">{node.error}</p>}
+                        {node.error && <p className="mt-1 text-[var(--danger)] font-mono break-all">{node.error}</p>}
                         {node.output != null && (
                           <pre
                             className="mt-1 p-2 border border-[var(--divider)] overflow-x-auto font-mono"
@@ -285,11 +285,11 @@ export const WorkflowRunsPage: React.FC = () => {
                           className={clsx(
                             'absolute -left-1 mt-1 h-2 w-2 rounded-full',
                             ev.kind.includes('failed')
-                              ? 'bg-[#dc2626]'
+                              ? 'bg-[var(--danger)]'
                               : ev.kind.includes('compensated')
-                                ? 'bg-[#d97706]'
+                                ? 'bg-[var(--warning)]'
                                 : ev.kind.includes('completed')
-                                  ? 'bg-[#16a34a]'
+                                  ? 'bg-[var(--success)]'
                                   : theme === 'dark' ? 'bg-slate-400' : 'bg-slate-500'
                           )}
                           aria-hidden="true"
@@ -299,7 +299,7 @@ export const WorkflowRunsPage: React.FC = () => {
                           {ev.node_id ? ` · ${ev.node_id}` : ''}
                         </div>
                         <div className="cell-data opacity-50">{new Date(ev.timestamp).toLocaleTimeString()}</div>
-                        {ev.error && <div className="text-xs text-[#dc2626] font-mono break-all">{ev.error}</div>}
+                        {ev.error && <div className="text-xs text-[var(--danger)] font-mono break-all">{ev.error}</div>}
                       </li>
                     ))}
                   </ol>

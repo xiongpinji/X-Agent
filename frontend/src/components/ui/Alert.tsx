@@ -9,41 +9,63 @@ export interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode
 }
 
+/**
+ * Status hues come from the design tokens (--accent/--success/--warning/
+ * --danger and their -soft fills), so the icon, the rail and the wash stay in
+ * step automatically across themes.
+ *
+ * The 4px left rail carries the severity even when the icon is missed at a
+ * glance — the previous version relied on a full 1px border in the same hue,
+ * which read as decoration rather than signal.
+ */
+const variantStyles = {
+  info: 'bg-[var(--accent-soft)] border-l-[var(--accent)]',
+  success: 'bg-[var(--success-soft)] border-l-[var(--success)]',
+  warning: 'bg-[var(--warning-soft)] border-l-[var(--warning)]',
+  error: 'bg-[var(--danger-soft)] border-l-[var(--danger)]',
+}
+
+const iconColorStyles = {
+  info: 'text-[var(--accent)]',
+  success: 'text-[var(--success)]',
+  warning: 'text-[var(--warning)]',
+  error: 'text-[var(--danger)]',
+}
+
 export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
   ({ variant = 'info', title, onClose, children, className, ...props }, ref) => {
-    const variantStyles = {
-      info: 'bg-blue-50 border border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-200',
-      success: 'bg-green-50 border border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200',
-      warning: 'bg-yellow-50 border border-yellow-200 text-yellow-800 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-200',
-      error: 'bg-red-50 border border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200',
-    }
-
     const iconMap = {
-      info: <Info size={20} />,
-      success: <CheckCircle size={20} />,
-      warning: <AlertTriangle size={20} />,
-      error: <AlertCircle size={20} />,
+      info: <Info size={18} />,
+      success: <CheckCircle size={18} />,
+      warning: <AlertTriangle size={18} />,
+      error: <AlertCircle size={18} />,
     }
 
     return (
       <div
         ref={ref}
-        className={clsx('rounded-lg p-4 flex gap-3', variantStyles[variant], className)}
+        className={clsx(
+          'flex gap-3 rounded-lg border border-l-4 border-[var(--divider)] p-4 text-[var(--fg)]',
+          variantStyles[variant],
+          className
+        )}
         role="alert"
         {...props}
       >
-        <div className="flex-shrink-0">{iconMap[variant]}</div>
-        <div className="flex-1">
-          {title && <h3 className="font-semibold mb-1">{title}</h3>}
-          <div className="text-sm">{children}</div>
+        <div className={clsx('flex-shrink-0 mt-0.5', iconColorStyles[variant])} aria-hidden="true">
+          {iconMap[variant]}
+        </div>
+        <div className="flex-1 min-w-0">
+          {title && <h3 className="font-semibold mb-1 text-[15px] leading-snug">{title}</h3>}
+          <div className="text-sm opacity-80">{children}</div>
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="flex-shrink-0 hover:opacity-70 transition-opacity"
+            className="focus-ring flex-shrink-0 h-6 w-6 -mr-1 -mt-1 inline-flex items-center justify-center rounded opacity-60 hover:opacity-100 transition-opacity"
             aria-label="Close alert"
           >
-            <X size={20} />
+            <X size={16} />
           </button>
         )}
       </div>

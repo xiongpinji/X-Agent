@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
 
+import { httpErrorMessage, sendFailure, type SendOutcome } from "../../sendOutcome";
+
 export type RealtimeChatPageProps = {
   conversations: ConversationSummary[];
   activeConversationId?: string | null;
@@ -29,19 +31,26 @@ export function RealtimeChatPage(props: RealtimeChatPageProps) {
     [threadMessages, localMessages],
   );
 
-  const handleSendMessage = async (content: string) => {
-    if (!activeConversation) return;
-    const created = await postCollaborationMessage({
-      roomId: activeConversation.room_id ?? activeConversation.conversation_id,
-      senderId: props.currentSenderId,
-      senderType: "agent",
-      content,
-      messageType: "text",
-      mentions: [],
-      metadata: { conversation_id: activeConversation.conversation_id },
-    });
-    setLocalMessages((prev) => [...prev, created]);
-    props.onMessageSent?.();
+  const handleSendMessage = async (content: string): Promise<SendOutcome> => {
+    if (!activeConversation) {
+      return { ok: false, error: "请先选择一个对话，再发送消息。" };
+    }
+    try {
+      const created = await postCollaborationMessage({
+        roomId: activeConversation.room_id ?? activeConversation.conversation_id,
+        senderId: props.currentSenderId,
+        senderType: "agent",
+        content,
+        messageType: "text",
+        mentions: [],
+        metadata: { conversation_id: activeConversation.conversation_id },
+      });
+      setLocalMessages((prev) => [...prev, created]);
+      props.onMessageSent?.();
+      return { ok: true };
+    } catch (cause) {
+      return sendFailure("发送消息", cause);
+    }
   };
 
   return (
@@ -126,15 +135,17 @@ function ChatThreadPanel({ messages, avatars, currentUserId, onOpenAudit, onOpen
   );
 }
 
-function ChatComposer({ onSend }: { onSend: (content: string) => Promise<void>; }) {
+function ChatComposer({ onSend }: { onSend: (content: string) => Promise<SendOutcome>; }) {
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
   return (
     <div className="border bg-gray-50 p-3">
       <textarea className="min-h-[92px] w-full border bg-white p-3 text-sm" value={value} onChange={(e) => setValue(e.target.value)} placeholder="输入消息，支持 @、引用、任务链接..." />
+      {error ? <p role="alert" className="mt-2 text-sm text-red-600">{error}</p> : null}
       <div className="mt-3 flex justify-end gap-2">
         <button className="border px-3 py-2 text-sm">引用</button>
-        <button className="bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50" disabled={sending} onClick={async () => { if (!value.trim()) return; setSending(true); try { await onSend(value); setValue(""); } finally { setSending(false); } }}>
+        <button className="bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50" disabled={sending} onClick={async () => { if (!value.trim()) return; setSending(true); setError(""); try { const outcome = await onSend(value); if (outcome.ok) { setValue(""); } else { setError(outcome.error); } } catch (cause) { setError(sendFailure("发送消息", cause).error); } finally { setSending(false); } }}>
           {sending ? "发送中..." : "发送"}
         </button>
       </div>
@@ -164,6 +175,6 @@ async function postCollaborationMessage(params: { roomId: string; senderId: stri
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sender_id: params.senderId, sender_type: params.senderType ?? "agent", content: params.content, message_type: params.messageType ?? "text", mentions: params.mentions ?? [], metadata: params.metadata ?? {} }),
   });
-  if (!response.ok) throw new Error(`Failed to send collaboration message: ${response.status}`);
+  if (!response.ok) throw new Error(httpErrorMessage(response.status));
   return response.json();
 }

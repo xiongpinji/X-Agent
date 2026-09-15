@@ -51,6 +51,14 @@ os.environ.setdefault(
     "XAGENT_EVOLUTION_STORE_PATH",
     tempfile.mkdtemp(prefix="xagent_evolution_").replace("\\", "/") + "/evolution_reflections.jsonl",
 )
+# P1-3：MCP 默认开启（settings.mcp_enabled=True）后，测试会话必须显式关闭——
+# 否则任何进入 app lifespan 的测试都会照 config/mcp_servers.yaml spawn 真实
+# stdio MCP 子进程：慢（每会话数秒）、Windows 下易残留 python 子进程，
+# 且把"单 server 连通性"变成整个测试套件的隐式前置条件。
+# 需要真实 MCP 的用例用 XAGENT_TEST_REAL_MCP=1 显式开启（仿 LLM key 逃生口），
+# 或直接构造 MCPManager 传显式 config_path（见 tests/test_mcp_bootstrap.py）。
+if os.environ.get("XAGENT_TEST_REAL_MCP") != "1":
+    os.environ["XAGENT_MCP_ENABLED"] = "false"
 
 # Per-worker isolated data directory for xdist parallel runs.
 # Prevents PermissionError when multiple workers write to the same

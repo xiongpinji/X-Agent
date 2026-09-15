@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
 
+import { sendFailure } from "../../sendOutcome";
+
 export type CreateAgentPageProps = {
   roleCatalog: RoleCatalog;
   organizationGraph: OrganizationGraphView;
@@ -70,6 +72,7 @@ const defaultFormState = (props: CreateAgentPageProps): AgentCreateFormState => 
 export function CreateAgentPage(props: CreateAgentPageProps) {
   const [form, setForm] = useState<AgentCreateFormState>(() => defaultFormState(props));
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const selectedTemplate = useMemo(
     () => props.roleCatalog.templates.find((item) => item.role_id === form.roleTemplateId) ?? null,
@@ -91,7 +94,16 @@ export function CreateAgentPage(props: CreateAgentPageProps) {
   };
 
   const handleSubmit = async () => {
-    if (!form.orgId || !form.departmentId || !form.name || !form.roleTemplateId) return;
+    const missing: string[] = [];
+    if (!form.orgId) missing.push("所属组织");
+    if (!form.departmentId) missing.push("所属部门");
+    if (!form.name.trim()) missing.push("智能体名称");
+    if (!form.roleTemplateId) missing.push("岗位模板");
+    if (missing.length) {
+      setSubmitError(`请先填写：${missing.join("、")}`);
+      return;
+    }
+    setSubmitError("");
     setSubmitting(true);
     try {
       await props.onCreateAgent({
@@ -111,6 +123,8 @@ export function CreateAgentPage(props: CreateAgentPageProps) {
         communication_style: form.communicationStyle,
         risk_appetite: form.riskAppetite,
       });
+    } catch (cause) {
+      setSubmitError(sendFailure("创建智能体", cause).error);
     } finally {
       setSubmitting(false);
     }
@@ -152,6 +166,7 @@ export function CreateAgentPage(props: CreateAgentPageProps) {
           <Field label="决策风格"><input className="w-full border px-3 py-2" value={form.decisionStyle} onChange={(e) => update("decisionStyle", e.target.value)} /></Field>
         </div>
         <div className="mt-4 border bg-gray-50 p-4"><h3 className="font-medium">角色预览</h3><div className="mt-2 flex items-center gap-3"><div className="h-14 w-14 rounded-full bg-gray-200" /><div><div className="font-semibold">{selectedTemplate?.role_name ?? "未选择角色"}</div><div className="text-sm text-gray-500">{selectedTemplate?.title ?? "-"}</div></div></div><div className="mt-3 text-sm text-gray-600">{selectedTemplate?.description ?? ""}</div></div>
+        {submitError ? <p role="alert" className="mt-4 text-sm text-red-600">{submitError}</p> : null}
         <div className="mt-4 flex justify-end gap-3"><button className="border px-4 py-2" onClick={props.onCancel}>取消</button><button className="bg-blue-600 px-4 py-2 text-white disabled:opacity-50" disabled={submitting} onClick={handleSubmit}>{submitting ? "创建中..." : "创建智能体"}</button></div>
       </section>
 

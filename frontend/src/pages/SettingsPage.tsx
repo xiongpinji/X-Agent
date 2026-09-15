@@ -136,7 +136,7 @@ const SettingsPage: React.FC = () => {
           <div
             className={clsx(
               'mb-4 px-3 py-2 border text-sm',
-              message.type === 'success' ? 'text-[#16a34a]' : 'text-[#dc2626]'
+              message.type === 'success' ? 'text-[var(--success)]' : 'text-[var(--danger)]'
             )}
             style={{ borderColor: message.type === 'success' ? 'rgba(22,163,74,.35)' : 'rgba(220,38,38,.35)' }}
             role="alert"
@@ -203,7 +203,7 @@ const SettingsPage: React.FC = () => {
           <div className="space-y-4">
             {lastCreatedKey && (
               <div
-                className="p-3 border text-sm text-[#16a34a]"
+                className="p-3 border text-sm text-[var(--success)]"
                 style={{ borderColor: 'rgba(22,163,74,.35)' }}
                 role="alert"
               >
@@ -243,7 +243,7 @@ const SettingsPage: React.FC = () => {
                     </div>
                     <button
                       onClick={() => handleDeleteApiKey(key.id)}
-                      className="text-xs text-[#dc2626] opacity-60 hover:opacity-100 font-medium transition-opacity"
+                      className="text-xs text-[var(--danger)] opacity-60 hover:opacity-100 font-medium transition-opacity"
                     >
                       {t('common.delete', 'Delete')}
                     </button>

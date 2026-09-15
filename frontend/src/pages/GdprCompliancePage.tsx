@@ -87,7 +87,7 @@ export const GdprCompliancePage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -95,7 +95,7 @@ export const GdprCompliancePage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -108,7 +108,7 @@ export const GdprCompliancePage: React.FC = () => {
         {pageError && (
           <div
             role="alert"
-            className="mb-6 border border-[#dc2626]/30 px-4 py-3 text-sm text-[#dc2626] flex items-start justify-between gap-4"
+            className="mb-6 border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] px-4 py-3 text-sm text-[var(--danger)] flex items-start justify-between gap-4"
           >
             <span>{pageError}</span>
             <button onClick={() => setPageError(null)} className="text-xs underline shrink-0" aria-label={t('common.dismiss', 'Dismiss')}>
@@ -164,7 +164,7 @@ const useStyles = () => {
     'flex items-center justify-center gap-1.5 px-3 py-2 border border-[var(--divider)] bg-transparent text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50',
   )
   const dangerBtn = clsx(
-    'flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium border border-[#dc2626]/40 text-[#dc2626] hover:bg-[#dc2626]/5 transition-colors disabled:opacity-50',
+    'flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium border border-[color-mix(in_srgb,var(--danger)_40%,transparent)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_5%,transparent)] transition-colors disabled:opacity-50',
   )
   const sectionTitle = 'text-[11px] uppercase tracking-[0.08em] opacity-50 mb-2'
   return { theme, input, label, primaryBtn, ghostBtn, dangerBtn, sectionTitle }
@@ -250,12 +250,12 @@ const DataRightsTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }
         </div>
 
         {/* Art.17 删除权 — 二次确认 */}
-        <div className="border border-[#dc2626]/30 p-3 mb-4">
-          <div className="text-sm font-medium mb-2 flex items-center gap-1.5 text-[#dc2626]">
+        <div className="border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] p-3 mb-4">
+          <div className="text-sm font-medium mb-2 flex items-center gap-1.5 text-[var(--danger)]">
             <Trash2 size={14} />
             {t('compliance.rights.erase', 'Right to Erasure (Art. 17)')}
           </div>
-          <p className="text-xs mb-2 text-[#dc2626]/80">
+          <p className="text-xs mb-2 text-[color-mix(in_srgb,var(--danger)_80%,transparent)]">
             {t('compliance.rights.eraseHint', 'Irreversible. Type the user ID again to confirm deletion of all data.')}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -284,8 +284,8 @@ const DataRightsTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }
             className={clsx(
               'border px-4 py-3 text-sm',
               eraseResult.success
-                ? 'border-[#16a34a]/30 text-[#16a34a]'
-                : 'border-[#d97706]/30 text-[#d97706]',
+                ? 'border-[color-mix(in_srgb,var(--success)_30%,transparent)] text-[var(--success)]'
+                : 'border-[color-mix(in_srgb,var(--warning)_30%,transparent)] text-[var(--warning)]',
             )}
           >
             <div className="font-medium mb-1">
@@ -489,7 +489,7 @@ const PiiTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError }) => {
           <h3 className={s.sectionTitle}>
             {t('compliance.pii.maskResult', 'Masked output')} · {strategy} · {t('compliance.pii.count', 'Matches')}: {maskResult.pii_count} · {t('compliance.pii.origLen', 'Original length')}: {maskResult.original_length}
           </h3>
-          <pre className="p-3 text-sm whitespace-pre-wrap break-all border border-[#16a34a]/30 text-[#16a34a]">
+          <pre className="p-3 text-sm whitespace-pre-wrap break-all border border-[color-mix(in_srgb,var(--success)_30%,transparent)] text-[var(--success)]">
             {maskResult.masked_text}
           </pre>
         </section>
@@ -636,7 +636,7 @@ const ResidencyTab: React.FC<{ reportError: ErrorReporter }> = ({ reportError })
           <button onClick={handleSave} disabled={!tenantId.trim() || saveBusy} className={s.primaryBtn} aria-label={t('common.save', 'Save')}>
             {saveBusy ? t('common.loading', 'Loading...') : t('common.save', 'Save rule')}
           </button>
-          {savedMsg && <span className="text-xs text-[#16a34a] cell-data">{savedMsg}</span>}
+          {savedMsg && <span className="text-xs text-[var(--success)] cell-data">{savedMsg}</span>}
         </div>
       </section>
     </div>

@@ -2,6 +2,9 @@ import React, { Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
+// Design Language v2 — imported AFTER index.css so its :root/.dark token
+// overrides win. See src/design/language.css.
+import './design/language.css'
 
 // Performance monitoring
 if ('PerformanceObserver' in window) {
@@ -39,14 +42,9 @@ if ('PerformanceObserver' in window) {
 
 // Lazy load non-critical resources
 const loadNonCriticalResources = () => {
-  // Preload fonts
-  const link = document.createElement('link')
-  link.rel = 'preload'
-  link.as = 'font'
-  link.href = '/fonts/inter.woff2'
-  link.type = 'font/woff2'
-  link.crossOrigin = 'anonymous'
-  document.head.appendChild(link)
+  // NOTE: the previous `/fonts/inter.woff2` preload was removed — no such file
+  // ships (public/fonts/ does not exist) and nothing declares an @font-face for
+  // it, so it only produced a 404 on every load. The app uses a system stack.
 
   // Prefetch API endpoints
   if ('requestIdleCallback' in window) {

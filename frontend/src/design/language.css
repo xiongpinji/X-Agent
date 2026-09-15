@@ -1,0 +1,286 @@
+/* ============================================================
+   X-Agent Design Language v2
+   ------------------------------------------------------------
+   Loaded AFTER index.css (see src/main.tsx) so the :root/.dark
+   value overrides below win on equal specificity.
+
+   Constraints this file respects:
+   - Zero dependencies: npm registry is unreachable in this
+     environment, so all motion is pure CSS (no Framer/GSAP).
+   - "Bolder" is achieved with layered elevation, frosted
+     surfaces and restrained motion — NOT with neon glows, pure
+     black, oversaturated accents or gradient header text, which
+     the design system explicitly forbids.
+   ============================================================ */
+
+:root {
+  /* Accent — keep in sync with tailwind.config.js `primary` */
+  --accent: #199aab;
+  --accent-strong: #147d90;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(25, 154, 171, 0.1);
+  --accent-line: rgba(25, 154, 171, 0.28);
+  --ring: rgba(25, 154, 171, 0.38);
+
+  /* Status hues. Light-theme values deliberately match the ones index.css
+     already uses for `.badge-success` / `.badge-danger` / `.badge-warning`,
+     so the Badge primitive and the hand-rolled pills converge on one set.
+     The dark values exist because those three fixed hexes are too dark to
+     read on --surface (#16181d) — which is exactly why badges elsewhere in
+     the app carry `dark:` overrides. Tokens remove the need for those. */
+  --success: #16a34a;
+  --success-soft: rgba(22, 163, 74, 0.1);
+  --warning: #d97706;
+  --warning-soft: rgba(217, 119, 6, 0.12);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+
+  /* Elevation: ambient + key layered. A single large blur reads cheap;
+     two-layer shadows read as real depth. */
+  --elev-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --elev-2: 0 2px 4px rgba(16, 24, 40, 0.04), 0 6px 16px -4px rgba(16, 24, 40, 0.1);
+  --elev-3: 0 4px 8px rgba(16, 24, 40, 0.05), 0 18px 36px -8px rgba(16, 24, 40, 0.16);
+
+  /* Motion */
+  --dur-fast: 150ms;
+  --dur: 220ms;
+  --dur-slow: 320ms;
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --sheen: rgba(255, 255, 255, 0.55);
+
+  /* Solid hover step for raised surfaces. `--hover` is a translucent overlay
+     meant for compositing over the page, so it cannot be used as a
+     background-color on an opaque element (it would read as a hole).
+     Secondary buttons/rows need an opaque one-step-down instead. */
+  --surface-raised-hover: #e8edf3;
+
+  /* Radius scale — exactly 3 steps, theme-independent (see 卡片化设计令牌规范 v1).
+     Tailwind equivalents: rounded-md / rounded-lg / rounded-xl.
+     ⛔ Banned: rounded-2xl (24px) / rounded-3xl (32px) — the first tell of AI-slop UI. */
+  --r-sm: 8px;  /* badges, tags, inputs, icon tiles */
+  --r-md: 12px; /* cards, list-row containers, buttons (primary step) */
+  --r-lg: 16px; /* large panels, modals, drawers */
+}
+
+.dark {
+  --accent: #29c3d3;
+  --accent-strong: #66dee8;
+  --accent-fg: #06252c;
+  --accent-soft: rgba(41, 195, 211, 0.14);
+  --accent-line: rgba(41, 195, 211, 0.32);
+  --ring: rgba(41, 195, 211, 0.45);
+
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.12);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.12);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+
+  /* Shadows must be far more opaque to register on dark surfaces */
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --elev-2: 0 2px 4px rgba(0, 0, 0, 0.4), 0 8px 20px -6px rgba(0, 0, 0, 0.6);
+  --elev-3: 0 4px 10px rgba(0, 0, 0, 0.45), 0 24px 48px -12px rgba(0, 0, 0, 0.7);
+
+  --sheen: rgba(255, 255, 255, 0.1);
+
+  --surface-raised-hover: #242833;
+}
+
+/* ---------- Surfaces ---------- */
+.surface-1 {
+  background: var(--surface);
+  box-shadow: var(--elev-1);
+}
+.surface-2 {
+  background: var(--surface);
+  box-shadow: var(--elev-2);
+}
+.surface-3 {
+  background: var(--surface);
+  box-shadow: var(--elev-3);
+}
+
+/* ---------- Card primitives (卡片化方向) ----------
+   Card = fill + 1px hairline + radius. Radius uses the --r-* scale (3 steps only).
+   Shadow: --elev-1 on the resting card (always WITH the hairline, never alone);
+   --elev-2 only on interaction. ⛔ No coloured/glow shadows, no gradients as fill.
+   Pages consume these instead of hand-rolling `border rounded-lg shadow-*` per file.
+   NOTE: no consumer yet — adding these changes nothing that currently renders. */
+.card {
+  background-color: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: var(--r-md);
+  box-shadow: var(--elev-1);
+}
+
+/* Nested group inside a card: L2 surface, NO border, smaller radius.
+   ⛔ 卡内不套卡 — grouping inside a card uses this borderless tile. */
+.tile {
+  background-color: var(--surface-raised);
+  border-radius: var(--r-sm);
+}
+
+/* Interactive card: hover raises to --elev-2 (never --elev-3; that is overlays only). */
+.card-interactive {
+  transition:
+    background-color var(--dur-fast) var(--ease-smooth),
+    border-color var(--dur-fast) var(--ease-smooth),
+    box-shadow var(--dur) var(--ease-smooth);
+}
+.card-interactive:hover {
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  box-shadow: var(--elev-2);
+}
+
+/* Stat tile: L2 fill, mono value + 11px uppercase 50% label. */
+.stat-tile {
+  background-color: var(--surface-raised);
+  border-radius: var(--r-sm);
+  padding: 12px 14px;
+}
+
+/* Frosted panel: sticky bars, dialogs, command palettes.
+   color-mix keeps it theme-aware without duplicating RGB triples. */
+.glass {
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: var(--elev-2), inset 0 1px 0 var(--sheen);
+}
+
+.hairline {
+  border-color: var(--divider);
+}
+
+/* ---------- Badge tints ----------
+   Derive fill and border from `currentColor`, so a badge only has to declare
+   its text colour and both themes come out right with no `dark:` pairs. */
+.badge-tint {
+  background-color: color-mix(in srgb, currentColor 13%, transparent);
+  border-color: color-mix(in srgb, currentColor 24%, transparent);
+}
+
+/* Neutral badge text: --fg at 62% rather than a grey hex, so it tracks the
+   token palette in both themes. */
+.badge-neutral {
+  color: color-mix(in srgb, var(--fg) 62%, transparent);
+}
+
+/* ---------- Focus (visible, outline-based for a11y) ---------- */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* ---------- Interactive lift ---------- */
+.lift {
+  transition:
+    transform var(--dur) var(--ease-smooth),
+    box-shadow var(--dur) var(--ease-smooth),
+    border-color var(--dur) var(--ease-smooth);
+  will-change: transform;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--elev-3);
+}
+.lift:active {
+  transform: translateY(0) scale(0.995);
+}
+
+/* ---------- Sheen sweep — one-shot highlight on hover ---------- */
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+.sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, var(--sheen) 48%, transparent 66%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+.sheen:hover::after {
+  animation: sheen-sweep 900ms var(--ease-smooth);
+}
+@keyframes sheen-sweep {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+/* ---------- Shimmer sweep for skeletons ---------- */
+.shimmer {
+  /* Base colour first: the gradient's mid stop is translucent, so without an
+     opaque base the element would show whatever sits behind it. */
+  background-color: var(--surface-raised);
+  background-image: linear-gradient(
+    90deg,
+    var(--surface-raised) 0%,
+    var(--hover) 42%,
+    var(--surface-raised) 80%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-slide 1.6s var(--ease-smooth) infinite;
+}
+@keyframes shimmer-slide {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ---------- Ambient breathe (status dots, live indicators) ---------- */
+.breathe {
+  animation: breathe 2.4s var(--ease-smooth) infinite;
+}
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.86);
+  }
+}
+
+/* ---------- Route enter (app shell) ----------
+   Restarted imperatively from Layout on every pathname change by removing the
+   class, forcing a reflow, then re-adding it. Deliberately NOT driven by a
+   `key={pathname}` on the wrapper: that would remount the page subtree on every
+   navigation and silently reset form/scroll state. */
+.route-enter {
+  animation: route-enter 260ms var(--ease-smooth) both;
+}
+@keyframes route-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- Accessibility: honour motion opt-out ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .lift,
+  .sheen,
+  .shimmer,
+  .breathe,
+  .route-enter,
+  .card-interactive {
+    transition: none !important;
+    animation: none !important;
+  }
+  .lift:hover {
+    transform: none;
+  }
+}

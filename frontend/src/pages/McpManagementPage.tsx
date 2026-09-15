@@ -33,7 +33,7 @@ export const McpManagementPage: React.FC = () => {
   )
   const errBox = clsx(
     'mb-6 border px-4 py-3 text-sm',
-    'border-[#dc2626]/40 text-[#dc2626]'
+    'border-[color-mix(in_srgb,var(--danger)_40%,transparent)] text-[var(--danger)]'
   )
 
   const tabs: Array<{ key: TabKey; label: string }> = [
@@ -45,7 +45,7 @@ export const McpManagementPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -53,7 +53,7 @@ export const McpManagementPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -251,7 +251,7 @@ const ServersTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
       </div>
 
       {!mcpEnabled && (
-        <div className="mb-4 border border-[#d97706]/40 px-4 py-3 text-sm text-[#d97706]">
+        <div className="mb-4 border border-[color-mix(in_srgb,var(--warning)_40%,transparent)] px-4 py-3 text-sm text-[var(--warning)]">
           {t('mcp.disabled', 'MCP manager not initialized (XAGENT_MCP_ENABLED=false or no config)')}
         </div>
       )}
@@ -316,7 +316,7 @@ const ServersTab: React.FC<TabProps> = ({ theme, input, errBox, setError }) => {
                   <button
                     onClick={() => handleDisconnect(id)}
                     disabled={busy}
-                    className="p-1.5 text-[#dc2626] opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30 shrink-0"
+                    className="p-1.5 text-[var(--danger)] opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30 shrink-0"
                     aria-label={t('mcp.disconnect', 'Disconnect')}
                     title={t('mcp.disconnect', 'Disconnect')}
                   >
@@ -505,8 +505,8 @@ const ToolsTab: React.FC<TabProps> = ({ errBox, setError }) => {
                     <pre className={clsx(
                       'mb-3 border px-3 py-2 text-xs overflow-x-auto whitespace-pre-wrap break-all',
                       invokeResult.ok
-                        ? 'border-[#16a34a]/40 text-[#16a34a]'
-                        : 'border-[#dc2626]/40 text-[#dc2626]'
+                        ? 'border-[color-mix(in_srgb,var(--success)_40%,transparent)] text-[var(--success)]'
+                        : 'border-[color-mix(in_srgb,var(--danger)_40%,transparent)] text-[var(--danger)]'
                     )} role="status">
                       {invokeResult.text}
                     </pre>
@@ -690,7 +690,7 @@ const HealthTab: React.FC<TabProps> = ({ input, errBox, setError }) => {
               {Object.entries(health.components).map(([k, v]) => (
                 <div key={k} className="flex justify-between gap-3 py-1.5 border-b" style={{ borderColor: DIVIDER }}>
                   <span className="opacity-50">{k}</span>
-                  <span className={clsx('text-[12px]', String(v).includes('error') ? 'text-[#dc2626]' : 'text-[#16a34a]')}>
+                  <span className={clsx('text-[12px]', String(v).includes('error') ? 'text-[var(--danger)]' : 'text-[var(--success)]')}>
                     {String(v).slice(0, 40)}
                   </span>
                 </div>

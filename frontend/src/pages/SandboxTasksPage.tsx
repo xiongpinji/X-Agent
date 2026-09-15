@@ -62,7 +62,7 @@ export const SandboxTasksPage: React.FC = () => {
   )
   const errBox = clsx(
     'mb-6 border px-4 py-3 text-sm',
-    'border-[#dc2626]/40 text-[#dc2626]'
+    'border-[color-mix(in_srgb,var(--danger)_40%,transparent)] text-[var(--danger)]'
   )
   const ghostBtnCls = clsx(
     'flex items-center gap-2 px-3 py-2 border border-[var(--divider)] text-sm font-medium transition-colors hover:bg-[var(--hover)] disabled:opacity-50'
@@ -158,7 +158,7 @@ export const SandboxTasksPage: React.FC = () => {
   return (
     <div className={clsx(
       'min-h-full px-8 py-10',
-      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[#fafafa] text-[#333333]'
+      theme === 'dark' ? 'bg-slate-950 text-slate-200' : 'bg-[var(--bg)] text-[var(--fg)]'
     )}>
       <div className="max-w-6xl">
         {/* Header — Dashboard-style */}
@@ -166,7 +166,7 @@ export const SandboxTasksPage: React.FC = () => {
           <div
             className={clsx(
               'w-12 border-t-2 mb-5',
-              theme === 'dark' ? 'border-slate-200' : 'border-[#333333]'
+              theme === 'dark' ? 'border-slate-200' : 'border-[var(--fg)]'
             )}
             aria-hidden="true"
           />
@@ -261,7 +261,7 @@ export const SandboxTasksPage: React.FC = () => {
                   </div>
                 )}
                 {detail.error && (
-                  <div className="border px-3 py-2 text-sm break-words border-[#dc2626]/40 text-[#dc2626]" role="alert">
+                  <div className="border px-3 py-2 text-sm break-words border-[color-mix(in_srgb,var(--danger)_40%,transparent)] text-[var(--danger)]" role="alert">
                     {detail.error}
                   </div>
                 )}

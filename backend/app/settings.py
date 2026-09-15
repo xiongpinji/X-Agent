@@ -154,6 +154,12 @@ class Settings(BaseSettings):
     prompt_guard_malicious_threshold: float = 0.7
     prompt_guard_action: str = "warn"  # pass | warn | sanitize | block
 
+    # 结构化日志（缺口补齐）：此前全应用从未配置 logging —— 没有 root handler，
+    # 记录只能落到 logging 的 lastResort（WARNING+ → stderr），.env.example 里承诺的
+    # LOG_FORMAT=json 因此从不生效，且 INFO 级日志被整体丢弃。默认 plain 保持原行为。
+    log_level: str = "INFO"  # XAGENT_LOG_LEVEL: DEBUG | INFO | WARNING | ERROR
+    log_format: str = "plain"  # XAGENT_LOG_FORMAT: plain | json
+
     # P2-06: OpenTelemetry — OTLP export
     otel_enabled: bool = False
     otel_endpoint: str = "http://localhost:4317"
@@ -246,11 +252,22 @@ class Settings(BaseSettings):
     cloud_executor_queue_size: int = 1000  # XAGENT_CLOUD_EXECUTOR_QUEUE_SIZE: max queued tasks
 
     # P1-01: MCP (Model Context Protocol) — 官方 SDK 工具发现与管理
-    mcp_enabled: bool = False  # opt-in：显式启用 MCP 服务器连接
+    # P1-3: 默认开启。此前默认 False，导致 config/mcp_servers.yaml 与仓库自带的
+    # stdio MCP server（plugins/filesystem-mcp 等）在默认部署里从不加载——
+    # 前端/MCP 面板"已有服务器"的观感与实际能力脱节，"插件生态"实为空壳。
+    # 单 server 连接失败不阻断启动（config 内 global.on_discovery_error: warn）。
+    mcp_enabled: bool = True  # XAGENT_MCP_ENABLED=false 可关闭
     # 默认指向非 example 路径：不存在时跳过初始化（example 文件内置 5 个
     # enabled 的假 server，作为默认值会导致启动时对不存在的服务做健康检查）
     mcp_config_path: str = "config/mcp_servers.yaml"  # MCP 服务器配置文件路径（支持 .mcp.json）
     mcp_server_whitelist: list[str] | None = None  # P2-04 服务器白名单（None=允许所有）
+
+    # ─── P1-2: 技能自沉淀闭环 ──────────────────────────────────────────────────
+    # 任务成功后是否自动把沉淀出的技能草稿 promote 落盘 custom-skills/ 并热加载
+    # 注册进 ToolRegistry。关闭时草稿只留在内存（进程重启即丢，只能经 API 人工
+    # promote），"自学习闭环"名存实亡，故默认开启。
+    # 生成的技能包是固定模板（不含 LLM 直写代码 / exec），可用此项或显式入参关闭。
+    skill_auto_promote: bool = True  # XAGENT_SKILL_AUTO_PROMOTE
 
     @field_validator("database_url")
     @classmethod
