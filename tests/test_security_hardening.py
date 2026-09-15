@@ -53,6 +53,12 @@ class TestPathSecurity:
             # logic is exercised on platforms where symlinks can be created.
             pytest.skip(f"Cannot create symlink in this environment: {exc}")
 
+        if not symlink.is_symlink():
+            # symlink_to 在本机还有第三种状态：不抛异常、也不产生真符号链接
+            # （宿主沙箱的虚拟文件层行为，已实测）。此时前提不成立 —— 校验器
+            # 面对的是普通文件，断言只会得到无意义的红。
+            pytest.skip("symlink_to 未产生真符号链接（沙箱虚拟文件层），本例不可验证")
+
         # Symlink should be rejected
         with pytest.raises(Exception):
             validator.validate_path(str(symlink), allow_symlinks=False)
