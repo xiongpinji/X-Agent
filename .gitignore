@@ -213,3 +213,7 @@ commercial_audit/node_modules/
 # data/ 全目录为运行时产物 (2026-07-26 修正)
 data/
 .pytest-tmp*/
+
+# WorkBuddy 工具工作目录（memory / artifacts / scripts，非项目资产）
+# 与 .vscode/ .idea/ .claude/ 同款处理；否则 git add -A 会带入 100+ 工具文件。
+.workbuddy/
