@@ -265,15 +265,10 @@ class PathMapper:
         if not self.is_within_workspace(real_path, user_id):
             return False
 
-        # Check for symlink attacks
-        if real_path.is_symlink():
-            try:
-                target = real_path.resolve()
-                if not self.is_within_workspace(target, user_id):
-                    return False
-            except (OSError, RuntimeError):
-                return False
-
+        # symlink 逃逸由「resolve() + is_within_workspace」承担，此处不再重复判定：
+        # real_path 在 map_virtual_to_real(:94) 与本函数首行(:256) 各 resolve 一次，
+        # 链接目标已被展开；对已 resolve 的路径再判 is_symlink() 不具备判定能力。
+        # 取证：.workbuddy/artifacts/2026-09-16_path_mapper_死分支取证.md
         return True
 
     def convert_windows_to_posix(self, windows_path: str) -> str:
