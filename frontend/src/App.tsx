@@ -22,6 +22,7 @@ const GoalModePage = lazy(() => import('@/pages/GoalModePage'))
 const CodeReviewPage = lazy(() => import('@/pages/CodeReviewPage'))
 const EvolutionPage = lazy(() => import('@/pages/EvolutionPage'))
 const AgentWorkspacePage = lazy(() => import('@/pages/AgentWorkspacePage'))
+const AgentWorkspace = lazy(() => import('@/pages/AgentWorkspace'))
 const WorkflowSchedulesPage = lazy(() => import('@/pages/WorkflowSchedulesPage'))
 const WorkflowRunsPage = lazy(() => import('@/pages/WorkflowRunsPage'))
 const CheckpointsPage = lazy(() => import('@/pages/CheckpointsPage'))
@@ -121,6 +122,7 @@ export const App: React.FC = () => {
                         <Route path="/review" element={<CodeReviewPage />} />
                         <Route path="/evolution" element={<EvolutionPage />} />
                         <Route path="/agents/:id/workspace" element={<AgentWorkspacePage />} />
+                        <Route path="/workspace" element={<AgentWorkspace />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                       </Routes>
                     </Suspense>

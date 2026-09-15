@@ -90,6 +90,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         { href: '/', labelKey: 'navigation.dashboard', fallback: 'Dashboard' },
         { href: '/chat', labelKey: 'navigation.chat', fallback: 'Chat' },
         { href: '/tasks', labelKey: 'navigation.tasks', fallback: 'Tasks' },
+        { href: '/workspace', labelKey: 'navigation.agentWorkspace', fallback: 'Agent Workspace' },
         { href: '/work-sessions', labelKey: 'navigation.workSessions', fallback: 'Work Sessions' },
         { href: '/forum', labelKey: 'navigation.forum', fallback: 'Forum' },
         { href: '/console', labelKey: 'navigation.console', fallback: 'Console' },
