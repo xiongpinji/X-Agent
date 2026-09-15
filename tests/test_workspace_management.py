@@ -7,7 +7,9 @@ and file access control with security validation.
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from datetime import datetime, timedelta, UTC
@@ -40,6 +42,46 @@ def _safe_rmtree(path, max_retries=3):
             else:
                 # Final attempt: ignore errors
                 shutil.rmtree(path, ignore_errors=True)
+
+
+def _make_outside_link(link_path: Path, target: Path) -> str | None:
+    """在 link_path 建一个指向 target 的链接（symlink 优先，退化到 junction）。
+
+    Windows 无开发者模式 / 非管理员时 symlink 需要特权（WinError 1314），
+    而 junction 不需要特权，Path.resolve() 同样会跟随它——因此仍能构造出
+    「resolve 到 workspace 外」这一前提，让防护可被真正验证。
+
+    Returns:
+        "symlink" / "junction" / None（两者都建不出来）
+    """
+    try:
+        link_path.symlink_to(target, target_is_directory=True)
+        return "symlink"
+    except (OSError, NotImplementedError):
+        pass
+
+    if os.name == "nt":
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link_path), str(target)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if result.returncode == 0 and link_path.exists():
+            return "junction"
+    return None
+
+
+def _remove_link(link_path: Path) -> None:
+    """只删链接本体，绝不递归进目标。"""
+    try:
+        if link_path.is_dir():
+            link_path.rmdir()
+        else:
+            link_path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 class TestWorkspaceManager:
@@ -261,28 +303,42 @@ class TestPathMapper:
             mapper.map_virtual_to_real("/../../../etc/passwd", "user1")
 
     def test_symlink_attack_prevention(self, mapper, temp_dir):
-        """Test prevention of symlink attacks."""
+        """链接式逃逸（resolve 出界）必须被拒。
+
+        旧版本用 ``except OSError: pass`` 把 ``pytest.raises`` 一并吞掉——
+        在建不出 symlink 的环境里该测试恒绿且零验证力（变异验证：短路实现的
+        symlink 防护分支后它仍然 passed）。现在的链路是：
+        symlink 失败 -> 退化 junction（Windows 无需特权）-> 都不行才 skip；
+        并且先断言链接确实把 resolve 引出了 workspace，避免新一轮空转。
+        """
         user_id = "user1"
         workspace_path = temp_dir / user_id / "project"
         workspace_path.mkdir(parents=True, exist_ok=True)
 
-        # Create symlink pointing outside workspace（指向 workspace 外的普通文件，
-        # 不依赖系统路径——forbidden 表命中随平台变化，出界判定才是本测试语义）
-        outside = temp_dir.parent / "outside_secret.txt"
-        outside.write_text("secret", encoding="utf-8")
-        symlink_path = workspace_path / "link"
+        # 指向 workspace 外的目录：出界判定才是本测试语义
+        # （forbidden 表命中随平台变化，不作为依据）
+        outside = temp_dir.parent / "outside_secret_dir"
+        outside.mkdir(exist_ok=True)
+        link_path = workspace_path / "link"
+
+        link_kind = _make_outside_link(link_path, outside)
+        if link_kind is None:
+            pytest.skip("环境既不支持 symlink 也无 junction，链接逃逸防护不可验证")
+
         try:
-            symlink_path.symlink_to(outside)
-            # virtual 路径须与 symlink 实际位置一致(/link 解析到的是
-            # base/user1/link, symlink 建在 project/link 下——此前测试靠
-            # /tmp forbidden 误打误撞通过, 换 workspace 后路径不匹配暴露)
+            resolved = link_path.resolve()
+            assert not resolved.is_relative_to(temp_dir.resolve()), (
+                f"{link_kind} 未把路径 resolve 到 workspace 外（{resolved}）——"
+                "前提不成立，拒绝据此断言防护有效"
+            )
             with pytest.raises(PermissionError):
                 mapper.map_virtual_to_real("/project/link", user_id)
-        except OSError:
-            # Symlinks may not be supported on all systems
-            pass
         finally:
-            outside.unlink(missing_ok=True)
+            _remove_link(link_path)
+            try:
+                outside.rmdir()
+            except OSError:
+                pass
 
     def test_validate_path(self, mapper):
         """Test path validation."""
