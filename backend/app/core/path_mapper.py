@@ -253,7 +253,13 @@ class PathMapper:
         Returns:
             True if path is safe
         """
-        real_path = Path(real_path).resolve()
+        try:
+            real_path = Path(real_path).resolve()
+        except (OSError, RuntimeError):
+            # 解析不了就不放行（fail-closed）。当前调用链上 :94 已先 resolve 成功，
+            # 这里是契约级防御：避免异常逃出 validate_path 的
+            # `except (ValueError, PermissionError)` 变成未捕获异常。
+            return False
 
         # Check forbidden system directories
         path_str = str(real_path).lower()

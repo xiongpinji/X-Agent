@@ -349,6 +349,21 @@ class TestPathMapper:
             except OSError:
                 pass
 
+    def test_is_path_safe_fails_closed_on_resolve_error(self, mapper, monkeypatch):
+        """resolve 抛错时必须 fail-closed（返回 False），而不是让异常逃逸。
+
+        _is_path_safe 内部会 resolve。若 resolve 因符号链接环等原因抛
+        OSError/RuntimeError，原实现会让异常直接逃出 validate_path 的
+        `except (ValueError, PermissionError)`，变成未捕获异常。
+        本用例锁定修复后的 fail-closed 行为。
+        """
+
+        def boom(*args, **kwargs):
+            raise OSError("Too many levels of symbolic links")
+
+        monkeypatch.setattr(Path, "resolve", boom)
+        assert mapper._is_path_safe(Path("/any/path"), "user1") is False
+
     def test_validate_path(self, mapper):
         """Test path validation."""
         assert mapper.validate_path("/test/file.txt", "user1")
