@@ -44,33 +44,42 @@ def _safe_rmtree(path, max_retries=3):
                 shutil.rmtree(path, ignore_errors=True)
 
 
-def _make_outside_link(link_path: Path, target: Path) -> str | None:
-    """在 link_path 建一个指向 target 的链接（symlink 优先，退化到 junction）。
+def _points_to(link_path: Path, target: Path) -> bool:
+    """链接是否**真的**指向 target。
 
-    Windows 无开发者模式 / 非管理员时 symlink 需要特权（WinError 1314），
-    而 junction 不需要特权，Path.resolve() 同样会跟随它——因此仍能构造出
-    「resolve 到 workspace 外」这一前提，让防护可被真正验证。
-
-    Returns:
-        "symlink" / "junction" / None（两者都建不出来）
+    本机 symlink 不止「成功 / 抛异常」两种状态：宿主沙箱的虚拟文件层会让
+    symlink_to 不抛异常、却既不产生真符号链接也不生效（已实测）。建成后必须
+    用 resolve() 核对，否则测试会在「链接是假的」前提下断言，得到无意义的红。
     """
     try:
-        link_path.symlink_to(target, target_is_directory=True)
-        return "symlink"
-    except (OSError, NotImplementedError):
-        pass
+        return link_path.resolve() == target.resolve()
+    except OSError:
+        return False
 
+
+def _make_outside_link(link_path: Path, target: Path) -> str | None:
+    """建一个**真的**指向 target 的目录链接；返回 "junction" / "symlink" / None。
+
+    - Windows：直接用 junction（`mklink /J`，无需开发者模式/管理员特权），
+      绕开 symlink 在本机的第三种「假成功」状态；
+    - 其它平台：symlink（那里总是可用）。
+    两者 Path.resolve() 都会跟随，足以构造「resolve 到 workspace 外」这一前提。
+    """
     if os.name == "nt":
-        result = subprocess.run(
+        subprocess.run(
             ["cmd", "/c", "mklink", "/J", str(link_path), str(target)],
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
         )
-        if result.returncode == 0 and link_path.exists():
-            return "junction"
-    return None
+        return "junction" if _points_to(link_path, target) else None
+
+    try:
+        link_path.symlink_to(target, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        return None
+    return "symlink" if _points_to(link_path, target) else None
 
 
 def _remove_link(link_path: Path) -> None:
