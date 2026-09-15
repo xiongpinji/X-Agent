@@ -20,17 +20,25 @@ const AgentWorkspacePage: React.FC = () => {
   const { t } = useI18n()
   const isDark = theme === 'dark'
   const [agent, setAgent] = useState<AgentDetail | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [chatInput, setChatInput] = useState('')
   const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>([])
   const [chatLoading, setChatLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'chat' | 'tools' | 'memory'>('chat')
 
   const loadAgent = useCallback(async () => {
+    setLoadError(null)
     try {
       const data = await apiClient.getAgentDetail(id)
-      setAgent(data || { id: id || 'unknown', name: `Agent ${id}`, status: 'active', capabilities: [] })
-    } catch {
-      setAgent({ id: id || 'unknown', name: `Agent ${id}`, status: 'active', capabilities: ['chat', 'tools'] })
+      if (data) {
+        setAgent(data)
+      } else {
+        setAgent(null)
+        setLoadError('Agent not found')
+      }
+    } catch (error) {
+      setAgent(null)
+      setLoadError(error instanceof Error ? error.message : 'Failed to load agent')
     }
   }, [id])
 
@@ -46,12 +54,30 @@ const AgentWorkspacePage: React.FC = () => {
     setChatLoading(true)
     try {
       const resp = await apiClient.runAgentTask(msg, id)
-      setChatMessages(prev => [...prev, { role: 'assistant', content: resp?.message || resp?.answer || 'Task completed.' }])
-    } catch {
-      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Agent responded (demo mode).' }])
+      const text = resp?.message || resp?.answer
+      setChatMessages(prev => [...prev, text
+        ? { role: 'assistant', content: text }
+        : { role: 'assistant', content: t('workspace.emptyResponse', 'The agent finished but returned no text.') }])
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'unknown error'
+      setChatMessages(prev => [...prev, { role: 'error', content: `${t('workspace.chatFailed', 'Failed to reach the agent')}: ${detail}` }])
     } finally {
       setChatLoading(false)
     }
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 px-6 text-center">
+        <p className={clsx('text-sm', isDark ? 'text-red-300' : 'text-red-600')}>⚠️ {loadError}</p>
+        <button
+          onClick={loadAgent}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+        >
+          {t('common.retry', 'Retry')}
+        </button>
+      </div>
+    )
   }
 
   if (!agent) {
@@ -112,7 +138,9 @@ const AgentWorkspacePage: React.FC = () => {
                     'max-w-[70%] px-3 py-2 rounded-lg text-sm',
                     msg.role === 'user'
                       ? 'bg-blue-600 text-white'
-                      : isDark ? 'bg-slate-800 text-slate-100' : 'bg-slate-100 text-slate-900'
+                      : msg.role === 'error'
+                        ? 'bg-red-100 text-red-700 border border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800'
+                        : isDark ? 'bg-slate-800 text-slate-100' : 'bg-slate-100 text-slate-900'
                   )}>
                     {msg.content}
                   </div>
