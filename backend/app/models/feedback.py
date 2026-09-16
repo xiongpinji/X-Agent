@@ -17,13 +17,15 @@ from sqlalchemy import (
     Text,
     select,
 )
-from sqlalchemy.orm import declarative_base
 
 from backend.app.core.session import SessionManager
 
-logger = logging.getLogger(__name__)
+# 必须复用 backend.app.models 的 Base：env.py 的 target_metadata 就是它。
+# 早期这里自建 declarative_base()，两套 metadata 并存 ⇒ feedback 两张表不在
+# target_metadata 里 ⇒ alembic --autogenerate 看不见它们，建表 DDL 一直缺失。
+from backend.app.models import Base
 
-Base = declarative_base()
+logger = logging.getLogger(__name__)
 
 
 class FeedbackType(StrEnum):

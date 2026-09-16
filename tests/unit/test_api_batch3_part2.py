@@ -17,7 +17,11 @@ def _make_principal(role="user", tenant_id="t1", user_id="u1"):
         trace_id="trace-1",
         request_id="req-1",
         authenticated=True,
-        scopes=["*", "agent:run", "agent:read", "tools:read", "memory:write", "workflow:create", "files:read", "files:write"],
+        # 2026-09-16 #86: PATCH /{feedback_id} 起用 enforce_scope("feedback:write")
+        # (与 PUT/DELETE/resolve 对齐)。真实 ROLE_SCOPES 里 user/developer/admin
+        # 都带 feedback:read + feedback:write，本夹具手写清单漏了该命名空间
+        # => PATCH 用例集体 403。补齐即可，不动安全链。
+        scopes=["*", "agent:run", "agent:read", "tools:read", "memory:write", "workflow:create", "files:read", "files:write", "feedback:read", "feedback:write"],
         permission_scope=["*"],
     )
 
