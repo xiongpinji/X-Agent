@@ -352,17 +352,84 @@ class TestPathMapper:
     def test_is_path_safe_fails_closed_on_resolve_error(self, mapper, monkeypatch):
         """resolve 抛错时必须 fail-closed（返回 False），而不是让异常逃逸。
 
-        _is_path_safe 内部会 resolve。若 resolve 因符号链接环等原因抛
-        OSError/RuntimeError，原实现会让异常直接逃出 validate_path 的
-        `except (ValueError, PermissionError)`，变成未捕获异常。
-        本用例锁定修复后的 fail-closed 行为。
+        resolve 的落点只有两处：map_virtual_to_real() 的边界解析（异常转
+        ValueError，由 validate_path 捕获）与 is_within_workspace() 的
+        containment 判定（异常 → False）。_is_path_safe 已不再自行 resolve，
+        因此对三个入口分别断言「解析失败绝不放行」。
         """
 
         def boom(*args, **kwargs):
             raise OSError("Too many levels of symbolic links")
 
         monkeypatch.setattr(Path, "resolve", boom)
+        assert mapper.is_within_workspace(Path("/any/path"), "user1") is False
         assert mapper._is_path_safe(Path("/any/path"), "user1") is False
+        assert mapper.validate_path("/documents/a.txt", "user1") is False
+
+    def test_same_path_is_resolved_once_per_check(self, mapper, monkeypatch):
+        """同一路径在一次安全判定中只应被 resolve 一次。
+
+        回归背景：同一条调用链曾对同一路径连续 resolve 三次
+        （map_virtual_to_real 边界解析 / _is_path_safe / is_within_workspace），
+        其中后两次作用于同一输入、结果完全相同，纯属冗余。现收敛为
+        「边界一次 + containment 判定一次」，本用例按路径计数锁定，
+        防止冗余解析被重新引入。
+        """
+        # 排除系统目录前缀判定的平台差异：Linux 上 pytest 的 tmp_path 落在
+        # /tmp 下，而 /tmp 属于 _FORBIDDEN_PATHS，会提前返回而不做任何解析，
+        # 使计数失去意义。
+        monkeypatch.setattr(PathMapper, "_FORBIDDEN_PATHS", set())
+
+        seen: list[str] = []
+        original = Path.resolve
+
+        def counting(self, *args, **kwargs):
+            seen.append(str(self))
+            return original(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "resolve", counting)
+        target_path = mapper.workspace_base / "user1" / "a.txt"
+        target = str(target_path)
+
+        assert mapper._is_path_safe(target_path, "user1") is True
+        assert seen.count(target) == 1, (
+            f"_is_path_safe 对同一路径 resolve 了 {seen.count(target)} 次：{seen}"
+        )
+
+        seen.clear()
+        assert mapper.is_within_workspace(target_path, "user1") is True
+        assert seen.count(target) == 1, (
+            f"is_within_workspace 对同一路径 resolve 了 {seen.count(target)} 次：{seen}"
+        )
+
+    def test_within_workspace_resolves_unresolved_input(self, mapper, temp_dir):
+        """is_within_workspace 必须自行解析入参，对未 resolve 的路径同样可靠。
+
+        它是对外公开的判定入口，调用方未必先 resolve。因此当入参是指向
+        workspace 之外的链接路径时，必须解析到真实目标再判定；否则会把
+        「链接本体在 workspace 内」误判为安全。
+        """
+        user_id = "user1"
+        workspace_path = temp_dir / user_id
+        workspace_path.mkdir(parents=True, exist_ok=True)
+        outside = temp_dir.parent / "outside_target"
+        outside.mkdir(exist_ok=True)
+        link_path = workspace_path / "link_dir"
+
+        link_kind = _make_outside_link(link_path, outside)
+        if link_kind is None:
+            pytest.skip("环境既不支持 symlink 也无 junction，链接解析契约不可验证")
+
+        try:
+            assert not mapper.is_within_workspace(link_path, user_id), (
+                f"{link_kind} 形式的越界链接被误判为「在 workspace 内」"
+            )
+        finally:
+            _remove_link(link_path)
+            try:
+                outside.rmdir()
+            except OSError:
+                pass
 
     def test_validate_path(self, mapper):
         """Test path validation."""

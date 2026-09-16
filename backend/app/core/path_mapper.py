@@ -228,14 +228,24 @@ class PathMapper:
         """Check if path is within user's workspace.
 
         Args:
-            real_path: Real filesystem path
+            real_path: Real filesystem path（可传未 resolve 的路径，内部会解析）
             user_id: User identifier
 
         Returns:
             True if path is within workspace
+
+        Note:
+            这是本模块对 real_path 的「判定用」解析点。上游
+            map_virtual_to_real() 已做过「虚拟 → 真实」的边界解析，
+            此处是 containment 判定之前的最后一次解析，两者职责不同，
+            不能互相省略。解析失败（符号链接环 / OS 错误）一律返回
+            False —— fail-closed，绝不因为「算不出来」而放行。
         """
-        real_path = Path(real_path).resolve()
-        workspace_path = (self.workspace_base / user_id).resolve()
+        try:
+            real_path = Path(real_path).resolve()
+            workspace_path = (self.workspace_base / user_id).resolve()
+        except (OSError, RuntimeError):
+            return False
 
         try:
             real_path.relative_to(workspace_path)
@@ -243,37 +253,41 @@ class PathMapper:
         except ValueError:
             return False
 
-    def _is_path_safe(self, real_path: Path, user_id: str) -> bool:
+    def _is_path_safe(self, resolved_path: Path, user_id: str) -> bool:
         """Check if path is safe to access.
 
         Args:
-            real_path: Real filesystem path
+            resolved_path: **必须是 resolve() 之后的真实路径。**
+                唯一合规来源是 map_virtual_to_real() 的返回值（其内部
+                已完成「虚拟 → 真实」的边界解析）。传入未解析的路径
+                不会报错，但系统目录前缀判定会作用于原始字符串，
+                结果不作保证 —— 契约由调用方负责。
             user_id: User identifier
 
         Returns:
             True if path is safe
-        """
-        try:
-            real_path = Path(real_path).resolve()
-        except (OSError, RuntimeError):
-            # 解析不了就不放行（fail-closed）。当前调用链上 :94 已先 resolve 成功，
-            # 这里是契约级防御：避免异常逃出 validate_path 的
-            # `except (ValueError, PermissionError)` 变成未捕获异常。
-            return False
 
+        Note:
+            本函数**不再自行 resolve**。紧随其后的 is_within_workspace()
+            会对同一路径再解析一次并做 containment 判定，那次解析才是
+            真正生效的一次（且带 fail-closed）。此前同一路径被连续
+            resolve 两次、结果完全相同，属冗余，已收敛。
+            取证：.workbuddy/artifacts/2026-09-16_path_mapper_可选优化项取证.md
+        """
         # Check forbidden system directories
-        path_str = str(real_path).lower()
+        path_str = str(resolved_path).lower()
         for forbidden in self._FORBIDDEN_PATHS:
             if path_str.startswith(forbidden.lower()):
                 return False
 
         # Check if within workspace
-        if not self.is_within_workspace(real_path, user_id):
+        # （is_within_workspace 内部会 resolve；解析失败一律 False）
+        if not self.is_within_workspace(resolved_path, user_id):
             return False
 
-        # symlink 逃逸由「resolve() + is_within_workspace」承担，此处不再重复判定：
-        # real_path 在 map_virtual_to_real(:94) 与本函数首行(:256) 各 resolve 一次，
-        # 链接目标已被展开；对已 resolve 的路径再判 is_symlink() 不具备判定能力。
+        # symlink 逃逸由「resolve() + is_within_workspace」承担：链接目标在
+        # 解析时已被展开，对已 resolve 的路径再判 is_symlink() 不具备判定能力
+        # （已实测 0 差异）。
         # 取证：.workbuddy/artifacts/2026-09-16_path_mapper_死分支取证.md
         return True
 
