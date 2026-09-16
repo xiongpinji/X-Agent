@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from enum import StrEnum
 from threading import RLock
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class RoleAvatar(BaseModel):
@@ -260,6 +263,11 @@ class AgentNode(BaseModel):
     agent_id: str = Field(default_factory=lambda: str(uuid4()))
     org_id: str
     department_id: str
+    # 岗位实例的真源：创建时由 API 层从所选 RoleTemplate 写入。
+    # 2026-09-16 之前这里没有该字段，组织图靠 role_index 反查
+    # （RoleCatalog.role_index 的 key 是中文 role_name，而 agent.role 是
+    # AgentRole 英文枚举值 ⇒ 恒定查不到 ⇒ AgentInstance.role_template_id 恒为 ""）。
+    role_template_id: str = ""
     name: str
     role: AgentRole = AgentRole.ASSISTANT
     title: str = ""
@@ -478,6 +486,50 @@ def build_default_role_catalog() -> RoleCatalog:
     return RoleCatalog(templates=templates, workflows=workflows, role_groups=role_groups, role_index=role_index, avatar_map=avatar_map)
 
 
+# 岗位模板 level → 组织域 AgentRole 的继承映射。
+#
+# 端点策略「只继承模板」的组成部分：控制台不再单独传 role，岗位层级由所选模板决定。
+# level 取值见 build_default_role_catalog()（executive / lead / specialist；
+# RoleTemplate.level 的默认值是 "specialist"）。未识别的 level 落到 ASSISTANT，
+# 而不是猜一个更"高"的角色 —— 宁可层级保守，也不要凭空造权限层级。
+_TEMPLATE_LEVEL_TO_AGENT_ROLE: dict[str, AgentRole] = {
+    "executive": AgentRole.DIRECTOR,
+    "manager": AgentRole.MANAGER,
+    "lead": AgentRole.LEAD,
+    "specialist": AgentRole.SPECIALIST,
+}
+
+
+def agent_role_for_template(template: RoleTemplate) -> AgentRole:
+    """把模板的 level 映射为组织域 AgentRole（未识别 → ASSISTANT）。"""
+    return _TEMPLATE_LEVEL_TO_AGENT_ROLE.get(template.level, AgentRole.ASSISTANT)
+
+
+class AgentNameConflictError(ValueError):
+    """同一部门内已存在同名智能体。
+
+    由 API 层映射为 409 RESOURCE_CONFLICT。Q2 拍板口径：同部门重名即冲突，
+    跨部门允许同名（不同部门各有一个「财务会计」是正常组织形态）。
+    """
+
+    def __init__(self, *, name: str, department_id: str) -> None:
+        super().__init__(name)
+        self.name = name
+        self.department_id = department_id
+
+
+def _record_warning(warnings: list[str] | None, message: str) -> None:
+    """把「部分成功」显式暴露给调用方。
+
+    调用方给了 ``warnings`` 列表就追加进去（端点随响应返回）；
+    没给就落到日志 —— 绝不静默丢弃。
+    """
+    if warnings is None:
+        logger.warning("organization_store: %s", message)
+        return
+    warnings.append(message)
+
+
 class OrganizationStore:
     def __init__(self) -> None:
         self._lock = RLock()
@@ -518,7 +570,30 @@ class OrganizationStore:
         items.sort(key=lambda item: item.updated_at, reverse=True)
         return items
 
-    def create_agent(self, *, org_id: str, department_id: str, name: str, role: AgentRole = AgentRole.ASSISTANT, title: str = "", manager_agent_id: str | None = None, capabilities: list[str] | None = None, team_size_limit: int = 5, memory_scope: dict[str, str] | None = None) -> AgentNode:
+    def _assert_agent_name_available(self, *, department_id: str, name: str) -> None:
+        """同一部门内 name 必须唯一；冲突抛 AgentNameConflictError。
+
+        比较用 ``strip()`` 后的字面值（尾随空格不算另一个名字），刻意不做
+        casefold —— 「大小写是否等价」是独立的业务口径，未拍板前不合并。
+
+        调用方**必须已持有** ``self._lock``，否则检查与写入之间存在竞态。
+        """
+        normalized = name.strip()
+        for existing in self._agents.values():
+            if existing.department_id == department_id and existing.name.strip() == normalized:
+                raise AgentNameConflictError(name=normalized, department_id=department_id)
+
+    def create_agent(self, *, org_id: str, department_id: str, name: str, role: AgentRole = AgentRole.ASSISTANT, title: str = "", manager_agent_id: str | None = None, capabilities: list[str] | None = None, team_size_limit: int = 5, memory_scope: dict[str, str] | None = None, role_template_id: str = "", warnings: list[str] | None = None) -> AgentNode:
+        """创建组织岗位智能体实例。
+
+        ``role_template_id`` 是岗位画像的唯一来源（模板继承已在 API 层完成，
+        这里只负责落库）。``warnings`` 用于回收「部分成功」——传入列表则追加
+        人可读原因，不传则写日志；两种情况都不再静默。
+
+        Raises:
+            KeyError: org_id / department_id 不存在。
+            AgentNameConflictError: 同部门内已有同名智能体。
+        """
         if org_id not in self._orgs:
             raise KeyError(org_id)
         if department_id not in self._departments:
@@ -526,6 +601,7 @@ class OrganizationStore:
         agent = AgentNode(
             org_id=org_id,
             department_id=department_id,
+            role_template_id=role_template_id,
             name=name,
             role=role,
             title=title,
@@ -535,10 +611,23 @@ class OrganizationStore:
             memory_scope=memory_scope or {},
         )
         with self._lock:
+            self._assert_agent_name_available(department_id=department_id, name=name)
             self._agents[agent.agent_id] = agent
-            if manager_agent_id and manager_agent_id in self._agents:
-                manager = self._agents[manager_agent_id]
-                if agent.agent_id not in manager.child_agent_ids and len(manager.child_agent_ids) < manager.team_size_limit:
+            if manager_agent_id:
+                manager = self._agents.get(manager_agent_id)
+                if manager is None:
+                    _record_warning(
+                        warnings,
+                        f"上级智能体 {manager_agent_id} 不存在，未建立汇报关系。",
+                    )
+                elif agent.agent_id in manager.child_agent_ids:
+                    pass  # 不可能发生：agent_id 是新建的 uuid4，保留分支以维持原语义
+                elif len(manager.child_agent_ids) >= manager.team_size_limit:
+                    _record_warning(
+                        warnings,
+                        f"上级智能体「{manager.name}」已达编制上限 {manager.team_size_limit}，未建立汇报关系。",
+                    )
+                else:
                     manager.child_agent_ids.append(agent.agent_id)
                     manager.updated_at = datetime.now(UTC)
             self._departments[department_id].updated_at = datetime.now(UTC)
@@ -590,7 +679,12 @@ class OrganizationStore:
             )
             for department in departments
         ]
-        role_catalog = build_default_role_catalog()
+        # 用 store 自己的目录，而不是重新 build 一份。
+        # RoleTemplate.role_id 是 uuid4 default_factory ⇒ 每次 build 都产出**新的**
+        # id；再 build 一份会让图里的 role_template node_id 与智能体实例上的
+        # role_template_id 对不上（前端 join 直接断裂），并且 workbench 发给前端
+        # 的那份目录也会与创建端点校验用的那份不同源 ⇒ POST 恒 404。
+        role_catalog = self._role_catalog
         nodes: list[OrganizationGraphNode] = [
             OrganizationGraphNode(node_id=org.org_id, node_type="organization", name=org.name, metadata={"status": org.status, "tenant_id": org.tenant_id}),
         ]
@@ -614,7 +708,7 @@ class OrganizationStore:
                 agent_id=agent.agent_id,
                 org_id=agent.org_id,
                 department_id=agent.department_id,
-                role_template_id=role_catalog.role_index.get(agent.role.value if hasattr(agent.role, "value") else str(agent.role), ""),
+                role_template_id=agent.role_template_id,
                 name=agent.name,
                 title=agent.title,
                 manager_agent_id=agent.manager_agent_id,

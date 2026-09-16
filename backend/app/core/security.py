@@ -53,6 +53,12 @@ ROLE_SCOPES: dict[str, list[str]] = {
         # 403——scheduler:manage/read 此前从未登记进角色表）
         "scheduler:manage",
         "scheduler:read",
+        # 2026-09-16 组织域写端点配套（POST /api/v1/organization/agents）。
+        # 拍板 Q8：org:write 给 admin + developer —— 在控制台建岗位智能体属于
+        # 开发者的日常操作，只给 admin 会让页面又一次「看得见、点不动」。
+        # 注：org:read 仍未登记给任何角色（organization_control 的 4 个 GET 依赖
+        # 它），那是独立的挂载决策，本次刻意不顺手决定。
+        "org:write",
     ],
     "developer": [
         "agent:run",
@@ -84,6 +90,8 @@ ROLE_SCOPES: dict[str, list[str]] = {
         # 2026-09-06 调度 API 配套：developer 读 + 建定时任务（管理面只读口径）
         "scheduler:manage",
         "scheduler:read",
+        # 2026-09-16 组织域写端点配套：与 admin 同口径（见上方注释）。
+        "org:write",
     ],
     "user": [
         "agent:run",

@@ -870,6 +870,12 @@ _KEPT_ROUTER_MODULES: tuple[str, ...] = (
     # 注：与 notification_configs（渠道配置 CRUD）是两个功能，刻意并存。
     "notifications",
 
+    # 2026-09-16 组织域写端点：POST /api/v1/organization/agents
+    # （控制台 CreateAgentPage 的 onCreateAgent 真实落点）。
+    # 注：这不是 organization_control —— 那个模块是纯 fixture（4 个 GET 全返回
+    # 硬编码字面量），刻意继续不挂载。
+    "organization",
+
 )
 
 

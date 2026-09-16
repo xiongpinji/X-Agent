@@ -9,7 +9,6 @@ from backend.app.core.dispatch import DispatchRequest, dispatch
 from backend.app.core.org import (
     ConsoleBootstrapResponse,
     RoleAvatar,
-    build_default_role_catalog,
     organization_store,
 )
 from backend.app.core.security import ROLE_SCOPES, Principal
@@ -74,7 +73,12 @@ async def get_workbench(principal: PrincipalDependency) -> ConsoleBootstrapRespo
             replay_hint=True,
         )
     )
-    role_catalog = build_default_role_catalog()
+    # 用 store 持有的那份目录，而不是重新 build。
+    # RoleTemplate.role_id 是 uuid4 default_factory ⇒ 每次 build_default_role_catalog()
+    # 都产出**新的** role_id。此前这里独立 build 一份，导致控制台拿到的
+    # role_template_id 与 OrganizationStore 内部目录不同源：CreateAgentPage 选中模板
+    # 后提交给 POST /api/v1/organization/agents 必然查不到模板（404）。
+    role_catalog = organization_store.get_role_catalog()
     organization_graph = organization_store.build_organization_graph(principal.tenant_id) if principal.tenant_id else None
     avatars = [
         RoleAvatar(avatar_id="avatar-ceo", role_name="总经理", display_name="总经理", category="leadership", style="executive", icon_type="portrait", expression="confident", outfit="suit", palette=["#0F172A", "#1D4ED8", "#F59E0B"], badge="CEO", status_variants={"online": "/avatars/ceo_online.png", "busy": "/avatars/ceo_busy.png", "in_meeting": "/avatars/ceo_meeting.png"}, graph_variant="ceo_graph", chat_variant="ceo_chat", meeting_variant="ceo_meeting", thumbnail_url="/avatars/ceo_thumb.png", full_image_url="/avatars/ceo_full.png", alt_text="总经理形象头像", usage=["organization_graph", "chat", "meeting_room", "agent_card", "role_catalog"], tags=["executive", "formal", "leadership"]),
