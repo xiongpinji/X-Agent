@@ -1,6 +1,18 @@
 import type { ConsoleState } from "./consoleReducer";
 
+export type ExecutionControlRecommendation = {
+  action: string;
+  reason: string;
+};
+
 export type ExecutionControlOverviewData = {
+  /**
+   * 总览信封是否真的到达。
+   *
+   * 没有它，调用方只能看到一排 0，无法区分「确实没有活跃执行」和
+   * 「请求失败/还没回来」—— 这正是读路径静默降级的本体。
+   */
+  loaded: boolean;
   activeRuns: number;
   pendingRuns: number;
   failedRuns: number;
@@ -9,109 +21,73 @@ export type ExecutionControlOverviewData = {
   riskLevel: string;
   dispatch: DispatchResult | null;
   executionPlan: Record<string, unknown> | null;
-  recommendations: Array<{ action: string; reason: string; confidence: string }>;
+  recommendations: ExecutionControlRecommendation[];
 };
 
+/**
+ * 运行控制总览。
+ *
+ * 数据来源只有一处：`/api/v1/execution-control/overview` 的真实信封（ConsoleShell
+ * 拉取后存入 `state.executionControlOverview`）。信封未到达时 `loaded: false`，
+ * 数值一律 0 且 `riskLevel` 为「未知」—— **不伪造**「风险等级：低」这类判定，
+ * 也不编造带置信度的建议。
+ *
+ * 历史缺陷两处：
+ * 1. 丢弃真实信封，改用 `state.dispatch` 现算近似值 —— 而后端 DispatchResult 里
+ *    根本没有 `actions` / `pending` / `last_result` 字段，恒为空数组 ⇒ KPI 恒 0，
+ *    后端明明回了 `active_runs: 6` 却被忽略。
+ * 2. `recommendations` 硬编码两条 `confidence: "92%"` 的建议，让用户以为系统
+ *    做过置信度评估。
+ */
 export function selectExecutionControlOverviewData(state: ConsoleState): ExecutionControlOverviewData {
-  const dispatch = state.dispatch;
-  const activeRuns = dispatch.pending.length ? dispatch.pending.length : dispatch.actions.length;
-  const failedRuns = dispatch.last_result ? 1 : 0;
-  const completedRuns = dispatch.actions.filter((action) => action.status === "completed").length;
-  const pendingRuns = dispatch.pending.length;
+  const api = state.executionControlOverview;
+
+  if (!api) {
+    return {
+      loaded: false,
+      activeRuns: 0,
+      pendingRuns: 0,
+      failedRuns: 0,
+      completedRuns: 0,
+      interventionCount: 0,
+      riskLevel: "未知",
+      dispatch: null,
+      executionPlan: null,
+      recommendations: [],
+    };
+  }
 
   return {
-    activeRuns,
-    pendingRuns,
-    failedRuns,
-    completedRuns,
-    interventionCount: failedRuns ? 1 : 0,
-    riskLevel: failedRuns ? "中等" : "低",
-    dispatch,
-    executionPlan: dispatch.last_result ? { task_id: dispatch.last_result.task_id } : null,
-    recommendations: failedRuns
-      ? [
-          { action: "优先重试失败任务", reason: "当前存在失败结果", confidence: "92%" },
-          { action: "打开恢复页面", reason: "便于快速处理异常", confidence: "88%" },
-        ]
-      : [
-          { action: "继续监控活跃执行", reason: "当前没有明显失败", confidence: "90%" },
-        ],
+    loaded: true,
+    activeRuns: api.primary.active_runs,
+    pendingRuns: api.primary.pending_runs,
+    failedRuns: api.primary.failed_runs,
+    completedRuns: api.primary.completed_runs,
+    interventionCount: api.primary.intervention_count,
+    riskLevel: api.primary.risk_level,
+    dispatch: api.primary.dispatch ?? null,
+    executionPlan: api.primary.execution_plan ?? null,
+    // 后端 overview 信封没有建议字段。宁可空着，也不编造带置信度的处置建议。
+    recommendations: [],
   };
 }
 
-export function selectExecutionControlDetailData(state: ConsoleState) {
-  const runId = state.selectedWorkflowId ?? state.dispatch.last_result?.task_id ?? "run-001";
-  return {
-    runId,
-    summary: {
-      name: "工具调用工作流",
-      status: "运行中",
-      triggerSource: "工作流调度",
-      owner: state.console.agent_id || state.console.user_id,
-    },
-    steps: [
-      { name: "接收任务", status: "done", duration: "2s", result: "已进入队列" },
-      { name: "生成计划", status: "done", duration: "8s", result: "已完成规划" },
-      { name: "调用工具", status: "running", duration: "18s", result: "等待工具返回" },
-    ],
-    toolCalls: [
-      { tool: "dispatch", time: "10:12", status: "success", cost: "120ms" },
-      { tool: "memory.read", time: "10:13", status: "success", cost: "32ms" },
-    ],
-    linkedTitles: {
-      messages: "关联消息",
-      audit: "审计记录",
-      memory: "记忆引用",
-    },
-  };
-}
-
-export function selectExecutionControlRecoveryData(state: ConsoleState) {
-  const runId = state.selectedAuditMessageId ?? state.dispatch.last_result?.task_id ?? "run-003";
-  return {
-    runId,
-    failure: {
-      status: "可恢复",
-      level: "中",
-      currentStep: "工具执行步骤",
-      canRetry: true,
-    },
-    reasons: [
-      { title: "外部工具超时", detail: "工具调用等待超过阈值，当前最适合优先重试。", level: "中" },
-      { title: "输入参数缺失", detail: "上游节点未提供完整参数，需要人工确认。", level: "高" },
-    ],
-    recoverySummary: {
-      before: "失败",
-      after: "待重试",
-      suggestion: "先重试，再确认外部依赖。",
-    },
-    recommendation: "恢复建议：优先检查外部工具是否恢复。",
-  };
-}
-
-export function selectExecutionControlDispatchData(state: ConsoleState) {
-  const runId = state.selectedWorkflowId ?? state.dispatch.last_result?.task_id ?? "execution-control";
-  return {
-    runId,
-    recommendation: {
-      action: "优先重试工具调用",
-      confidence: "92%",
-      risk: "低",
-      requiresConfirmation: false,
-    },
-    recommendations: [
-      { action: "优先重试失败任务", reason: "当前存在失败结果", confidence: "92%", risk: "低" },
-      { action: "打开恢复页面", reason: "便于快速处理异常", confidence: "88%", risk: "中" },
-    ],
-    reasoning: {
-      trigger: "工具超时 / 任务卡住",
-      relatedModules: "工作流、消息、审计、记忆",
-      summary: "当前失败点集中在单一外部依赖。",
-    },
-    impact: {
-      expectedResult: "恢复执行并继续当前任务",
-      sideEffect: "重复执行消耗额外资源",
-      scope: "当前任务及其相关工作流节点",
-    },
-  };
+/**
+ * 详情 / 恢复 / 调度三页当前要看的 run。
+ *
+ * 这三个页面**自己**从 `/api/v1/execution-control/{detail,recovery,dispatch}/{run_id}`
+ * 拉数据，selector 只负责把「用户选中的 run」交给它们。
+ *
+ * 历史缺陷（Critical）：这里曾无条件返回硬编码 fixture —— `failure: { status:
+ * "可恢复", level: "中" }`、`recommendation: { confidence: "92%" }`、
+ * `recommendations: demoRecommendations` —— 经 ConsoleShell 以 props 注入页面。
+ * 页面里 `props.x ?? (apiData ? 真值 : null)` 因此**永远命中 props 分支**，
+ * 页面 fetch 到的真实数据被静默丢弃，控制台渲染的始终是 demo。
+ *
+ * 同一处还有第二个 bug：没有选中项时用编造的 `"run-001"` / `"run-003"` 去请求，
+ * 后端会为任何 id 返回一份体面的假数据 —— 假 run 上跑假流程，用户看不出破绽。
+ * 现在返回 `null`，由页面显示「未选择任务」。
+ */
+export function selectExecutionControlRunId(state: ConsoleState): string | null {
+  return state.selectedWorkflowId ?? state.dispatch.last_result?.task_id ?? null;
 }

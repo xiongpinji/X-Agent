@@ -23,10 +23,8 @@ import {
   selectWorkflowData,
 } from "./state/consoleSelectors";
 import {
-  selectExecutionControlDetailData,
-  selectExecutionControlDispatchData,
   selectExecutionControlOverviewData,
-  selectExecutionControlRecoveryData,
+  selectExecutionControlRunId,
 } from "./state/executionControlSelectors";
 import { selectToolsCenterOverviewData } from "./state/toolsCenterSelectors";
 import { selectMemoryCenterOverviewData } from "./state/memoryCenterSelectors";
@@ -90,9 +88,10 @@ export function ConsoleShell() {
   const workflowData = selectWorkflowData(state);
   const auditData = selectAuditData(state);
   const executionOverviewData = selectExecutionControlOverviewData(state);
-  const executionDetailData = selectExecutionControlDetailData(state);
-  const executionRecoveryData = selectExecutionControlRecoveryData(state);
-  const executionDispatchData = selectExecutionControlDispatchData(state);
+  // 详情 / 恢复 / 调度三页各自去拉真实数据；这里只把「当前选中的 run」交给它们。
+  // （历史上这里注入硬编码 fixture，页面里的 `props.x ?? 真值` 因此永远命中 props，
+  //  fetch 到的数据被静默丢弃。）
+  const executionRunId = selectExecutionControlRunId(state);
   const toolsCenterData = selectToolsCenterOverviewData(state);
   const memoryCenterData = selectMemoryCenterOverviewData(state);
   const organizationCenterData = selectOrganizationCenterOverviewData(state);
@@ -349,7 +348,7 @@ export function ConsoleShell() {
               dispatch({ type: "page/set", payload: "execution_detail" });
             }}
             onOpenRecovery={(runId) => {
-              dispatch({ type: "audit/setSelectedMessage", payload: runId });
+              dispatch({ type: "workflow/setSelected", payload: runId });
               dispatch({ type: "page/set", payload: "execution_recovery" });
             }}
             onOpenDispatch={(runId) => {
@@ -361,41 +360,44 @@ export function ConsoleShell() {
       case "execution_detail":
         return (
           <ExecutionDetailPage
-            runId={executionDetailData.runId}
-            summary={executionDetailData.summary}
-            steps={executionDetailData.steps}
-            toolCalls={executionDetailData.toolCalls}
-            linkedTitles={executionDetailData.linkedTitles}
+            runId={executionRunId}
             onBack={() => dispatch({ type: "page/set", payload: "execution_overview" })}
-            onOpenRecovery={(_runId) => dispatch({ type: "page/set", payload: "execution_recovery" })}
+            onOpenRecovery={(runId) => {
+              dispatch({ type: "workflow/setSelected", payload: runId });
+              dispatch({ type: "page/set", payload: "execution_recovery" });
+            }}
             onOpenAudit={(runId) => dispatch({ type: "audit/setSelectedMessage", payload: runId })}
-            onOpenDispatch={(_runId) => dispatch({ type: "page/set", payload: "execution_dispatch" })}
+            onOpenDispatch={(runId) => {
+              dispatch({ type: "workflow/setSelected", payload: runId });
+              dispatch({ type: "page/set", payload: "execution_dispatch" });
+            }}
           />
         );
       case "execution_recovery":
         return (
           <ExecutionRecoveryPage
-            runId={executionRecoveryData.runId}
-            failure={executionRecoveryData.failure}
-            reasons={executionRecoveryData.reasons}
-            recoverySummary={executionRecoveryData.recoverySummary}
-            recommendation={executionRecoveryData.recommendation}
+            runId={executionRunId}
             onBack={() => dispatch({ type: "page/set", payload: "execution_overview" })}
-            onOpenDetail={(_runId) => dispatch({ type: "page/set", payload: "execution_detail" })}
+            onOpenDetail={(runId) => {
+              dispatch({ type: "workflow/setSelected", payload: runId });
+              dispatch({ type: "page/set", payload: "execution_detail" });
+            }}
             onOpenAudit={(runId) => dispatch({ type: "audit/setSelectedMessage", payload: runId })}
           />
         );
       case "execution_dispatch":
         return (
           <ExecutionDispatchPage
-            runId={executionDispatchData.runId}
-            recommendation={executionDispatchData.recommendation}
-            recommendations={executionDispatchData.recommendations}
-            reasoning={executionDispatchData.reasoning}
-            impact={executionDispatchData.impact}
+            runId={executionRunId}
             onBack={() => dispatch({ type: "page/set", payload: "execution_overview" })}
-            onOpenDetail={(_runId) => dispatch({ type: "page/set", payload: "execution_detail" })}
-            onOpenRecovery={(_runId) => dispatch({ type: "page/set", payload: "execution_recovery" })}
+            onOpenDetail={(runId) => {
+              dispatch({ type: "workflow/setSelected", payload: runId });
+              dispatch({ type: "page/set", payload: "execution_detail" });
+            }}
+            onOpenRecovery={(runId) => {
+              dispatch({ type: "workflow/setSelected", payload: runId });
+              dispatch({ type: "page/set", payload: "execution_recovery" });
+            }}
           />
         );
       case "tools_overview":

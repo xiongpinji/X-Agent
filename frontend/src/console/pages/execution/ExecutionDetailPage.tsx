@@ -1,10 +1,14 @@
 import React from "react";
 
+import { ConsoleReadEmpty, ConsoleReadFailure, ConsoleReadLoading } from "@/console/components/ReadState";
+import { useConsoleResource } from "@/console/readResource";
+
 export type ExecutionDetailPageProps = {
-  runId?: string;
+  /** 要查看的 run。为 null 表示尚未选中 —— 页面不发请求，显示空态。 */
+  runId?: string | null;
   summary?: { name?: string; status?: string; triggerSource?: string; owner?: string } | null;
-  steps?: Array<{ name: string; status: string; duration: string; result: string }>;
-  toolCalls?: Array<{ tool: string; time: string; status: string; cost: string }>;
+  steps?: Array<{ name: string; status: string; duration: string; result: string }> | null;
+  toolCalls?: Array<{ tool: string; time: string; status: string; cost: string }> | null;
   linkedTitles?: { messages?: string; audit?: string; memory?: string } | null;
   onBack?: () => void;
   onOpenRecovery?: (runId: string) => void;
@@ -41,41 +45,29 @@ type ExecutionDetailApiResponse = {
   };
 };
 
-const demoSteps = [
-  { name: "接收任务", status: "done", duration: "2s", result: "已进入队列" },
-  { name: "生成计划", status: "done", duration: "8s", result: "已完成规划" },
-  { name: "调用工具", status: "running", duration: "18s", result: "等待工具返回" },
-  { name: "汇总结果", status: "pending", duration: "-", result: "未开始" },
-];
+const READ_ACTION = "加载执行详情";
 
-const demoToolCalls = [
-  { tool: "dispatch", time: "10:12", status: "success", cost: "120ms" },
-  { tool: "memory.read", time: "10:13", status: "success", cost: "32ms" },
-  { tool: "tool.execute", time: "10:14", status: "running", cost: "pending" },
-];
-
+/**
+ * 执行详情。
+ *
+ * 历史缺陷（读路径 Critical，B1）：`props.steps ?? demoSteps` / `props.summary ??
+ * { name: "工具调用工作流", status: "运行中", ... }` / `?? 72%` / `?? "medium"`。
+ * 而 selector 又通过 props 注入了同一批硬编码值 ⇒ 页面 fetch 到的真实数据被静默
+ * 丢弃，用户看到的是**一套看起来完全合理的执行剖面**，无从分辨真假。
+ *
+ * 现在：失败 → 失败态（可重试）；成功但字段缺失 → 如实「-」；确实没有明细 → 空态。
+ */
 export function ExecutionDetailPage(props: ExecutionDetailPageProps) {
-  const runId = props.runId ?? "run-001";
-  const [apiData, setApiData] = React.useState<ExecutionDetailApiResponse | null>(null);
+  const runId = props.runId ?? null;
+  const resource = useConsoleResource<ExecutionDetailApiResponse>(
+    runId === null ? null : `/api/v1/execution-control/detail/${encodeURIComponent(runId)}`,
+    READ_ACTION,
+    [runId],
+  );
+  const apiData = resource.data;
 
-  React.useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const response = await fetch(`/api/v1/execution-control/detail/${encodeURIComponent(runId)}`, { method: "GET", headers: { "Content-Type": "application/json" } });
-        if (!response.ok) return;
-        const payload = (await response.json()) as ExecutionDetailApiResponse;
-        if (!cancelled) setApiData(payload);
-      } catch (error) {
-        console.warn("Failed to load execution detail", error);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [runId]);
-
+  // props 覆盖优先（测试 / 嵌入场景）。没有真实来源时一律留 null —— 绝不兜底成
+  // 一个看起来合理的业务对象。
   const summary =
     props.summary ??
     (apiData
@@ -85,13 +77,9 @@ export function ExecutionDetailPage(props: ExecutionDetailPageProps) {
           triggerSource: apiData.primary.trigger_source,
           owner: apiData.primary.owner,
         }
-      : { name: "工具调用工作流", status: "运行中", triggerSource: "工作流调度", owner: "短剧导演" });
-  const currentStepLabel = apiData?.primary.current_step_label ?? "当前步骤";
-  const progressLabel = apiData?.primary.progress_label ?? `${apiData?.primary.progress ?? 72}%`;
-  const riskLevel = apiData?.primary.risk_level ?? "medium";
-
-  const steps = props.steps ?? demoSteps;
-  const toolCalls = props.toolCalls ?? demoToolCalls;
+      : null);
+  const steps = props.steps ?? null;
+  const toolCalls = props.toolCalls ?? null;
   const linkedTitles =
     props.linkedTitles ??
     (apiData
@@ -100,82 +88,156 @@ export function ExecutionDetailPage(props: ExecutionDetailPageProps) {
           audit: apiData.linked_summaries.audit?.summary?.title,
           memory: apiData.linked_summaries.memory?.summary?.title,
         }
-      : { messages: "关联消息", audit: "审计记录", memory: "记忆引用" });
+      : null);
+
+  const currentStepLabel = apiData?.primary.current_step_label ?? "当前步骤";
+  const progressLabel =
+    apiData?.primary.progress_label ??
+    (apiData?.primary.progress != null ? `${apiData.primary.progress}%` : null);
+  const riskLevel = apiData?.primary.risk_level ?? null;
+
+  // 头部在「未选中」分支里也要用，所以在这里就把 runId 收窄掉，
+  // 避免闭包里残留 `string | null`。
+  const openRecovery = runId === null ? undefined : () => props.onOpenRecovery?.(runId);
+
+  const header = (
+    <section className="console-section">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">执行详情</h2>
+          <p className="text-sm text-gray-500">
+            {runId === null ? "尚未选择要查看的任务。" : `任务 ${runId} 的执行剖面。`}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={props.onBack}>
+            返回总览
+          </button>
+          {openRecovery && (
+            <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={openRecovery}>
+              进入恢复
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+
+  if (runId === null) {
+    return (
+      <div className="space-y-4">
+        {header}
+        <ConsoleReadEmpty title="未选择执行任务" description="请从运行控制页选择一个任务后再查看执行详情。" />
+      </div>
+    );
+  }
+
+  // 失败 / 加载优先于一切：数据源没成功，就不能渲染任何结论。
+  if (resource.status === "loading" || resource.status === "idle") {
+    return (
+      <div className="space-y-4">
+        {header}
+        <ConsoleReadLoading action={READ_ACTION} />
+      </div>
+    );
+  }
+
+  if (resource.status === "failed") {
+    return (
+      <div className="space-y-4">
+        {header}
+        <ConsoleReadFailure action={READ_ACTION} message={resource.error} onRetry={resource.reload} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <section className="console-section">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">执行详情</h2>
-            <p className="text-sm text-gray-500">任务 {runId} 的执行剖面。</p>
-          </div>
-          <div className="flex gap-2">
-            <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={props.onBack}>返回总览</button>
-            <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onOpenRecovery?.(runId)}>进入恢复</button>
-          </div>
-        </div>
-      </section>
+      {header}
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-4">
           <Panel title="任务摘要">
             <div className="grid gap-3 md:grid-cols-2">
-              <Info label="任务名称" value={summary.name ?? "-"} />
-              <Info label="当前状态" value={summary.status ?? "-"} />
-              <Info label="触发来源" value={summary.triggerSource ?? "-"} />
-              <Info label="负责人" value={summary.owner ?? "-"} />
+              <Info label="任务名称" value={summary?.name ?? "-"} />
+              <Info label="当前状态" value={summary?.status ?? "-"} />
+              <Info label="触发来源" value={summary?.triggerSource ?? "-"} />
+              <Info label="负责人" value={summary?.owner ?? "-"} />
               <Info label={currentStepLabel} value={apiData?.primary.current_step ?? "-"} />
-              <Info label="进度" value={progressLabel} />
-              <Info label="风险等级" value={riskLevel} />
+              <Info label="进度" value={progressLabel ?? "-"} />
+              <Info label="风险等级" value={riskLevel ?? "-"} />
               <Info label="结果摘要" value={apiData?.primary.result_summary ?? "-"} />
             </div>
           </Panel>
 
           <Panel title="执行时间线">
-            <div className="space-y-3">
-              {steps.map((step) => (
-                <div key={step.name} className="border-b px-3 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="font-medium">{step.name}</div>
-                    <div className="text-xs text-gray-500">{step.duration}</div>
+            {steps && steps.length > 0 ? (
+              <div className="space-y-3">
+                {steps.map((step) => (
+                  <div key={step.name} className="border-b px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-medium">{step.name}</div>
+                      <div className="text-xs text-gray-500">{step.duration}</div>
+                    </div>
+                    <div className="mt-1 text-sm text-gray-600">{step.result}</div>
+                    <div className="mt-2 text-xs text-blue-600">状态：{step.status}</div>
                   </div>
-                  <div className="mt-1 text-sm text-gray-600">{step.result}</div>
-                  <div className="mt-2 text-xs text-blue-600">状态：{step.status}</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <ConsoleReadEmpty title="暂无执行步骤明细" description="后端 detail 接口未返回步骤列表。" />
+            )}
           </Panel>
 
           <Panel title="消息 / 审计 / 记忆引用">
             <div className="grid gap-3">
-              <LinkCard title={linkedTitles.messages ?? "关联消息"} subtitle="查看执行期间产生的消息事件" onClick={() => props.onOpenMessages?.(runId)} />
-              <LinkCard title={linkedTitles.audit ?? "审计记录"} subtitle="查看执行链路审计" onClick={() => props.onOpenAudit?.(runId)} />
-              <LinkCard title={linkedTitles.memory ?? "记忆引用"} subtitle="查看关联记忆和证据" onClick={() => props.onOpenMemory?.(runId)} />
+              <LinkCard
+                title={linkedTitles?.messages ?? "关联消息"}
+                subtitle="查看执行期间产生的消息事件"
+                onClick={() => props.onOpenMessages?.(runId)}
+              />
+              <LinkCard
+                title={linkedTitles?.audit ?? "审计记录"}
+                subtitle="查看执行链路审计"
+                onClick={() => props.onOpenAudit?.(runId)}
+              />
+              <LinkCard
+                title={linkedTitles?.memory ?? "记忆引用"}
+                subtitle="查看关联记忆和证据"
+                onClick={() => props.onOpenMemory?.(runId)}
+              />
             </div>
           </Panel>
         </div>
 
         <aside className="space-y-4">
           <Panel title="工具调用">
-            <div className="space-y-2">
-              {toolCalls.map((call) => (
-                <div key={`${call.tool}-${call.time}`} className="border-b px-3 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="font-medium">{call.tool}</div>
-                    <div className="text-xs text-gray-500">{call.time}</div>
+            {toolCalls && toolCalls.length > 0 ? (
+              <div className="space-y-2">
+                {toolCalls.map((call) => (
+                  <div key={`${call.tool}-${call.time}`} className="border-b px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-medium">{call.tool}</div>
+                      <div className="text-xs text-gray-500">{call.time}</div>
+                    </div>
+                    <div className="mt-1 text-xs text-gray-600">状态：{call.status}</div>
+                    <div className="mt-1 text-xs text-gray-600">耗时：{call.cost}</div>
                   </div>
-                  <div className="mt-1 text-xs text-gray-600">状态：{call.status}</div>
-                  <div className="mt-1 text-xs text-gray-600">耗时：{call.cost}</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <ConsoleReadEmpty title="暂无工具调用明细" description="后端 detail 接口未返回工具调用列表。" />
+            )}
           </Panel>
 
           <Panel title="操作区">
             <div className="grid gap-2">
-              <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenDispatch?.(runId)}>查看调度建议</button>
-              <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenRecovery?.(runId)}>重新进入恢复</button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenDispatch?.(runId)}>
+                查看调度建议
+              </button>
+              <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenRecovery?.(runId)}>
+                重新进入恢复
+              </button>
             </div>
           </Panel>
         </aside>
