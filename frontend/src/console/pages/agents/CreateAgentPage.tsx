@@ -8,6 +8,13 @@ export type CreateAgentPageProps = {
   avatars: RoleAvatar[];
   initialOrgId?: string;
   initialDepartmentId?: string;
+  /**
+   * 当前组织名（只读展示）。
+   *
+   * 表单里此前**连「所属组织」这一栏都没有** —— orgId 隐式取自组织图，用户看不见
+   * 自己正往哪个组织里建人。有了组织切换之后这件事更必须显式化。
+   */
+  organizationName?: string;
   onCreateAgent: (payload: AgentCreatePayload) => Promise<AgentCreateResult>;
   onPreviewWorkflow?: (roleTemplateId: string) => void;
   onPreviewTools?: (roleTemplateId: string) => void;
@@ -151,6 +158,13 @@ export function CreateAgentPage(props: CreateAgentPageProps) {
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="智能体名称"><input className="w-full border px-3 py-2" value={form.name} onChange={(e) => update("name", e.target.value)} placeholder="例如：短剧导演智能体" /></Field>
           <Field label="岗位标题"><input className="w-full border px-3 py-2" value={form.title} onChange={(e) => update("title", e.target.value)} placeholder="例如：内容总监" /></Field>
+          {/* 「所属组织」是只读的：组织切换统一在组织图页做，这里只如实显示建到哪去。
+              此前表单里根本没有这一栏，orgId 隐式取自组织图，用户看不见目标组织。 */}
+          <Field label="所属组织">
+            <div className="w-full border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+              {props.organizationName ?? props.organizationGraph.organization?.name ?? "未选择组织（请先到「组织图」新建或切换组织）"}
+            </div>
+          </Field>
           <Field label="所属部门"><select className="w-full border px-3 py-2" value={form.departmentId} onChange={(e) => update("departmentId", e.target.value)}>{props.organizationGraph.departments.map((department) => <option key={department.department_id} value={department.department_id}>{department.name}</option>)}</select></Field>
           <Field label="上级智能体"><select className="w-full border px-3 py-2" value={form.managerAgentId} onChange={(e) => update("managerAgentId", e.target.value)}><option value="">无</option>{props.organizationGraph.agent_instances.map((agent) => <option key={agent.agent_id} value={agent.agent_id}>{agent.name}</option>)}</select></Field>
         </div>

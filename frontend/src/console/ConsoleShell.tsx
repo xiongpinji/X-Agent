@@ -64,15 +64,77 @@ import { MemoryHistoryPage } from "./pages/memory/MemoryHistoryPage";
 import type { AgentCreatePayload, AgentCreateResult } from "./pages/agents/CreateAgentPage";
 import type { AuditSummarySection, TraceSummarySection } from "./pages/audit/AuditReplayPage";
 import { apiFailureMessage } from "./sendOutcome";
+import { consoleFetch } from "./consoleFetch";
+import { useOrganizationDirectory } from "./hooks/useOrganizationDirectory";
+import { OrganizationSwitcher } from "./components/organization/OrganizationSwitcher";
+import type {
+  NewDepartmentPayload,
+  NewOrganizationPayload,
+} from "./components/organization/OrganizationSwitcher";
+
+/**
+ * 当前组织在 localStorage 的键 —— 让刷新/重开控制台后仍停在同一个组织。
+ *
+ * 存的是 org_id。陈旧值（组织已被删除、后端内存重置、换了租户）会让 workbench
+ * 返回 404，下面有一条自愈 effect 负责清掉它并回退到缺省组织。
+ */
+const CONSOLE_ORG_STORAGE_KEY = "console_active_org_id";
 
 export function ConsoleShell() {
   const state = useConsoleState();
   const dispatch = useConsoleDispatch();
+
+  // (c) 组织切换：当前组织由本组件持有，刻意**不放 reducer** —— reducer 是纯函数，
+  // 而这里需要懒读 localStorage（刷新后停在同一个组织）。
+  // 切换后 bootstrapUrl 变化，hook 内部会用新的 org_id 自动重新 bootstrap，
+  // 于是组织图、以及「创建智能体」的目标组织一起跟着变。
+  const [activeOrgId, setActiveOrgId] = React.useState<string | null>(() => {
+    try {
+      return localStorage.getItem(CONSOLE_ORG_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
+
+  const bootstrapUrl = React.useMemo(
+    () =>
+      activeOrgId
+        ? `/api/v1/workbench?org_id=${encodeURIComponent(activeOrgId)}`
+        : "/api/v1/workbench",
+    [activeOrgId],
+  );
+
   const sync = useConsoleRealtimeSync(state, dispatch, {
-    bootstrapUrl: "/api/v1/workbench",
+    bootstrapUrl,
     messagesStreamUrl: "/api/v1/messages/stream",
     pollingIntervalMs: 10000,
   });
+
+  const organizationDirectory = useOrganizationDirectory(activeOrgId);
+
+  const activeOrganization =
+    organizationDirectory.organizations.find(
+      (organization) => organization.org_id === activeOrgId,
+    ) ?? null;
+
+  /**
+   * 陈旧组织 id 自愈。
+   *
+   * localStorage 里记的 org_id 可能已经不存在（组织被删、后端内存重置、换了租户），
+   * 那时 workbench 会**诚实地返回 404**（见 backend/app/api/workbench.py：明确拒绝
+   * 而不是静默回退，因为静默回退会让「切换没生效」看起来像「切换成功了」）。
+   * 但前端不能因此永久打不开 —— 清掉本地记忆、回退到缺省组织。
+   */
+  React.useEffect(() => {
+    if (!activeOrgId || !sync.syncError) return;
+    if (!sync.syncError.includes("404")) return;
+    try {
+      localStorage.removeItem(CONSOLE_ORG_STORAGE_KEY);
+    } catch {
+      // localStorage 不可用（隐私模式等）时忽略：回退逻辑本身不依赖它
+    }
+    setActiveOrgId(null);
+  }, [activeOrgId, sync.syncError]);
 
   const reconnectAttempts = React.useMemo(() => {
     if (sync.syncStatus === "polling" || sync.syncStatus === "error") return 1;
@@ -204,9 +266,10 @@ export function ConsoleShell() {
   };
 
   const handleCreateAgent = async (payload: AgentCreatePayload): Promise<AgentCreateResult> => {
-    const response = await fetch("/api/v1/organization/agents", {
+    // ★ 必须走 consoleFetch：裸 fetch 不带任何凭证，写请求会被 main.py 的
+    // CSRFProtectionMiddleware 挡成 403 {"detail":"CSRF token required"}（已实测）。
+    const response = await consoleFetch("/api/v1/organization/agents", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
@@ -234,6 +297,54 @@ export function ConsoleShell() {
     }
     await sync.manualRefresh();
     return result;
+  };
+
+  const handleSelectOrg = (orgId: string) => {
+    if (!orgId || orgId === activeOrgId) return;
+    setActiveOrgId(orgId);
+    try {
+      localStorage.setItem(CONSOLE_ORG_STORAGE_KEY, orgId);
+    } catch {
+      // 忽略：记忆失败只影响「下次打开时停在哪个组织」，不影响本次切换
+    }
+  };
+
+  const handleCreateOrganization = async (payload: NewOrganizationPayload) => {
+    const response = await consoleFetch("/api/v1/organization/organizations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(await apiFailureMessage(response));
+    }
+
+    const created = (await response.json()) as { org_id?: string };
+    if (created.org_id) {
+      // 建完立刻切过去。缺省只展示「最近更新的那一个组织」，不切的话新组织会掉出
+      // 视野 —— 用户会以为根本没建成功。这正是 (c) 要根治的「我建的组织不见了」。
+      // （切过去之后，组织目录会因为 activeOrgId 变化自动重拉，不需要在这里 reload。）
+      handleSelectOrg(created.org_id);
+    } else {
+      await organizationDirectory.reload();
+    }
+  };
+
+  const handleCreateDepartment = async (payload: NewDepartmentPayload) => {
+    if (!activeOrgId) {
+      throw new Error("请先选择一个组织");
+    }
+    const response = await consoleFetch("/api/v1/organization/departments", {
+      method: "POST",
+      body: JSON.stringify({ org_id: activeOrgId, ...payload }),
+    });
+    if (!response.ok) {
+      throw new Error(await apiFailureMessage(response));
+    }
+
+    await organizationDirectory.reload();
+    // 组织图来自 workbench 的 bootstrap，新部门不会自己出现 —— 必须显式刷新，
+    // 否则「部门建好了但图上没有」。
+    await sync.manualRefresh();
   };
 
   const renderPage = () => {
@@ -283,6 +394,7 @@ export function ConsoleShell() {
           <CreateAgentPage
             roleCatalog={roleCatalogData.roleCatalog}
             organizationGraph={overviewData.organizationGraph ?? emptyGraph()}
+            organizationName={activeOrganization?.name}
             avatars={roleCatalogData.avatars}
             onCreateAgent={handleCreateAgent}
             onPreviewWorkflow={(roleTemplateId) => dispatch({ type: "roleTemplate/setSelected", payload: roleTemplateId })}
@@ -301,6 +413,18 @@ export function ConsoleShell() {
               dispatch({ type: "room/setActive", payload: roomId });
               dispatch({ type: "page/set", payload: "meeting_room" });
             }}
+            organizationSwitcher={
+              <OrganizationSwitcher
+                organizations={organizationDirectory.organizations}
+                departments={organizationDirectory.departments}
+                activeOrgId={activeOrgId}
+                loading={organizationDirectory.loading}
+                error={organizationDirectory.error}
+                onSelectOrg={handleSelectOrg}
+                onCreateOrganization={handleCreateOrganization}
+                onCreateDepartment={handleCreateDepartment}
+              />
+            }
           />
         );
       case "meeting_room":
@@ -489,15 +613,32 @@ export function ConsoleShell() {
           <OrganizationCenterOverviewPage
             {...organizationCenterData}
             onOpenStructure={() => dispatch({ type: "page/set", payload: "org_structure" })}
-            onOpenRoles={() => dispatch({ type: "page/set", payload: "org_roles" })}
-            onOpenAudit={() => dispatch({ type: "page/set", payload: "org_audit" })}
+            // onOpenRoles / onOpenAudit 刻意不传：那两个页面是纯编造数据的占位
+            // （硬编码 24 个角色 / 13 条审核事件），且它们 fetch 的
+            // /api/v1/organization-control/* 未挂载恒 404。给一个通往假页面的
+            // 按钮，等于把假数据包装成可达功能。不传 ⇒ 组件不渲染这两个入口。
           />
         );
       case "org_structure":
-        return <OrganizationStructurePage rootName="统一控制台" departmentCount={8} memberCount={86} roleCount={24} riskLevel="low" />;
+        return (
+          <OrganizationStructurePage
+            organizations={organizationDirectory.organizations}
+            departments={organizationDirectory.departments}
+            activeOrgId={activeOrgId}
+            loading={organizationDirectory.loading}
+            error={organizationDirectory.error}
+            onSelectOrg={handleSelectOrg}
+            agentCount={overviewData.organizationGraph?.agent_instances.length ?? 0}
+          />
+        );
       case "org_roles":
+        // ★ 已无任何入口可达（侧边栏与「组织权限中心」的按钮都已摘掉）：本页渲染的是
+        // 硬编码占位（24 角色 / 21 启用 / 12 权限集），数据源
+        // /api/v1/organization-control/* 未挂载。保留 case 而不是删除，是为了让
+        // 「零引用 ≠ 可删」这条纪律生效前不误删 —— 它的去留应作为一个独立决定。
         return <OrganizationRolesPage totalRoles={24} activeRoles={21} pendingRoles={3} permissionSets={12} riskLevel="medium" />;
       case "org_audit":
+        // ★ 同上，已无入口可达。
         return <OrganizationAuditPage totalEvents={13} successEvents={10} failedEvents={3} lastEventStatus="pending" riskLevel="medium" />;
       case "audit":
         return (
@@ -538,8 +679,10 @@ export function ConsoleShell() {
             <button onClick={() => dispatch({ type: "page/set", payload: "organization_graph" })}>组织图</button>
             <button onClick={() => dispatch({ type: "page/set", payload: "org_overview" })}>组织权限中心</button>
             <button onClick={() => dispatch({ type: "page/set", payload: "org_structure" })}>组织结构</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "org_roles" })}>角色权限</button>
-            <button onClick={() => dispatch({ type: "page/set", payload: "org_audit" })}>组织审核</button>
+            {/* 「角色权限」(org_roles) 与「组织审核」(org_audit) 两个侧边栏入口已摘除：
+                它们展示的是硬编码占位（24 个角色 / 13 条审核事件），数据源
+                /api/v1/organization-control/* 未挂载恒 404。留一个通往编造数字的
+                入口 = 把静态 fixture 当成功能交付。页面本身保留（见 renderPage）。 */}
             <button onClick={() => dispatch({ type: "page/set", payload: "meeting_room" })}>会议室</button>
             <button onClick={() => dispatch({ type: "page/set", payload: "realtime_chat" })}>对话</button>
             <button onClick={() => dispatch({ type: "page/set", payload: "workflow" })}>工作流</button>
@@ -561,7 +704,7 @@ export function ConsoleShell() {
       topBar={
         <div className="flex h-full items-center justify-between gap-4 px-4">
           <div className="text-xs opacity-60">
-            <span>组织：{overviewData.organizationGraph?.organization?.name ?? "统一控制台"}</span>
+            <span>组织：{overviewData.organizationGraph?.organization?.name ?? activeOrganization?.name ?? "未选择组织"}</span>
             <span className="mx-2">·</span>
             <span>模式：{identityData.mode}</span>
             <span className="mx-2">·</span>

@@ -95,8 +95,12 @@ export function OrganizationCenterOverviewPage(props: OrganizationCenterOverview
         <Panel title="快捷入口">
           <div className="grid gap-2">
             <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenStructure?.()}>查看组织结构</button>
-            <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenRoles?.()}>查看角色权限</button>
-            <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenAudit?.()}>查看审核队列</button>
+            {/* onOpenRoles / onOpenAudit 只在调用方显式提供时才渲染。
+                「角色权限」「组织审核」两页渲染的是硬编码占位（24 个角色 / 13 条
+                审核事件），且 fetch 的 /api/v1/organization-control/* 未挂载恒 404。
+                控制台不再提供通往它们的入口 ⇒ 这两个按钮随之消失。 */}
+            {props.onOpenRoles ? <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenRoles?.()}>查看角色权限</button> : null}
+            {props.onOpenAudit ? <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenAudit?.()}>查看审核队列</button> : null}
           </div>
         </Panel>
       </section>

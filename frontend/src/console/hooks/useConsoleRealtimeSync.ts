@@ -105,6 +105,8 @@ export function useConsoleRealtimeSync(
   const didInitialBootstrapRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
   const stateRef = useRef(state);
+  // 上一次真正用过的 bootstrapUrl —— 用于识别「组织切换」触发的 URL 变化
+  const bootstrapUrlRef = useRef(bootstrapUrl);
 
   useEffect(() => {
     stateRef.current = state;
@@ -323,6 +325,28 @@ export function useConsoleRealtimeSync(
     await refreshBootstrap();
     connectSSE();
   }, [connectSSE, refreshBootstrap]);
+
+  /**
+   * ``bootstrapUrl`` 变化时用新的 URL 重新 bootstrap。
+   *
+   * 用途：控制台切换组织（(c)）—— 切换后 URL 从 ``/api/v1/workbench`` 变成
+   * ``/api/v1/workbench?org_id=...``，组织图必须跟着换成那个组织的。
+   *
+   * ★ 为什么必须放在这里，而不是让调用方 ``await sync.manualRefresh()``：
+   * 调用方 ``setState`` 之后，本帧的 ``manualRefresh`` 闭包里仍是**旧**的
+   * bootstrapUrl（React 状态更新是异步的），刷新会打回旧组织。放在 hook 内部，
+   * 本 effect 与 ``refreshBootstrap`` 的闭包在同一次渲染里同步更新，天然拿到新 URL。
+   *
+   * 首次挂载不触发（ref 初值即当前 URL）—— 首屏由上面那个 effect 负责，
+   * 这里只处理**变化**，避免开局打两次请求。
+   */
+  useEffect(() => {
+    if (bootstrapUrlRef.current === bootstrapUrl) return;
+    bootstrapUrlRef.current = bootstrapUrl;
+    // 换了数据源，旧的 last_event_id 在新流里没有意义
+    lastEventIdRef.current = null;
+    void refreshBootstrap();
+  }, [bootstrapUrl, refreshBootstrap]);
 
   const reconnect = useCallback(() => {
     lastEventIdRef.current = lastEventIdRef.current ?? null;

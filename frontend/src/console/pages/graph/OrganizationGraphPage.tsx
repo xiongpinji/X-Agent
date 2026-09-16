@@ -7,6 +7,14 @@ export type OrganizationGraphPageProps = {
   onSelectNode: (nodeId: string) => void;
   onCreateAgentFromNode?: (nodeId: string) => void;
   onCreateRoomFromNode?: (roomId: string) => void;
+  /**
+   * 组织/部门管理条（组织切换 + 新建组织/部门）。
+   *
+   * 以插槽传入而不是把 6 个回调全塞进本组件：组织目录的读写归 `ConsoleShell` 的
+   * 写路径统一处理（与 `handleCreateAgent` 同一约定）。不传则不渲染，
+   * 这样本组件在测试里仍可独立使用。
+   */
+  organizationSwitcher?: React.ReactNode;
 };
 
 export function OrganizationGraphPage(props: OrganizationGraphPageProps) {
@@ -16,7 +24,9 @@ export function OrganizationGraphPage(props: OrganizationGraphPageProps) {
   const selectedAvatar = useMemo(() => selectedRoleTemplate ? props.avatars.find((avatar) => avatar.role_name === selectedRoleTemplate.role_name) ?? null : null, [props.avatars, selectedRoleTemplate]);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="space-y-4">
+      {props.organizationSwitcher}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
       <section className="console-section">
         <header className="mb-4 flex items-center justify-between gap-3">
           <div>
@@ -24,7 +34,10 @@ export function OrganizationGraphPage(props: OrganizationGraphPageProps) {
             <p className="text-sm text-gray-500">企业、部门、岗位、智能体、会议室关系图。</p>
           </div>
           <div className="flex gap-2">
-            <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onSelectNode(props.graph.organization?.organization_id ?? "")}>
+            {/* ★ 这里此前取的是 organization.organization_id —— 后端 dump 的是
+                Organization.org_id，前者恒 undefined ⇒「返回组织」实际 dispatch 了
+                空串，什么也没选中。已按真实字段名修正。 */}
+            <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onSelectNode(props.graph.organization?.org_id ?? "")}>
               返回组织
             </button>
           </div>
@@ -83,6 +96,7 @@ export function OrganizationGraphPage(props: OrganizationGraphPageProps) {
           </div>
         ) : <p className="mt-4 text-sm text-gray-500">请选择一个节点查看详情。</p>}
       </aside>
+      </div>
     </div>
   );
 }

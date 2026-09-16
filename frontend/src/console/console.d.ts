@@ -232,8 +232,16 @@ type AgentInstance = {
 
 /** 组织摘要 */
 type OrganizationSummary = {
+  /**
+   * ★ 只有 `org_id` —— 后端 `build_organization_graph` 里 dump 的是
+   * `backend.app.core.org.Organization`，其主键字段就叫 `org_id`。
+   *
+   * 这里此前还声明了一个 `organization_id?: string`，那个字段**后端从来不返回**。
+   * 它把「猜出来的字段名」写成了契约，于是 `OrganizationGraphPage` 的
+   * 「返回组织」按钮取 `organization.organization_id` 恒得 undefined、静默失效
+   * （已修）。删掉它是为了不再给下一个人同样的幻觉。
+   */
   org_id?: string;
-  organization_id?: string;
   name?: string;
   [key: string]: unknown;
 };

@@ -5,6 +5,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
+from backend.app.api.errors import api_error
+from backend.app.core.contracts import ErrorCode
 from backend.app.core.dispatch import DispatchRequest, dispatch
 from backend.app.core.org import (
     ConsoleBootstrapResponse,
@@ -58,7 +60,16 @@ class WorkbenchTaskRequest(BaseModel):
 
 
 @router.get("", response_model=ConsoleBootstrapResponse)
-async def get_workbench(principal: PrincipalDependency) -> ConsoleBootstrapResponse:
+async def get_workbench(
+    principal: PrincipalDependency,
+    org_id: str | None = None,
+) -> ConsoleBootstrapResponse:
+    """控制台首屏 bootstrap。
+
+    ``org_id`` 是**可选**查询参数，让控制台能在多个组织之间切换（(c)）：
+    省略 ⇒ 取该租户「最近更新的组织」（旧行为，首屏与未登录场景不变）；
+    给出 ⇒ 必须是**当前租户**的组织，否则 404。
+    """
     enforce_scope(principal, "tools:read")
     tools = ["agent", "memory", "workflow", "browser", "desktop", "plugins", "open_source"]
     dispatch_result = dispatch(
@@ -97,15 +108,38 @@ async def get_workbench(principal: PrincipalDependency) -> ConsoleBootstrapRespo
     if principal.tenant_id and get_settings().seed_default_organization_active:
         organization_store.ensure_default_organization(tenant_id=principal.tenant_id)
 
-    organization_graph = None
+    # 组织选择（(c)：控制台支持在多个组织之间切换）。
+    #
+    # 此前这里恒取 list_organizations(...)[0]，于是用户建了第 2 个组织后
+    # 「我建的组织不见了」—— 组织图只会展示最近更新的那一个，前端也没有任何
+    # 切换入口。现在由显式 org_id 决定，缺省时维持旧行为。
+    #
+    # org_id 给出但**不属于当前租户**时返回 404（与 api/organization.py 的
+    # _require_organization_in_tenant 同码同文案），而不是静默回退到 [0]：
+    # 让用户点了一个不该看的组织、却看到另一个组织的内容，比报错危险得多，
+    # 且静默回退会让「切换没生效」看起来像「切换成功了」。
+    selected_organization = None
     if principal.tenant_id:
-        tenant_organizations = organization_store.list_organizations(
-            tenant_id=principal.tenant_id
-        )
-        if tenant_organizations:
-            organization_graph = organization_store.build_organization_graph(
-                tenant_organizations[0].org_id
+        if org_id is None:
+            tenant_organizations = organization_store.list_organizations(
+                tenant_id=principal.tenant_id
             )
+            selected_organization = (
+                tenant_organizations[0] if tenant_organizations else None
+            )
+        else:
+            candidate = organization_store.get_organization(org_id)
+            if candidate is None or candidate.tenant_id != principal.tenant_id:
+                raise api_error(
+                    404, ErrorCode.RESOURCE_NOT_FOUND, f"组织不存在：{org_id}"
+                )
+            selected_organization = candidate
+
+    organization_graph = (
+        organization_store.build_organization_graph(selected_organization.org_id)
+        if selected_organization is not None
+        else None
+    )
     avatars = [
         RoleAvatar(avatar_id="avatar-ceo", role_name="总经理", display_name="总经理", category="leadership", style="executive", icon_type="portrait", expression="confident", outfit="suit", palette=["#0F172A", "#1D4ED8", "#F59E0B"], badge="CEO", status_variants={"online": "/avatars/ceo_online.png", "busy": "/avatars/ceo_busy.png", "in_meeting": "/avatars/ceo_meeting.png"}, graph_variant="ceo_graph", chat_variant="ceo_chat", meeting_variant="ceo_meeting", thumbnail_url="/avatars/ceo_thumb.png", full_image_url="/avatars/ceo_full.png", alt_text="总经理形象头像", usage=["organization_graph", "chat", "meeting_room", "agent_card", "role_catalog"], tags=["executive", "formal", "leadership"]),
         RoleAvatar(avatar_id="avatar-legal", role_name="法律顾问", display_name="法务顾问", category="legal", style="formal", icon_type="portrait", expression="strict", outfit="business_formal", palette=["#0F172A", "#334155", "#94A3B8"], badge="LEGAL", status_variants={"online": "/avatars/legal_online.png", "busy": "/avatars/legal_busy.png"}, graph_variant="legal_graph", chat_variant="legal_chat", meeting_variant="legal_meeting", thumbnail_url="/avatars/legal_thumb.png", full_image_url="/avatars/legal_full.png", alt_text="法务顾问形象头像", usage=["organization_graph", "chat", "meeting_room", "agent_card", "role_catalog"], tags=["formal", "strict", "risk_averse"]),
@@ -116,7 +150,7 @@ async def get_workbench(principal: PrincipalDependency) -> ConsoleBootstrapRespo
         RoleAvatar(avatar_id="avatar-admin", role_name="管理员", display_name="管理员", category="administration", style="system", icon_type="portrait", expression="calm", outfit="system_admin", palette=["#64748B", "#0EA5E9", "#E2E8F0"], badge="ADMIN", status_variants={"online": "/avatars/admin_online.png", "busy": "/avatars/admin_busy.png"}, graph_variant="admin_graph", chat_variant="admin_chat", meeting_variant="admin_meeting", thumbnail_url="/avatars/admin_thumb.png", full_image_url="/avatars/admin_full.png", alt_text="管理员形象头像", usage=["organization_graph", "chat", "meeting_room", "agent_card", "role_catalog"], tags=["system", "stable", "admin"]),
     ]
     return ConsoleBootstrapResponse(
-        console={"mode": "unified_console", "tenant_id": principal.tenant_id, "org_id": principal.tenant_id, "agent_id": principal.agent_id, "session_id": principal.session_id, "user_id": principal.user_id, "created_at": principal.created_at, "server_time": principal.created_at},
+        console={"mode": "unified_console", "tenant_id": principal.tenant_id, "org_id": selected_organization.org_id if selected_organization else "", "agent_id": principal.agent_id, "session_id": principal.session_id, "user_id": principal.user_id, "created_at": principal.created_at, "server_time": principal.created_at},
         dispatch=dispatch_result.model_dump(mode="json"),
         collaboration={
             "rooms": [],

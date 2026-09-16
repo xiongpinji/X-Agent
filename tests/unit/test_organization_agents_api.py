@@ -1203,3 +1203,181 @@ class TestWorkbenchGraphWiring:
         assert organization_store.list_organizations(tenant_id="default")[
             0
         ].org_id == org["org_id"]
+
+
+class TestWorkbenchOrganizationSelection:
+    """(c) 组织切换：``GET /api/v1/workbench?org_id=...``。
+
+    ★ 为什么每个用例都要建**两个**组织，且让被选中的那个**不是** ``[0]``
+    =====================================================================
+    ``OrganizationStore`` 是进程级单例，而缺省行为恰好就是
+    ``list_organizations(...)[0]``。若用例只建一个组织再断言「选中的是它」，
+    那么把实现原样退回「永远取 [0]」也能通过 —— 断言恒真、测试空转
+    （本仓已反复出现的第四种空转归因：对照组缺失）。所以这里必须让
+    「正确实现」与「退化成 [0]」在结果上**可区分**。
+    """
+
+    def test_explicit_org_id_selects_that_organization_not_the_most_recent(
+        self, client, admin_headers
+    ):
+        suffix = uuid4().hex[:8]
+        older = organization_store.create_organization(
+            tenant_id="default", name=f"较早组织-{suffix}"
+        )
+        older_dept = organization_store.create_department(
+            org_id=older.org_id, name=f"较早部门-{suffix}"
+        )
+        # 后建 ⇒ updated_at 更晚（create_department 会 touch 其组织的 updated_at）
+        # ⇒ list_organizations(...)[0] 是 newer。目标组织刻意选 older。
+        newer = organization_store.create_organization(
+            tenant_id="default", name=f"较新组织-{suffix}"
+        )
+        newer_dept = organization_store.create_department(
+            org_id=newer.org_id, name=f"较新部门-{suffix}"
+        )
+        # 前置断言：先证明「[0] ≠ 目标组织」这个前提真的成立。
+        # 少了它，本用例会在前提不成立时静默退化成「取 [0] 也对」。
+        assert (
+            organization_store.list_organizations(tenant_id="default")[0].org_id
+            == newer.org_id
+        )
+
+        r = client.get(
+            f"/api/v1/workbench?org_id={older.org_id}", headers=admin_headers
+        )
+        assert r.status_code == 200, r.text
+        graph = r.json()["organization_graph"]
+        assert graph["organization"]["org_id"] == older.org_id
+        assert graph["organization"]["name"] == f"较早组织-{suffix}"
+        assert [d["department_id"] for d in graph["departments"]] == [
+            older_dept.department_id
+        ]
+        # 反向：最近更新的那个组织的内容不得混进来
+        assert newer_dept.department_id not in {
+            d["department_id"] for d in graph["departments"]
+        }
+
+    def test_omitting_org_id_keeps_the_most_recent_organization(
+        self, client, admin_headers
+    ):
+        """省略参数 ⇒ 维持旧行为（首屏 / 未登录 bootstrap 依赖它）。"""
+        suffix = uuid4().hex[:8]
+        org = organization_store.create_organization(
+            tenant_id="default", name=f"缺省组织-{suffix}"
+        )
+        organization_store.create_department(
+            org_id=org.org_id, name=f"缺省部门-{suffix}"
+        )
+
+        r = client.get("/api/v1/workbench", headers=admin_headers)
+        assert r.status_code == 200, r.text
+        assert r.json()["organization_graph"]["organization"]["org_id"] == org.org_id
+
+    def test_unknown_org_id_is_404(self, client, admin_headers):
+        missing_id = str(uuid4())
+        r = client.get(
+            f"/api/v1/workbench?org_id={missing_id}", headers=admin_headers
+        )
+        assert r.status_code == 404, r.text
+        body = r.json()
+        assert body["code"] == "resource_not_found"
+        assert body["message"] == f"组织不存在：{missing_id}"
+
+    def test_foreign_tenant_org_id_is_404(self, client, admin_headers, foreign_bundle):
+        """别的租户的组织 ⇒ 404（不是静默回退到自己的 [0]）。
+
+        静默回退会让「切换没生效」看起来像「切换成功了」，用户在一个
+        不该看的组织上继续操作，比直接报错危险得多。
+        """
+        r = client.get(
+            f"/api/v1/workbench?org_id={foreign_bundle.org.org_id}",
+            headers=admin_headers,
+        )
+        assert r.status_code == 404, r.text
+        assert r.json()["code"] == "resource_not_found"
+
+    def test_missing_and_foreign_org_share_the_same_error_shape(
+        self, client, admin_headers, foreign_bundle
+    ):
+        """「不存在」与「属于别人」必须同码同文案，否则可枚举他人 org_id。"""
+        missing_id = str(uuid4())
+        missing = client.get(
+            f"/api/v1/workbench?org_id={missing_id}", headers=admin_headers
+        )
+        foreign = client.get(
+            f"/api/v1/workbench?org_id={foreign_bundle.org.org_id}",
+            headers=admin_headers,
+        )
+
+        assert missing.status_code == foreign.status_code == 404
+        assert missing.json()["code"] == foreign.json()["code"]
+        assert missing.json()["message"] == f"组织不存在：{missing_id}"
+        assert (
+            foreign.json()["message"]
+            == f"组织不存在：{foreign_bundle.org.org_id}"
+        )
+
+    def test_console_org_id_reports_the_selected_organization(
+        self, client, admin_headers
+    ):
+        """``console.org_id`` 必须是被选中的组织，而不是 ``principal.tenant_id``。
+
+        此前它恒等于 tenant_id（``"default"``），与 organization_graph 里的真实
+        org_id 不是一回事 —— 前端拿它拼 SSE 的 org_id 过滤参数，等于永远过滤错。
+        """
+        suffix = uuid4().hex[:8]
+        org = organization_store.create_organization(
+            tenant_id="default", name=f"标识组织-{suffix}"
+        )
+
+        r = client.get(f"/api/v1/workbench?org_id={org.org_id}", headers=admin_headers)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["console"]["org_id"] == org.org_id
+        assert body["console"]["org_id"] != body["console"]["tenant_id"]
+        assert body["organization_graph"]["organization"]["org_id"] == org.org_id
+
+    def test_switching_twice_returns_each_organizations_own_agents(
+        self, client, admin_headers
+    ):
+        """★ 切换语义：同一客户端连续切两次，两份图各自只含自己的智能体。"""
+        suffix = uuid4().hex[:8]
+        left = organization_store.create_organization(
+            tenant_id="default", name=f"左组织-{suffix}"
+        )
+        left_dept = organization_store.create_department(
+            org_id=left.org_id, name=f"左部门-{suffix}"
+        )
+        right = organization_store.create_organization(
+            tenant_id="default", name=f"右组织-{suffix}"
+        )
+        right_dept = organization_store.create_department(
+            org_id=right.org_id, name=f"右部门-{suffix}"
+        )
+        template_id = organization_store.get_role_catalog().templates[0].role_id
+        left_agent = organization_store.create_agent(
+            org_id=left.org_id,
+            department_id=left_dept.department_id,
+            name=f"左岗位-{suffix}",
+            role_template_id=template_id,
+        )
+        right_agent = organization_store.create_agent(
+            org_id=right.org_id,
+            department_id=right_dept.department_id,
+            name=f"右岗位-{suffix}",
+            role_template_id=template_id,
+        )
+
+        left_graph = client.get(
+            f"/api/v1/workbench?org_id={left.org_id}", headers=admin_headers
+        ).json()["organization_graph"]
+        right_graph = client.get(
+            f"/api/v1/workbench?org_id={right.org_id}", headers=admin_headers
+        ).json()["organization_graph"]
+
+        assert {a["agent_id"] for a in left_graph["agent_instances"]} == {
+            left_agent.agent_id
+        }
+        assert {a["agent_id"] for a in right_graph["agent_instances"]} == {
+            right_agent.agent_id
+        }
