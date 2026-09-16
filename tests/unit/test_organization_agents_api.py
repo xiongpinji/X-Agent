@@ -28,6 +28,7 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.app.api.workbench import get_workbench_principal
 from backend.app.core.org import organization_store
 from backend.app.core.security import ROLE_SCOPES, Principal
 from backend.app.dependencies import get_current_principal
@@ -91,10 +92,15 @@ def csrf_exempt_headers():
 
 @pytest.fixture()
 def bundle():
-    """一个全新的组织 + 两个部门 + store 自己的模板目录。"""
+    """一个全新的组织 + 两个部门 + store 自己的模板目录。
+
+    `tenant_id` 必须用 `"default"` —— 端点有租户边界（`_require_organization_in_tenant`），
+    而 bootstrap key 解析出的 principal 其 tenant 就是 `"default"`。用别的租户建组织
+    会让所有用例撞 404，测的就成了租户边界而不是被测逻辑。唯一性靠 uuid 名字保证。
+    """
     suffix = uuid4().hex[:8]
     org = organization_store.create_organization(
-        tenant_id=f"tenant-{suffix}", name=f"组织-{suffix}"
+        tenant_id="default", name=f"组织-{suffix}"
     )
     dept = organization_store.create_department(
         org_id=org.org_id, name=f"内容部-{suffix}"
@@ -109,6 +115,19 @@ def bundle():
         catalog=organization_store.get_role_catalog(),
         suffix=suffix,
     )
+
+
+@pytest.fixture()
+def foreign_bundle():
+    """**另一个租户**的组织 + 部门，用于租户边界用例。"""
+    suffix = uuid4().hex[:8]
+    org = organization_store.create_organization(
+        tenant_id=f"tenant-other-{suffix}", name=f"外部组织-{suffix}"
+    )
+    dept = organization_store.create_department(
+        org_id=org.org_id, name=f"外部部门-{suffix}"
+    )
+    return SimpleNamespace(org=org, dept=dept, suffix=suffix)
 
 
 def _payload(bundle, **overrides):
@@ -641,3 +660,415 @@ class TestOrganizationGraph:
         assert graph is not None
         node = next(n for n in graph.nodes if n.node_id == body["agent_id"])
         assert node.metadata["role"] == body["role"] == "director"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 组织 / 部门端点 —— 闭环：组织域可以「从零真实地建起来」
+#
+# 这批端点的存在理由：OrganizationStore 无种子且 create_organization /
+# create_department 在 backend/app/** 里零调用者 ⇒ 不先建出组织与部门，
+# POST /agents 根本没有合法的 org_id / department_id 可用。
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ORGANIZATION_CONTRACT_KEYS = {
+    "org_id",
+    "tenant_id",
+    "name",
+    "description",
+    "owner_user_id",
+    "status",
+    "created_at",
+    "updated_at",
+}
+
+DEPARTMENT_CONTRACT_KEYS = {
+    "department_id",
+    "org_id",
+    "name",
+    "mission",
+    "leader_agent_id",
+    "parent_department_id",
+    "created_at",
+    "updated_at",
+}
+
+
+class TestOrganizationsApi:
+    def test_create_returns_201_and_exact_key_set(self, client, admin_headers):
+        r = client.post(
+            f"{BASE}/organizations",
+            json={"name": f"新组织-{uuid4().hex[:6]}"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 201, r.text
+        assert set(r.json().keys()) == ORGANIZATION_CONTRACT_KEYS
+
+    def test_created_organization_is_readable_from_the_store(
+        self, client, admin_headers
+    ):
+        name = f"落库组织-{uuid4().hex[:6]}"
+        created = client.post(
+            f"{BASE}/organizations", json={"name": name}, headers=admin_headers
+        ).json()
+
+        stored = organization_store.get_organization(created["org_id"])
+        assert stored is not None
+        assert stored.name == name
+        assert created["org_id"] in {
+            org.org_id
+            for org in organization_store.list_organizations(tenant_id="default")
+        }
+
+    def test_tenant_and_owner_come_from_the_principal_not_the_body(
+        self, client, admin_headers
+    ):
+        """请求体里塞 tenant_id 必须 422 —— 归属只能来自 principal。"""
+        created = client.post(
+            f"{BASE}/organizations",
+            json={"name": f"归属-{uuid4().hex[:6]}"},
+            headers=admin_headers,
+        ).json()
+        assert created["tenant_id"] == "default"
+        assert created["owner_user_id"] == "bootstrap-admin"
+
+        r = client.post(
+            f"{BASE}/organizations",
+            json={"name": "越权归属", "tenant_id": "someone-else"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 422, r.text
+
+    def test_list_only_returns_own_tenant(self, client, admin_headers, foreign_bundle):
+        own = client.post(
+            f"{BASE}/organizations",
+            json={"name": f"本租户-{uuid4().hex[:6]}"},
+            headers=admin_headers,
+        ).json()
+
+        listed = client.get(f"{BASE}/organizations", headers=admin_headers).json()
+        ids = {item["org_id"] for item in listed}
+        assert own["org_id"] in ids
+        assert foreign_bundle.org.org_id not in ids
+        assert all(item["tenant_id"] == "default" for item in listed)
+
+    def test_blank_name_is_422(self, client, admin_headers):
+        r = client.post(
+            f"{BASE}/organizations", json={"name": "   "}, headers=admin_headers
+        )
+        assert r.status_code == 422, r.text
+
+    def test_user_role_cannot_create_or_list(self, client, csrf_exempt_headers):
+        _use_role("user")
+        assert (
+            client.post(
+                f"{BASE}/organizations",
+                json={"name": "x"},
+                headers=csrf_exempt_headers,
+            ).status_code
+            == 403
+        )
+        r = client.get(f"{BASE}/organizations", headers=csrf_exempt_headers)
+        assert r.status_code == 403, r.text
+        assert "org:read" in r.json()["message"]
+
+    def test_developer_can_create(self, client, csrf_exempt_headers):
+        _use_role("developer")
+        r = client.post(
+            f"{BASE}/organizations",
+            json={"name": f"开发者建的-{uuid4().hex[:6]}"},
+            headers=csrf_exempt_headers,
+        )
+        assert r.status_code == 201, r.text
+
+
+class TestDepartmentsApi:
+    def test_create_returns_201_and_exact_key_set(self, client, admin_headers, bundle):
+        r = client.post(
+            f"{BASE}/departments",
+            json={"org_id": bundle.org.org_id, "name": f"新部门-{uuid4().hex[:6]}"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 201, r.text
+        assert set(r.json().keys()) == DEPARTMENT_CONTRACT_KEYS
+
+    def test_created_department_is_listed_and_stored(self, client, admin_headers, bundle):
+        name = f"落库部门-{uuid4().hex[:6]}"
+        created = client.post(
+            f"{BASE}/departments",
+            json={"org_id": bundle.org.org_id, "name": name, "mission": "跑内容"},
+            headers=admin_headers,
+        ).json()
+
+        listed = client.get(
+            f"{BASE}/departments",
+            params={"org_id": bundle.org.org_id},
+            headers=admin_headers,
+        ).json()
+        assert created["department_id"] in {d["department_id"] for d in listed}
+        assert any(d["name"] == name and d["mission"] == "跑内容" for d in listed)
+
+        stored = organization_store.get_department(created["department_id"])
+        assert stored is not None and stored.name == name
+
+    def test_list_is_scoped_to_the_requested_org(
+        self, client, admin_headers, bundle, foreign_bundle
+    ):
+        """★ 别组织的部门绝不能出现在本组织的列表里。
+
+        ``foreign_bundle`` 同样是**必需**的：单跑本类时 store 里只有 bundle 自己
+        造的部门 ⇒ 即便 ``list_departments(org_id=...)`` 的过滤被摘掉，「自己的部门
+        在列表里」也照样成立（变异实测 SURVIVED）。垫上 foreign_bundle 才能把
+        「org 维度不串」这条不变量钉住。
+        """
+        listed = client.get(
+            f"{BASE}/departments",
+            params={"org_id": bundle.org.org_id},
+            headers=admin_headers,
+        ).json()
+        ids = {d["department_id"] for d in listed}
+        assert bundle.dept.department_id in ids
+        assert foreign_bundle.dept.department_id not in ids
+        assert all(d["org_id"] == bundle.org.org_id for d in listed)
+
+    def test_unknown_org_is_404(self, client, admin_headers):
+        r = client.post(
+            f"{BASE}/departments",
+            json={"org_id": f"missing-{uuid4().hex[:6]}", "name": "孤儿部门"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 404, r.text
+
+    def test_foreign_tenant_org_is_404(self, client, admin_headers, foreign_bundle):
+        """跨租户读写必须 404（与「不存在」同码同文案，不泄漏 id 是否存在）。"""
+        assert (
+            client.post(
+                f"{BASE}/departments",
+                json={"org_id": foreign_bundle.org.org_id, "name": "越界部门"},
+                headers=admin_headers,
+            ).status_code
+            == 404
+        )
+        assert (
+            client.get(
+                f"{BASE}/departments",
+                params={"org_id": foreign_bundle.org.org_id},
+                headers=admin_headers,
+            ).status_code
+            == 404
+        )
+
+    def test_blank_name_is_422(self, client, admin_headers, bundle):
+        r = client.post(
+            f"{BASE}/departments",
+            json={"org_id": bundle.org.org_id, "name": "  "},
+            headers=admin_headers,
+        )
+        assert r.status_code == 422, r.text
+
+    def test_leader_must_exist_and_belong_to_the_org(
+        self, client, admin_headers, bundle, foreign_bundle
+    ):
+        outsider = organization_store.create_agent(
+            org_id=foreign_bundle.org.org_id,
+            department_id=foreign_bundle.dept.department_id,
+            name=f"外部负责人-{uuid4().hex[:6]}",
+        )
+        for bad_leader in (f"missing-{uuid4().hex[:6]}", outsider.agent_id):
+            r = client.post(
+                f"{BASE}/departments",
+                json={
+                    "org_id": bundle.org.org_id,
+                    "name": f"部门-{uuid4().hex[:6]}",
+                    "leader_agent_id": bad_leader,
+                },
+                headers=admin_headers,
+            )
+            assert r.status_code == 404, f"{bad_leader} 应被拒绝，实际 {r.status_code}"
+
+    def test_parent_must_exist_and_belong_to_the_org(
+        self, client, admin_headers, bundle, foreign_bundle
+    ):
+        for bad_parent in (
+            f"missing-{uuid4().hex[:6]}",
+            foreign_bundle.dept.department_id,
+        ):
+            r = client.post(
+                f"{BASE}/departments",
+                json={
+                    "org_id": bundle.org.org_id,
+                    "name": f"子部门-{uuid4().hex[:6]}",
+                    "parent_department_id": bad_parent,
+                },
+                headers=admin_headers,
+            )
+            assert r.status_code == 404, f"{bad_parent} 应被拒绝，实际 {r.status_code}"
+
+    def test_valid_leader_and_parent_are_accepted(
+        self, client, admin_headers, bundle
+    ):
+        leader = _create(client, admin_headers, bundle, name=f"负责人-{uuid4().hex[:6]}")
+        child = client.post(
+            f"{BASE}/departments",
+            json={
+                "org_id": bundle.org.org_id,
+                "name": f"子部门-{uuid4().hex[:6]}",
+                "leader_agent_id": leader["agent_id"],
+                "parent_department_id": bundle.dept.department_id,
+            },
+            headers=admin_headers,
+        )
+        assert child.status_code == 201, child.text
+        assert child.json()["leader_agent_id"] == leader["agent_id"]
+        assert child.json()["parent_department_id"] == bundle.dept.department_id
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 租户边界（新增：此前 POST /agents 只验组织存在，不验归属）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestTenantBoundary:
+    def test_agents_endpoint_rejects_foreign_tenant_org(
+        self, client, admin_headers, foreign_bundle
+    ):
+        before = {a.agent_id for a in organization_store.list_agents()}
+        r = client.post(
+            f"{BASE}/agents",
+            json={
+                "org_id": foreign_bundle.org.org_id,
+                "department_id": foreign_bundle.dept.department_id,
+                "name": f"越界岗位-{uuid4().hex[:6]}",
+                "role_template_id": organization_store.get_role_catalog()
+                .templates[0]
+                .role_id,
+            },
+            headers=admin_headers,
+        )
+        assert r.status_code == 404, r.text
+        assert {a.agent_id for a in organization_store.list_agents()} == before
+
+    def test_missing_and_foreign_org_share_the_same_error_shape(
+        self, client, admin_headers, foreign_bundle
+    ):
+        """同码同文案 —— 否则可以用错误文案当「组织存在性探针」。"""
+        missing = client.get(
+            f"{BASE}/departments",
+            params={"org_id": f"missing-{uuid4().hex[:6]}"},
+            headers=admin_headers,
+        )
+        foreign = client.get(
+            f"{BASE}/departments",
+            params={"org_id": foreign_bundle.org.org_id},
+            headers=admin_headers,
+        )
+        assert missing.status_code == foreign.status_code == 404
+        assert missing.json()["code"] == foreign.json()["code"]
+        assert (
+            missing.json()["message"].split("：")[0]
+            == foreign.json()["message"].split("：")[0]
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 控制台 bootstrap 与组织域的接线（闭环不变量）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestWorkbenchGraphWiring:
+    def test_bootstrap_graph_reflects_the_real_organization(
+        self, client, admin_headers, bundle
+    ):
+        """★ 闭环不变量：刚建的组织/部门必须出现在 bootstrap 的组织图里。
+
+        隔离此用例的是一个**真实存在的后端 bug**：workbench 曾把
+        principal.tenant_id 当 org_id 传给 build_organization_graph ⇒
+        恒返回 None ⇒ 控制台组织图恒空 ⇒ CreateAgentPage 的「所属组织/部门」
+        下拉恒空、表单在校验阶段就被拦下（页面看得见、点不动）。
+        """
+        r = client.get("/api/v1/workbench", headers=admin_headers)
+        assert r.status_code == 200, r.text
+        graph = r.json().get("organization_graph") or {}
+        assert graph, "bootstrap 组织图为空 —— 组织域与工作台断了"
+        assert graph["organization"]["org_id"] == bundle.org.org_id
+        assert {d["department_id"] for d in graph["departments"]} >= {
+            bundle.dept.department_id,
+            bundle.other_dept.department_id,
+        }
+
+    def test_bootstrap_graph_is_empty_for_a_tenant_without_organizations(
+        self, client, csrf_exempt_headers, foreign_bundle
+    ):
+        """没有组织的租户 → 空图（诚实），而不是别人的组织。
+
+        ★ ``foreign_bundle`` 不是装饰：``OrganizationStore`` 是进程级单例，
+        单跑这条用例时 store 里本来就只有它自己刚造的 foreign 组织。若不给一个
+        「别人的组织」垫底，即便生产代码把租户过滤整个摘掉，``list_organizations()``
+        也只是把自己排除掉了、仍返回空 ⇒ 断言空转（变异实测 SURVIVED）。垫上
+        foreign 组织后，「空租户看不见别人的组织」才是一条真的被守住的不变量。
+
+        ★ 这里覆盖的是 ``get_workbench_principal``，不是 ``get_current_principal``。
+        workbench 端点的依赖是前者，它在内部**以普通函数调用**方式执行
+        ``get_current_principal(request)``（见 ``api/workbench.py``），不经过
+        FastAPI 的 Depends 解析 ⇒ 覆盖后者对本端点**完全无效**：用例会拿到 bootstrap
+        的 default 租户、看见别的用例建的组织，于是这条断言结构性恒假。
+        """
+        # 前置：别人的组织**确实**在 store 里 —— 否则下面的空图只是因为 store 本来就空。
+        assert organization_store.get_organization(foreign_bundle.org.org_id) is not None
+        assert organization_store.list_organizations(), "store 里必须已有组织，否则断言空转"
+
+        app.dependency_overrides[get_workbench_principal] = lambda: Principal(
+            tenant_id=f"empty-tenant-{uuid4().hex[:8]}",
+            user_id="empty-tenant-admin",
+            role="admin",
+            scopes=list(ROLE_SCOPES.get("admin", [])),
+            authenticated=True,
+        )
+        r = client.get("/api/v1/workbench", headers=csrf_exempt_headers)
+        assert r.status_code == 200, r.text
+        assert (r.json().get("organization_graph") or {}) == {}
+
+    def test_console_can_complete_the_full_flow_without_seed_data(
+        self, client, admin_headers, csrf_exempt_headers
+    ):
+        """端到端闭环：建组织 → 建部门 → 建岗位，全程只用公开端点、零预置数据。
+
+        这条把「组织域无种子」这个阻塞的**解法**钉住：不依赖任何 fixture 造数据，
+        控制台该走的每一步都在这里走通了。
+        """
+        template_id = organization_store.get_role_catalog().templates[1].role_id
+
+        org = client.post(
+            f"{BASE}/organizations",
+            json={"name": f"闭环组织-{uuid4().hex[:6]}"},
+            headers=admin_headers,
+        ).json()
+        dept = client.post(
+            f"{BASE}/departments",
+            json={"org_id": org["org_id"], "name": f"闭环部门-{uuid4().hex[:6]}"},
+            headers=admin_headers,
+        ).json()
+        agent = client.post(
+            f"{BASE}/agents",
+            json={
+                "org_id": org["org_id"],
+                "department_id": dept["department_id"],
+                "name": f"闭环岗位-{uuid4().hex[:6]}",
+                "role_template_id": template_id,
+            },
+            headers=admin_headers,
+        )
+        assert agent.status_code == 201, agent.text
+
+        # 1) 落库可复核（验收红线）
+        assert agent.json()["agent_id"] in {
+            a.agent_id
+            for a in organization_store.list_agents(department_id=dept["department_id"])
+        }
+        # 2) 组织图（控制台的数据来源）里看得见
+        graph = organization_store.build_organization_graph(org["org_id"])
+        assert graph is not None
+        assert agent.json()["agent_id"] in {i.agent_id for i in graph.agent_instances}
+        # 3) 该组织是当前租户最近更新的 ⇒ 它就是要展示到控制台的那一个
+        assert organization_store.list_organizations(tenant_id="default")[
+            0
+        ].org_id == org["org_id"]

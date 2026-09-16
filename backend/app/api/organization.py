@@ -39,6 +39,8 @@ from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.org import (
     AgentNameConflictError,
+    Department,
+    Organization,
     agent_role_for_template,
     organization_store,
 )
@@ -48,6 +50,49 @@ from backend.app.dependencies import enforce_scope, get_current_principal
 router = APIRouter(prefix="/api/v1/organization", tags=["organization"])
 
 PrincipalDependency = Annotated[Principal, Depends(get_current_principal)]
+
+
+def _require_organization_in_tenant(org_id: str, principal: Principal) -> Organization:
+    """取组织，且必须属于当前租户；否则 404。
+
+    「不存在」与「属于别的租户」返回**同一个 404**：403 会泄漏「该 org_id 真实存在」，
+    让攻击者能枚举别人的组织 id。
+
+    注：OrganizationStore 目前是进程内单例、没有租户级隔离层，所以这层校验是
+    唯一的边界 —— 组织域任何按 id 取对象的入口都必须先过它。
+    """
+    organization = organization_store.get_organization(org_id)
+    if organization is None or organization.tenant_id != principal.tenant_id:
+        raise api_error(
+            404, ErrorCode.RESOURCE_NOT_FOUND, f"组织不存在：{org_id}"
+        )
+    return organization
+
+
+def _organization_payload(organization: Organization) -> dict[str, Any]:
+    return {
+        "org_id": organization.org_id,
+        "tenant_id": organization.tenant_id,
+        "name": organization.name,
+        "description": organization.description,
+        "owner_user_id": organization.owner_user_id,
+        "status": organization.status.value,
+        "created_at": organization.created_at,
+        "updated_at": organization.updated_at,
+    }
+
+
+def _department_payload(department: Department) -> dict[str, Any]:
+    return {
+        "department_id": department.department_id,
+        "org_id": department.org_id,
+        "name": department.name,
+        "mission": department.mission,
+        "leader_agent_id": department.leader_agent_id,
+        "parent_department_id": department.parent_department_id,
+        "created_at": department.created_at,
+        "updated_at": department.updated_at,
+    }
 
 
 class OrganizationAgentCreateRequest(BaseModel):
@@ -76,6 +121,31 @@ class OrganizationAgentCreateRequest(BaseModel):
     memory_scope: dict[str, str] = Field(default_factory=dict)
 
 
+class OrganizationCreateRequest(BaseModel):
+    """创建组织的请求体。
+
+    刻意**不含 `tenant_id`** —— 归属一律取 `principal.tenant_id`。
+    允许客户端指定就等于开了一个跨租户写入口，而目前没有任何真实需求需要它。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    description: str = ""
+
+
+class DepartmentCreateRequest(BaseModel):
+    """创建部门的请求体。`parent_department_id` 支持多级组织结构。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    org_id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    mission: str = ""
+    leader_agent_id: str | None = None
+    parent_department_id: str | None = None
+
+
 @router.post("/agents", status_code=201)
 async def create_organization_agent(
     payload: OrganizationAgentCreateRequest,
@@ -100,11 +170,8 @@ async def create_organization_agent(
     """
     enforce_scope(principal, "org:write")
 
-    organization = organization_store.get_organization(payload.org_id)
-    if organization is None:
-        raise api_error(
-            404, ErrorCode.RESOURCE_NOT_FOUND, f"组织不存在：{payload.org_id}"
-        )
+    # 租户边界：不能往别的租户的组织里塞智能体。
+    _require_organization_in_tenant(payload.org_id, principal)
 
     department = organization_store.get_department(payload.department_id)
     if department is None:
@@ -196,3 +263,112 @@ async def create_organization_agent(
         "created_at": agent.created_at,
         "warnings": warnings,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 组织 / 部门
+#
+# 这两个端点的存在理由：OrganizationStore 纯内存无种子，而 create_organization /
+# create_department 在 backend/app/** 里**零调用者** ⇒ 运行时组织域永远为空 ⇒
+# POST /agents 拿不到合法的 org_id / department_id（控制台表单也因此恒空、
+# 校验阶段就被拦下）。有了它们，组织域第一次能「从零真实地建起来」，
+# 不需要预置任何假数据。
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/organizations")
+async def list_organizations(
+    principal: PrincipalDependency = None,
+) -> list[dict[str, Any]]:
+    """列出**当前租户**的组织（`list_organizations` 已按 updated_at 倒序）。"""
+    enforce_scope(principal, "org:read")
+    return [
+        _organization_payload(organization)
+        for organization in organization_store.list_organizations(
+            tenant_id=principal.tenant_id
+        )
+    ]
+
+
+@router.post("/organizations", status_code=201)
+async def create_organization(
+    payload: OrganizationCreateRequest,
+    principal: PrincipalDependency = None,
+) -> dict[str, Any]:
+    """创建一个组织（归属 = 当前租户，创建者记为 owner）。"""
+    enforce_scope(principal, "org:write")
+
+    name = payload.name.strip()
+    if not name:
+        raise api_error(
+            422, ErrorCode.VALIDATION_ERROR, "组织名称不能为空（或全为空白字符）"
+        )
+
+    organization = organization_store.create_organization(
+        tenant_id=principal.tenant_id,
+        name=name,
+        description=payload.description.strip(),
+        owner_user_id=principal.user_id,
+    )
+    return _organization_payload(organization)
+
+
+@router.get("/departments")
+async def list_departments(
+    org_id: str,
+    principal: PrincipalDependency = None,
+) -> list[dict[str, Any]]:
+    """列出某组织下的部门。"""
+    enforce_scope(principal, "org:read")
+    _require_organization_in_tenant(org_id, principal)
+    return [
+        _department_payload(department)
+        for department in organization_store.list_departments(org_id=org_id)
+    ]
+
+
+@router.post("/departments", status_code=201)
+async def create_department(
+    payload: DepartmentCreateRequest,
+    principal: PrincipalDependency = None,
+) -> dict[str, Any]:
+    """在指定组织下创建一个部门。
+
+    `leader_agent_id` / `parent_department_id` 若给出，必须存在**且同属该组织** ——
+    放行一个打错的 id 会静默挂出一棵错的汇报树，比直接报错难查得多。
+    """
+    enforce_scope(principal, "org:write")
+    _require_organization_in_tenant(payload.org_id, principal)
+
+    name = payload.name.strip()
+    if not name:
+        raise api_error(
+            422, ErrorCode.VALIDATION_ERROR, "部门名称不能为空（或全为空白字符）"
+        )
+
+    if payload.leader_agent_id:
+        leader = organization_store.get_agent(payload.leader_agent_id)
+        if leader is None or leader.org_id != payload.org_id:
+            raise api_error(
+                404,
+                ErrorCode.RESOURCE_NOT_FOUND,
+                f"负责人不存在或不属于该组织：{payload.leader_agent_id}",
+            )
+
+    if payload.parent_department_id:
+        parent = organization_store.get_department(payload.parent_department_id)
+        if parent is None or parent.org_id != payload.org_id:
+            raise api_error(
+                404,
+                ErrorCode.RESOURCE_NOT_FOUND,
+                f"上级部门不存在或不属于该组织：{payload.parent_department_id}",
+            )
+
+    department = organization_store.create_department(
+        org_id=payload.org_id,
+        name=name,
+        mission=payload.mission.strip(),
+        leader_agent_id=payload.leader_agent_id,
+        parent_department_id=payload.parent_department_id,
+    )
+    return _department_payload(department)

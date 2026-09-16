@@ -79,7 +79,23 @@ async def get_workbench(principal: PrincipalDependency) -> ConsoleBootstrapRespo
     # role_template_id 与 OrganizationStore 内部目录不同源：CreateAgentPage 选中模板
     # 后提交给 POST /api/v1/organization/agents 必然查不到模板（404）。
     role_catalog = organization_store.get_role_catalog()
-    organization_graph = organization_store.build_organization_graph(principal.tenant_id) if principal.tenant_id else None
+    # 组织图按「该租户最近更新的组织」取。
+    #
+    # 2026-09-16 修正：此前这里写的是 build_organization_graph(principal.tenant_id) ——
+    # 把 tenant_id 当成 org_id 传，而 Organization.org_id 是 uuid4()、tenant_id 是
+    # "default" 这类字符串 ⇒ get_organization 必然返回 None ⇒ 组织图**恒为空**，
+    # 于是 CreateAgentPage 的「所属组织 / 所属部门」下拉恒为空、表单在校验阶段就被拦下。
+    # list_organizations 已按 updated_at 倒序，故 [0] 即最近活跃的组织；
+    # 租户下没有任何组织时维持「空图」（与没有任何组织这一事实一致，不伪造）。
+    organization_graph = None
+    if principal.tenant_id:
+        tenant_organizations = organization_store.list_organizations(
+            tenant_id=principal.tenant_id
+        )
+        if tenant_organizations:
+            organization_graph = organization_store.build_organization_graph(
+                tenant_organizations[0].org_id
+            )
     avatars = [
         RoleAvatar(avatar_id="avatar-ceo", role_name="总经理", display_name="总经理", category="leadership", style="executive", icon_type="portrait", expression="confident", outfit="suit", palette=["#0F172A", "#1D4ED8", "#F59E0B"], badge="CEO", status_variants={"online": "/avatars/ceo_online.png", "busy": "/avatars/ceo_busy.png", "in_meeting": "/avatars/ceo_meeting.png"}, graph_variant="ceo_graph", chat_variant="ceo_chat", meeting_variant="ceo_meeting", thumbnail_url="/avatars/ceo_thumb.png", full_image_url="/avatars/ceo_full.png", alt_text="总经理形象头像", usage=["organization_graph", "chat", "meeting_room", "agent_card", "role_catalog"], tags=["executive", "formal", "leadership"]),
         RoleAvatar(avatar_id="avatar-legal", role_name="法律顾问", display_name="法务顾问", category="legal", style="formal", icon_type="portrait", expression="strict", outfit="business_formal", palette=["#0F172A", "#334155", "#94A3B8"], badge="LEGAL", status_variants={"online": "/avatars/legal_online.png", "busy": "/avatars/legal_busy.png"}, graph_variant="legal_graph", chat_variant="legal_chat", meeting_variant="legal_meeting", thumbnail_url="/avatars/legal_thumb.png", full_image_url="/avatars/legal_full.png", alt_text="法务顾问形象头像", usage=["organization_graph", "chat", "meeting_room", "agent_card", "role_catalog"], tags=["formal", "strict", "risk_averse"]),
