@@ -61,8 +61,9 @@ import { MemoryOverviewPage } from "./pages/memory/MemoryOverviewPage";
 import { MemoryDetailPage } from "./pages/memory/MemoryDetailPage";
 import { MemoryManagementPage } from "./pages/memory/MemoryManagementPage";
 import { MemoryHistoryPage } from "./pages/memory/MemoryHistoryPage";
-import type { AgentCreatePayload } from "./pages/agents/CreateAgentPage";
+import type { AgentCreatePayload, AgentCreateResult } from "./pages/agents/CreateAgentPage";
 import type { AuditSummarySection, TraceSummarySection } from "./pages/audit/AuditReplayPage";
+import { apiFailureMessage } from "./sendOutcome";
 
 export function ConsoleShell() {
   const state = useConsoleState();
@@ -202,13 +203,37 @@ export function ConsoleShell() {
     dispatch({ type: "page/set", payload: "workflow" });
   };
 
-  const handleCreateAgent = async (payload: AgentCreatePayload) => {
-    console.log("create agent", payload);
+  const handleCreateAgent = async (payload: AgentCreatePayload): Promise<AgentCreateResult> => {
+    const response = await fetch("/api/v1/organization/agents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      // 抛出而非静默 return：CreateAgentPage 的 catch 会把这里的原因渲染进
+      // role="alert"。此前这里是 console.log 桩且永不 reject，
+      // 那段 catch 是死代码。
+      throw new Error(await apiFailureMessage(response));
+    }
+
+    const created = (await response.json()) as { agent_id?: string; warnings?: string[] };
+    const result: AgentCreateResult = {
+      agentId: created.agent_id ?? "",
+      warnings: created.warnings ?? [],
+    };
+
+    if (result.warnings.length) {
+      // 部分成功（例如上级已满编）：留在表单页把原因显示出来，
+      // 不要静默跳回组织图 —— 那会让一次「建了但没挂上汇报关系」看起来像全成功。
+      return result;
+    }
+
     dispatch({ type: "page/set", payload: "organization_graph" });
     if (payload.role_template_id) {
       dispatch({ type: "roleTemplate/setSelected", payload: payload.role_template_id });
     }
-    await sync.refreshMessagesOnly();
+    await sync.manualRefresh();
+    return result;
   };
 
   const renderPage = () => {

@@ -46,3 +46,27 @@ export function httpErrorMessage(status: number): string {
   if (status >= 500) return "服务暂时不可用，请稍后再试";
   return "请求未能完成，请稍后再试";
 }
+
+/**
+ * 失败响应 → 可展示的中文原因。
+ *
+ * 后端（``backend/app/api/errors.py``）的错误体是
+ * ``{code, message, request_id, trace_id, details}``，其中 message 对
+ * 业务冲突是**具体且已中文化**的（例如「部门内已存在同名智能体「短剧导演」」）。
+ * 只用 ``httpErrorMessage(status)`` 会把它压成泛化的「操作冲突，请刷新后重试」，
+ * 用户拿不到任何可行动信息；只信后端 message 又会在网关/代理返回非 JSON
+ * （HTML 错误页、空体）时把原始字符串抛给用户。
+ *
+ * 所以：优先用后端 message，取不到再按状态码兜底。
+ */
+export async function apiFailureMessage(response: Response): Promise<string> {
+  let detail = "";
+  try {
+    const body = (await response.json()) as { message?: unknown; detail?: unknown };
+    const raw = body?.message ?? body?.detail;
+    if (typeof raw === "string") detail = raw.trim();
+  } catch {
+    // 非 JSON 响应，走状态码兜底
+  }
+  return detail || httpErrorMessage(response.status);
+}
