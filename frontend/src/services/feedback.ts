@@ -227,11 +227,21 @@ class FeedbackService {
     return adaptFeedback(response.data)
   }
 
-  // The backend only supports status updates via PATCH /{id}?status=...
+  // PATCH /{id} — status 与 severity 一起放进请求体。
+  //
+  // 这里原来只把 status 塞进 query、请求体固定为 null，于是 `priority` 被**静默
+  // 丢弃**：详情页编辑态提交的是 `{status, priority}`，用户改完严重程度点保存会
+  // 看到「保存成功」，值却没变。后端 PATCH 现在同时接受请求体里的 status 与
+  // severity，两处都给出且冲突时会报 400 而不是任选一个。
   async updateFeedback(id: string, data: Partial<Feedback>): Promise<Feedback> {
-    const response = await this.client.patch(`/feedback/${id}`, null, {
-      params: { status: data.status === 'open' ? 'new' : data.status },
-    })
+    const payload: { status?: string; severity?: string } = {}
+    if (data.status !== undefined) {
+      payload.status = data.status === 'open' ? 'new' : data.status
+    }
+    if (data.priority !== undefined) {
+      payload.severity = data.priority
+    }
+    const response = await this.client.patch(`/feedback/${id}`, payload)
     return adaptFeedback(response.data)
   }
 

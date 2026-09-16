@@ -132,17 +132,48 @@ describe('FeedbackService', () => {
   })
 
   describe('updateFeedback', () => {
-    it('status updates go through PATCH with status param (open maps to new)', async () => {
+    it('sends status in the PATCH body (open maps to new)', async () => {
       http.patch.mockResolvedValue({
         data: { ...rawFeedback, status: 'in_progress' },
       })
 
       const result = await feedbackService.updateFeedback('1', { status: 'in_progress' })
 
-      expect(http.patch).toHaveBeenCalledWith('/feedback/1', null, {
-        params: { status: 'in_progress' },
-      })
+      expect(http.patch).toHaveBeenCalledWith('/feedback/1', { status: 'in_progress' })
       expect(result.status).toBe('in_progress')
+    })
+
+    it("sends priority as severity — it used to be dropped silently", async () => {
+      /*
+       * The regression this guards: `updateFeedback` put only `status` into the
+       * query string and passed `null` as the body, so `priority` never left the
+       * browser. FeedbackDetail submits `{status, priority}` from its edit form,
+       * so changing the severity and hitting save reported success while the
+       * value stayed put. The backend PATCH ignored its body entirely, so both
+       * layers dropped the field — fixing only one side changes nothing.
+       */
+      http.patch.mockResolvedValue({
+        data: { ...rawFeedback, status: 'resolved', severity: 'critical' },
+      })
+
+      const result = await feedbackService.updateFeedback('1', {
+        status: 'resolved',
+        priority: 'critical',
+      })
+
+      expect(http.patch).toHaveBeenCalledWith('/feedback/1', {
+        status: 'resolved',
+        severity: 'critical',
+      })
+      expect(result.priority).toBe('critical')
+    })
+
+    it("maps the legacy 'open' status onto the backend's 'new'", async () => {
+      http.patch.mockResolvedValue({ data: { ...rawFeedback, status: 'new' } })
+
+      await feedbackService.updateFeedback('1', { status: 'open' })
+
+      expect(http.patch).toHaveBeenCalledWith('/feedback/1', { status: 'new' })
     })
   })
 

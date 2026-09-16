@@ -192,6 +192,27 @@ class ResolveFeedbackRequest(BaseModel):
     resolution_note: str | None = Field(None, max_length=5000, description="解决说明")
 
 
+class FeedbackPatchRequest(BaseModel):
+    """``PATCH /{id}`` 的可选请求体。
+
+    历史缺陷：本端点只从 query string 读 ``status``（``?status=...``），请求体被
+    整体丢弃。按 REST 惯例发 ``PATCH`` + ``{"status": "resolved"}`` 的客户端会拿到
+    200 与**未改变**的记录 —— 静默成功。现在两处都读；冲突时报 400；都没给也报
+    400，而不是回一个「什么都没做」的 200。
+
+    ``severity`` 一并支持：前端编辑态提交的是 ``{status, priority}``，而
+    ``priority`` 在前端映射的就是后端的 ``severity``。此前它被静默丢弃，用户改完
+    严重程度点保存会看到「保存成功」而值不变。
+
+    ``extra="forbid"``：不认识的字段直接 422，而不是丢掉之后返回 200。
+    """
+
+    model_config = {"extra": "forbid"}
+
+    status: str | None = Field(None, description="状态: new, acknowledged, in_progress, resolved, closed")
+    severity: str | None = Field(None, description="严重程度: low, medium, high, critical")
+
+
 class FeedbackTrendPoint(BaseModel):
     """趋势数据点(按日聚合)"""
     date: str
@@ -749,48 +770,72 @@ async def get_feedback_analysis(
 @router.patch("/{feedback_id}", response_model=FeedbackResponse)
 async def update_feedback(
     feedback_id: str,
+    payload: FeedbackPatchRequest | None = None,
     new_status: str | None = Query(None, alias="status", description="新状态"),
     principal: Annotated[Principal, Depends(get_current_principal)] = None,
 ) -> FeedbackResponse:
-    """更新反馈状态"""
+    """更新反馈的状态 / 严重程度。
+
+    状态既可从 query（``?status=``）也可从请求体（``{"status": ...}``）给出。两处
+    都给出且不一致时返回 400 —— 不替调用方猜哪个才算数；两处都没给时也返回 400，
+    因为本端点的唯一职责就是改这两项，一个「什么都没做」的 200 只会把调用方的 bug
+    变成静默成功。
+
+    ``severity`` 与 ``status`` 同级支持：前端编辑态提交的是 ``{status, priority}``，
+    ``priority`` 在前端映射的就是后端的 ``severity``。
+    """
+    enforce_scope(principal, "feedback:write")
     try:
-        if new_status and new_status not in [s.value for s in FeedbackStatus]:
+        body_status = payload.status if payload is not None else None
+        body_severity = payload.severity if payload is not None else None
+
+        if body_status is not None and new_status is not None and body_status != new_status:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Conflicting status values in query string and request body",
+            )
+
+        resolved_status = body_status if body_status is not None else new_status
+
+        if resolved_status is None and body_severity is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Nothing to update: provide `status` and/or `severity`",
+            )
+
+        if resolved_status is not None and resolved_status not in [s.value for s in FeedbackStatus]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid status. Must be one of: {[s.value for s in FeedbackStatus]}"
             )
+        if body_severity is not None and body_severity not in [s.value for s in FeedbackSeverity]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid severity. Must be one of: {[s.value for s in FeedbackSeverity]}"
+            )
+
+        feedback = await _get_tenant_feedback_or_404(feedback_id, principal)
+        _enforce_owner_or_admin(feedback, principal)
+
+        update_data: dict = {}
+        if resolved_status is not None:
+            update_data["status"] = resolved_status
+            # 只在首次解决时落 resolved_at（与 PUT 一致）。此前是「只要 status 为
+            # resolved 就重写」—— 重复 PATCH 会把真正的解决时刻抹成当前时间。
+            if resolved_status == "resolved" and feedback.resolved_at is None:
+                update_data["resolved_at"] = datetime.now(UTC)
+        if body_severity is not None:
+            update_data["severity"] = body_severity
 
         store = get_feedback_store()
-        feedback = await store.get_feedback_by_id(feedback_id)
-
-        if not feedback or feedback.tenant_id != principal.tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Feedback not found"
-            )
-
-        # 检查权限
-        if feedback.user_id != principal.user_id and principal.role != "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied"
-            )
-
-        # 更新反馈
-        update_data = {}
-        if new_status:
-            update_data["status"] = new_status
-            if new_status == "resolved":
-                update_data["resolved_at"] = datetime.now(UTC)
-
-        feedback = await store.update_feedback(feedback_id, **update_data)
+        updated = await store.update_feedback(feedback_id, **update_data)
 
         # 复用手写构造点 _to_response。此前 create / get / update / replace 四个
         # 端点各自手抄了一份与它逐字段相同的构造，list_feedback 的列表推导里还藏了
         # 第五份 —— 给 FeedbackResponse 加字段必须记得改满 5 处。本轮加
         # resolution_note 就是实例：漏掉 get_feedback，刚存进去的解决说明会在
         # 重新拉取时凭空消失。
-        return _to_response(feedback)
+        return _to_response(updated)
 
     except HTTPException:
         raise
