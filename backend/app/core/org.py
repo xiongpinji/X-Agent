@@ -530,6 +530,16 @@ def _record_warning(warnings: list[str] | None, message: str) -> None:
     warnings.append(message)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 默认种子（2026-09-16，(b) 方案 A）
+#
+# 改名只需改这两行 —— 端点、种子逻辑、测试断言都从这里取值。
+# ─────────────────────────────────────────────────────────────────────────────
+
+DEFAULT_ORGANIZATION_NAME = "我的组织"
+DEFAULT_DEPARTMENT_NAME = "综合部"
+
+
 class OrganizationStore:
     def __init__(self) -> None:
         self._lock = RLock()
@@ -553,6 +563,45 @@ class OrganizationStore:
             items = [item for item in items if item.tenant_id == tenant_id]
         items.sort(key=lambda item: item.updated_at, reverse=True)
         return items
+
+    def ensure_default_organization(
+        self, *, tenant_id: str, owner_user_id: str = "system"
+    ) -> Organization:
+        """保证该租户至少有一个组织 + 一个部门，并返回那个组织。
+
+        **为什么存在**（拍板 (b) 方案 A）：``OrganizationStore`` 纯内存无种子，而控制台
+        **没有**「新建组织 / 新建部门」入口（前端零引用 ``/organizations``、``/departments``）；
+        ``CreateAgentPage`` 的「所属组织」直接取组织图的 ``organization.org_id``、
+        「所属部门」取 ``departments[0]`` ⇒ 组织图为空时这两个值都是空串，表单在
+        **校验阶段**就被拦下，用户无路可走。seed 一个默认组织 + 一个部门，
+        目的是让**首屏可用**，而不是伪造一套组织架构 —— 所以只种 **1 个**部门，
+        用户可按需再建（写端点已就绪）。
+
+        **幂等**：该租户已有任何组织 ⇒ 直接返回最近活跃的那个，**不写**。
+        因此用户自建的组织不会被覆盖，刷新多少次都不会重复种。
+
+        **租户口径**：按租户隔离（不同租户各得一份自己的默认组织），
+        不写全局单例。调用方负责判开关（``settings.seed_default_organization_active``）。
+        """
+        with self._lock:
+            existing = self.list_organizations(tenant_id=tenant_id)
+            if existing:
+                return existing[0]
+            organization = self.create_organization(
+                tenant_id=tenant_id,
+                name=DEFAULT_ORGANIZATION_NAME,
+                description="首次使用时自动创建；可在组织图里继续添加部门与岗位。",
+                owner_user_id=owner_user_id,
+            )
+            self.create_department(
+                org_id=organization.org_id, name=DEFAULT_DEPARTMENT_NAME
+            )
+            logger.info(
+                "organization_store: 为租户 %s 种下默认组织 %s",
+                tenant_id,
+                organization.org_id,
+            )
+            return organization
 
     def create_department(self, *, org_id: str, name: str, mission: str = "", leader_agent_id: str | None = None, parent_department_id: str | None = None) -> Department:
         if org_id not in self._orgs:

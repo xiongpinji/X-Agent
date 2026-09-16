@@ -87,6 +87,16 @@ async def get_workbench(principal: PrincipalDependency) -> ConsoleBootstrapRespo
     # 于是 CreateAgentPage 的「所属组织 / 所属部门」下拉恒为空、表单在校验阶段就被拦下。
     # list_organizations 已按 updated_at 倒序，故 [0] 即最近活跃的组织；
     # 租户下没有任何组织时维持「空图」（与没有任何组织这一事实一致，不伪造）。
+    # (b) 方案 A：按租户惰性种子。
+    #
+    # 控制台**没有**建组织/部门的入口（前端零引用 /organizations、/departments），
+    # 而「所属组织」在表单里是**不可切换**的（直接取 organization_graph.organization.org_id），
+    # 所以首屏必须自己能立起来，否则图空 ⇒ 下拉空 ⇒ 表单在校验阶段被拦下、用户无路可走。
+    # 幂等：只在「该租户一个组织都没有」时写；开关见 settings.seed_default_organization_active
+    # （默认跟随 app_mode，生产环境不种）。
+    if principal.tenant_id and get_settings().seed_default_organization_active:
+        organization_store.ensure_default_organization(tenant_id=principal.tenant_id)
+
     organization_graph = None
     if principal.tenant_id:
         tenant_organizations = organization_store.list_organizations(

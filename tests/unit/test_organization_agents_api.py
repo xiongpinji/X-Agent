@@ -157,6 +157,17 @@ def _use_role(role: str, *, authenticated: bool = True) -> None:
     )
 
 
+def _principal_for(tenant_id: str) -> Principal:
+    """该租户下的 admin principal —— 供两个依赖入口共用同一份身份。"""
+    return Principal(
+        tenant_id=tenant_id,
+        user_id=f"{tenant_id}-admin",
+        role="admin",
+        scopes=list(ROLE_SCOPES.get("admin", [])),
+        authenticated=True,
+    )
+
+
 def _org_agents(bundle, department_id=None):
     return organization_store.list_agents(
         org_id=bundle.org.org_id,
@@ -995,37 +1006,157 @@ class TestWorkbenchGraphWiring:
             bundle.other_dept.department_id,
         }
 
-    def test_bootstrap_graph_is_empty_for_a_tenant_without_organizations(
+    @staticmethod
+    def _as_workbench_tenant(tenant_id: str) -> None:
+        """把 workbench 的租户换成指定租户。
+
+        ★ 必须覆盖 ``get_workbench_principal`` 而不是 ``get_current_principal``：
+        workbench 端点的依赖是前者，它在内部**以普通函数调用**方式执行
+        ``get_current_principal(request)``（见 ``api/workbench.py``），不经过 FastAPI 的
+        Depends 解析 ⇒ 覆盖后者对本端点**完全无效**：用例会拿到 bootstrap 的 default
+        租户、看见别的用例建的组织，于是断言结构性恒假。
+        """
+        app.dependency_overrides[get_workbench_principal] = lambda: _principal_for(
+            tenant_id
+        )
+
+    @staticmethod
+    def _as_tenant(tenant_id: str) -> None:
+        """**读、写两个入口都指向同一租户**。
+
+        真实请求里 workbench 与 /organization/* 解析出的是**同一个** principal；
+        测试里必须照做，否则会出现「图建在 A 租户、写端点用 B 租户」的错配
+        （读端点被覆盖、写端点没被覆盖 ⇒ 404）。
+        """
+        principal = _principal_for(tenant_id)
+        app.dependency_overrides[get_workbench_principal] = lambda: principal
+        app.dependency_overrides[get_current_principal] = lambda: principal
+
+    def test_first_visit_seeds_a_usable_default_organization(
         self, client, csrf_exempt_headers, foreign_bundle
     ):
-        """没有组织的租户 → 空图（诚实），而不是别人的组织。
+        """★ (b) 方案 A：空租户首次打开控制台 ⇒ 立刻可用。
 
-        ★ ``foreign_bundle`` 不是装饰：``OrganizationStore`` 是进程级单例，
-        单跑这条用例时 store 里本来就只有它自己刚造的 foreign 组织。若不给一个
-        「别人的组织」垫底，即便生产代码把租户过滤整个摘掉，``list_organizations()``
-        也只是把自己排除掉了、仍返回空 ⇒ 断言空转（变异实测 SURVIVED）。垫上
-        foreign 组织后，「空租户看不见别人的组织」才是一条真的被守住的不变量。
+        钉住的是「控制台没有建组织/部门的入口」这一事实：``CreateAgentPage`` 的
+        「所属组织」**不可切换**（取自 ``organization_graph.organization.org_id``）、
+        「所属部门」取 ``departments[0]`` ⇒ 图空则两个值皆空 ⇒ 表单在校验阶段就被拦下。
+        所以「首访即有一个组织 + 一个部门」是控制台可用的**前提**，不是锦上添花。
 
-        ★ 这里覆盖的是 ``get_workbench_principal``，不是 ``get_current_principal``。
-        workbench 端点的依赖是前者，它在内部**以普通函数调用**方式执行
-        ``get_current_principal(request)``（见 ``api/workbench.py``），不经过
-        FastAPI 的 Depends 解析 ⇒ 覆盖后者对本端点**完全无效**：用例会拿到 bootstrap
-        的 default 租户、看见别的用例建的组织，于是这条断言结构性恒假。
+        ``foreign_bundle`` 用于排除「拿别人的组织充数」这条假绿路径。
         """
-        # 前置：别人的组织**确实**在 store 里 —— 否则下面的空图只是因为 store 本来就空。
+        tenant = f"fresh-tenant-{uuid4().hex[:8]}"
+        self._as_workbench_tenant(tenant)
+
+        r = client.get("/api/v1/workbench", headers=csrf_exempt_headers)
+        assert r.status_code == 200, r.text
+        graph = r.json().get("organization_graph") or {}
+        assert graph, "空租户首访必须拿到可用组织图，否则控制台走不动"
+        assert graph["organization"]["name"] == "我的组织"
+        assert graph["organization"]["tenant_id"] == tenant
+        assert [d["name"] for d in graph["departments"]] == ["综合部"]
+        assert graph["organization"]["owner_user_id"] == "system"
+        assert graph["organization"]["org_id"] != foreign_bundle.org.org_id
+
+    def test_seeded_graph_is_directly_usable_by_the_create_agent_form(
+        self, client, csrf_exempt_headers
+    ):
+        """★★ 闭环：种出来的图，**原样**喂给创建表单的默认取值即可建出第一个岗位。
+
+        这是「(b) 让首屏可用」最直接的证明。前端 ``CreateAgentPage`` 的三个初值就是
+        ``graph.organization.org_id``（**不可切换**）、``graph.departments[0].department_id``、
+        ``roleCatalog.templates[0].role_id`` —— 全部从**同一次** workbench 响应里取，
+        中间不掺任何夹具造的数据。
+
+        顺带钉住「图的模板 id 与创建端点校验用的是同一份目录」：图的 ``role_templates``
+        由 ``build_organization_graph`` 从 ``store._role_catalog`` 取，创建端点也查
+        ``store.get_role_catalog()`` ⇒ 两边必须是**同一个对象**，否则提交必然 404。
+        ⚠️ 口径别混：本条覆盖的是**图**这条路径（突变点在 ``build_organization_graph``）；
+        workbench 自己那份局部 ``role_catalog``（只喂 ConsoleBootstrapResponse，与图无关）
+        由 ``test_workbench_role_catalog_is_the_same_catalog_as_the_store`` 守。
+        """
+        tenant = f"e2e-tenant-{uuid4().hex[:8]}"
+        self._as_tenant(tenant)
+
+        boot = client.get("/api/v1/workbench", headers=csrf_exempt_headers)
+        assert boot.status_code == 200, boot.text
+        graph = boot.json().get("organization_graph") or {}
+        assert graph and graph["departments"] and graph["role_templates"], (
+            "首屏图必须自带组织 + 部门 + 模板目录"
+        )
+
+        # 前端真实的默认取值顺序
+        created = client.post(
+            f"{BASE}/agents",
+            json={
+                "org_id": graph["organization"]["org_id"],
+                "department_id": graph["departments"][0]["department_id"],
+                "name": f"首位岗位-{uuid4().hex[:6]}",
+                "role_template_id": graph["role_templates"][0]["role_id"],
+            },
+            headers=csrf_exempt_headers,
+        )
+        assert created.status_code == 201, created.text
+        body = created.json()
+        assert body["department_id"] == graph["departments"][0]["department_id"]
+        assert body["role_template_id"] == graph["role_templates"][0]["role_id"]
+
+    def test_seeding_is_idempotent_across_repeat_visits(
+        self, client, csrf_exempt_headers
+    ):
+        """刷新多少次都只有一个组织 —— 否则每次轮询都往 store 里塞一条。"""
+        tenant = f"repeat-tenant-{uuid4().hex[:8]}"
+        self._as_workbench_tenant(tenant)
+
+        first = client.get("/api/v1/workbench", headers=csrf_exempt_headers).json()
+        org_id = first["organization_graph"]["organization"]["org_id"]
+        for _ in range(3):
+            again = client.get("/api/v1/workbench", headers=csrf_exempt_headers).json()
+            assert again["organization_graph"]["organization"]["org_id"] == org_id
+
+        assert [
+            o.org_id for o in organization_store.list_organizations(tenant_id=tenant)
+        ] == [org_id]
+        assert len(organization_store.list_departments(org_id=org_id)) == 1
+
+    def test_seeding_leaves_a_tenant_with_organizations_alone(
+        self, client, csrf_exempt_headers, bundle
+    ):
+        """已有组织 ⇒ 种子绝不介入（用户自建的组织不会被覆盖、也不会被再建一个）。"""
+        self._as_workbench_tenant("default")  # bundle 建在 default 租户下
+        before = {
+            o.org_id for o in organization_store.list_organizations(tenant_id="default")
+        }
+
+        r = client.get("/api/v1/workbench", headers=csrf_exempt_headers)
+        assert r.status_code == 200, r.text
+        graph = r.json().get("organization_graph") or {}
+        assert graph["organization"]["org_id"] == bundle.org.org_id
+        assert {
+            o.org_id for o in organization_store.list_organizations(tenant_id="default")
+        } == before
+
+    def test_seeding_off_keeps_the_graph_honestly_empty(
+        self, client, csrf_exempt_headers, foreign_bundle, monkeypatch
+    ):
+        """开关关闭 ⇒ 空租户维持空图，且**不会**退化成「看见别人的组织」。
+
+        ★ 语义变更：本条取代原先的
+        ``test_bootstrap_graph_is_empty_for_a_tenant_without_organizations``。
+        原先「空租户 ⇒ 空图」是无条件的；引入惰性种子后，默认（非 production）下
+        首访即会种出一个组织，只有**关闭开关**时才维持空图。两种行为都钉住，
+        才不会把「有意的种子」误判成「租户过滤失效」。
+        """
+        monkeypatch.setattr(get_settings(), "seed_default_organization", False)
+        # 前置：别人的组织**确实**在 store 里 —— 否则空图只是因为 store 本来就空。
         assert organization_store.get_organization(foreign_bundle.org.org_id) is not None
         assert organization_store.list_organizations(), "store 里必须已有组织，否则断言空转"
 
-        app.dependency_overrides[get_workbench_principal] = lambda: Principal(
-            tenant_id=f"empty-tenant-{uuid4().hex[:8]}",
-            user_id="empty-tenant-admin",
-            role="admin",
-            scopes=list(ROLE_SCOPES.get("admin", [])),
-            authenticated=True,
-        )
+        tenant = f"empty-tenant-{uuid4().hex[:8]}"
+        self._as_workbench_tenant(tenant)
         r = client.get("/api/v1/workbench", headers=csrf_exempt_headers)
         assert r.status_code == 200, r.text
         assert (r.json().get("organization_graph") or {}) == {}
+        assert organization_store.list_organizations(tenant_id=tenant) == []
 
     def test_console_can_complete_the_full_flow_without_seed_data(
         self, client, admin_headers, csrf_exempt_headers

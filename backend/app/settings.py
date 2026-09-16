@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     bootstrap_api_key: str | None = None
     bootstrap_api_key_sha256: str | None = None
 
+    # 组织域默认种子（2026-09-16，拍板 (b) 方案 A）。
+    # OrganizationStore 纯内存、无种子，而控制台没有「新建组织/部门」入口 ⇒ 首次打开
+    # 控制台时组织图为空 ⇒ CreateAgentPage 的「所属组织」= ""、「所属部门」= ""
+    # ⇒ 表单在校验阶段就被拦下，用户无路可走。
+    # None = 跟随 app_mode（非 production 才种子）；显式 true/false 可覆盖。
+    seed_default_organization: bool | None = None  # XAGENT_SEED_DEFAULT_ORGANIZATION
+
     llm_backend: str = "auto"  # auto = 有 Key 用真实后端，无 Key 明确报错
     llm_fallback_order: str = "openai,deepseek,anthropic,ollama"
     openai_api_key: str | None = None
@@ -147,6 +154,18 @@ class Settings(BaseSettings):
         if self.rate_limit_enabled is not None:
             return self.rate_limit_enabled
         return self.app_mode == "production"
+
+    @property
+    def seed_default_organization_active(self) -> bool:
+        """生产环境不得凭空多出一个组织 —— 与匿名 bootstrap 同口径。
+
+        见 `api/workbench.py` 的 `get_workbench_principal`：只在
+        `app_mode != "production"` 且未开启 `require_api_key` 时才允许匿名 bootstrap。
+        种子同此口径：显式配置优先，否则 development/staging 才种。
+        """
+        if self.seed_default_organization is not None:
+            return self.seed_default_organization
+        return self.app_mode != "production"
 
     # P2-04: PromptGuard — prompt injection defense
     prompt_guard_enabled: bool = True
