@@ -30,6 +30,7 @@ manager / role_template_id。这样就不会再出现「表单里根本没这个
 """
 from __future__ import annotations
 
+from collections import Counter
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
@@ -39,13 +40,18 @@ from backend.app.api.errors import api_error
 from backend.app.core.contracts import ErrorCode
 from backend.app.core.org import (
     AgentNameConflictError,
+    AgentNode,
     Department,
     Organization,
     agent_role_for_template,
     organization_store,
 )
 from backend.app.core.security import Principal
-from backend.app.dependencies import enforce_scope, get_current_principal
+from backend.app.dependencies import (
+    enforce_scope,
+    get_audit_store,
+    get_current_principal,
+)
 
 router = APIRouter(prefix="/api/v1/organization", tags=["organization"])
 
@@ -247,6 +253,21 @@ async def create_organization_agent(
             404, ErrorCode.RESOURCE_NOT_FOUND, f"组织域对象已不存在：{exc.args[0] if exc.args else 'unknown'}"
         ) from exc
 
+    _record_org_audit(
+        principal,
+        action="organization_agent.create",
+        resource_type="organization_agent",
+        resource_id=agent.agent_id,
+        details={
+            "org_id": agent.org_id,
+            "department_id": agent.department_id,
+            "role_template_id": agent.role_template_id,
+            "name": agent.name,
+            "role": agent.role.value,
+            "warnings": list(warnings),
+        },
+    )
+
     return {
         "agent_id": agent.agent_id,
         "org_id": agent.org_id,
@@ -263,6 +284,67 @@ async def create_organization_agent(
         "created_at": agent.created_at,
         "warnings": warnings,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 治理读路径与审计落账
+#
+# 为什么写路径要显式落审计：``core.audit.AuditStore`` 此前只被 ``api/agents.py``
+# （运行期 ``agent.run``）和审批域调用，**组织域一条都不写**。若只挂一个
+# ``GET /organization/audit`` 而不补写，页面要么空、要么就得去编数字 —— 后者正是
+# 本仓一直在拆的东西。
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: 审计读取的扫描上界（内存存储，量级很小）。超过它时响应里会给 ``truncated: true``，
+#: 而不是让 ``total`` 静默失真。
+_AUDIT_SCAN_LIMIT = 2000
+
+
+def _record_org_audit(
+    principal: Principal,
+    *,
+    action: str,
+    resource_type: str,
+    resource_id: str,
+    details: dict[str, Any] | None = None,
+) -> None:
+    """把一次组织域写操作落进审计存储。
+
+    ``tenant_id`` 一律取 ``principal.tenant_id``，与 ``GET /organization/audit``
+    的读取过滤口径**同源**；否则写进去的账在读取侧看不见。
+    """
+    get_audit_store().record(
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        tenant_id=principal.tenant_id,
+        actor_id=principal.user_id,
+        outcome="success",
+        details=details or {},
+    )
+
+
+def _tenant_agent_nodes(principal: Principal, org_id: str | None = None) -> list[AgentNode]:
+    """当前租户下的岗位智能体（给出 ``org_id`` 时收窄到该组织）。
+
+    ``OrganizationStore`` 是**进程级单例、跨租户共用**，而 ``list_agents()`` 不认识
+    租户 ⇒ 必须先按「本租户的组织 id 集合」收窄，否则会把别的租户的编制算进在用数。
+    """
+    if org_id is not None:
+        _require_organization_in_tenant(org_id, principal)
+        return organization_store.list_agents(org_id=org_id)
+
+    tenant_org_ids = {
+        organization.org_id
+        for organization in organization_store.list_organizations(
+            tenant_id=principal.tenant_id
+        )
+    }
+    return [
+        agent
+        for agent in organization_store.list_agents()
+        if agent.org_id in tenant_org_ids
+    ]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -309,6 +391,13 @@ async def create_organization(
         name=name,
         description=payload.description.strip(),
         owner_user_id=principal.user_id,
+    )
+    _record_org_audit(
+        principal,
+        action="organization.create",
+        resource_type="organization",
+        resource_id=organization.org_id,
+        details={"name": organization.name, "tenant_id": organization.tenant_id},
     )
     return _organization_payload(organization)
 
@@ -371,4 +460,133 @@ async def create_department(
         leader_agent_id=payload.leader_agent_id,
         parent_department_id=payload.parent_department_id,
     )
+    _record_org_audit(
+        principal,
+        action="department.create",
+        resource_type="department",
+        resource_id=department.department_id,
+        details={
+            "org_id": department.org_id,
+            "name": department.name,
+            "parent_department_id": department.parent_department_id,
+            "leader_agent_id": department.leader_agent_id,
+        },
+    )
     return _department_payload(department)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 治理读路径（岗位模板目录 / 审计流水）
+#
+# 控制台的「角色权限」与「组织审核」两页此前是硬编码占位（24 个角色 / 13 条事件），
+# 数据源 /api/v1/organization-control/* 未挂载。这里给出**两条真实读路径**，
+# 让那两页可以接线到真数据 —— 而不是把 fixture 模块挂上白名单。
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/roles")
+async def list_organization_roles(
+    principal: PrincipalDependency = None,
+    org_id: str | None = None,
+) -> dict[str, Any]:
+    """岗位模板目录 + **真实**的在用数量。
+
+    角色目录必须取 ``organization_store.get_role_catalog()``：``RoleTemplate.role_id``
+    是 ``uuid4`` factory，各处自行 ``build_default_role_catalog()`` 会得到**不同的 id**
+    ⇒ 前端拿着模板 id 去创建智能体必然 404（与写路径同源是硬要求）。
+
+    ``in_use`` 是该模板在当前租户（给出 ``org_id`` 时收窄到该组织）下**真实在用**的
+    智能体数量 —— 由 ``list_agents()`` 数出来，不是估计值、更不是常量。
+    """
+    enforce_scope(principal, "org:read")
+
+    catalog = organization_store.get_role_catalog()
+    usage: Counter[str] = Counter(
+        agent.role_template_id for agent in _tenant_agent_nodes(principal, org_id)
+    )
+
+    return {
+        "resource_type": "organization_roles",
+        "org_id": org_id,
+        "total_templates": len(catalog.templates),
+        "in_use_total": sum(usage.values()),
+        "templates": [
+            {
+                "role_id": template.role_id,
+                "role_name": template.role_name,
+                "category": template.category,
+                "level": template.level,
+                "title": template.title,
+                "description": template.description,
+                "core_skills": list(template.core_skills),
+                "in_use": usage.get(template.role_id, 0),
+            }
+            for template in catalog.templates
+        ],
+        "role_groups": catalog.role_groups,
+    }
+
+
+@router.get("/audit")
+async def list_organization_audit(
+    principal: PrincipalDependency = None,
+    limit: int = 50,
+    offset: int = 0,
+    resource_type: str | None = None,
+    outcome: str | None = None,
+) -> dict[str, Any]:
+    """组织域审计流水（真实数据，读 ``core.audit.AuditStore``）。
+
+    与 ``POST /organizations`` / ``/departments`` / ``/agents`` 写的是**同一份**存储，
+    按 ``principal.tenant_id`` 隔离。**刻意不挂载 organization_control.py**：
+    它的 ``GET /audit`` 返回硬编码的 13 条事件，挂上去等于把编造数字包装成功能。
+
+    读数口径：先把该租户的匹配记录整段取出（内存存储，量级很小），再切片 ——
+    ``total`` / ``summary`` 与列表出自**同一份**数据，不会出现「汇总说 13 条、
+    列表只有 3 条」的错位。超过 ``_AUDIT_SCAN_LIMIT`` 时置 ``truncated: true``，
+    让截断可见而不是让 ``total`` 静默失真。
+    """
+    enforce_scope(principal, "org:read")
+
+    if limit < 1 or limit > 200:
+        raise api_error(422, ErrorCode.VALIDATION_ERROR, "limit 必须在 1..200 之间")
+    if offset < 0:
+        raise api_error(422, ErrorCode.VALIDATION_ERROR, "offset 不能为负数")
+
+    matched = get_audit_store().list(
+        tenant_id=principal.tenant_id,
+        resource_type=resource_type,
+        outcome=outcome,
+        limit=_AUDIT_SCAN_LIMIT,
+    )
+    page = matched[offset : offset + limit]
+    outcomes = Counter(record.outcome for record in matched)
+
+    return {
+        "resource_type": "organization_audit",
+        "tenant_id": principal.tenant_id,
+        "total": len(matched),
+        "limit": limit,
+        "offset": offset,
+        "scan_limit": _AUDIT_SCAN_LIMIT,
+        "truncated": len(matched) >= _AUDIT_SCAN_LIMIT,
+        "filters": {"resource_type": resource_type, "outcome": outcome},
+        "summary": {
+            "success": outcomes.get("success", 0),
+            "failure": outcomes.get("failure", 0) + outcomes.get("failed", 0),
+            "latest_outcome": matched[0].outcome if matched else None,
+        },
+        "records": [
+            {
+                "id": record.id,
+                "actor_id": record.actor_id,
+                "action": record.action,
+                "resource_type": record.resource_type,
+                "resource_id": record.resource_id,
+                "outcome": record.outcome,
+                "created_at": record.created_at,
+                "details": record.details,
+            }
+            for record in page
+        ],
+    }

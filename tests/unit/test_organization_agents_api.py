@@ -1381,3 +1381,290 @@ class TestWorkbenchOrganizationSelection:
         assert {a["agent_id"] for a in right_graph["agent_instances"]} == {
             right_agent.agent_id
         }
+# ═══════════════════════════════════════════════════════════════════════════════
+# 治理读路径：岗位模板目录（真实在用数）/ 审计流水
+#
+# ★ 为什么每条断言都锚在「我这条 record 的 resource_id」上
+#   ``core.audit.AuditStore`` 与 ``OrganizationStore`` 一样是**进程级单例**，
+#   同进程的其它用例（以及本文件里所有成功的 POST）都会往里写。因此：
+#   - **不做**「总数 == N」这类断言 —— 那是会被别人写脏的垃圾断言；
+#   - 断言「我这条 resource_id 出现/不出现」，这是**可归因**的；
+#   - 「不该出现」类断言**必须自带对照组**（真的在别的租户/别的组织写一条），
+#     否则「没出现」恒真 —— 这正是本仓记录过的「对照组缺失」空转。
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _roles(client, headers, org_id: str | None = None) -> dict:
+    url = f"{BASE}/roles" if org_id is None else f"{BASE}/roles?org_id={org_id}"
+    r = client.get(url, headers=headers)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _audit(client, headers, **params) -> dict:
+    r = client.get(f"{BASE}/audit", params=params, headers=headers)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _records_for(body: dict, resource_id: str) -> list[dict]:
+    return [record for record in body["records"] if record["resource_id"] == resource_id]
+
+
+class TestOrganizationRolesRead:
+    def test_returns_the_store_catalog_not_the_fixture_numbers(
+        self, client, admin_headers
+    ):
+        """目录必须与 store 同源，且**不是** organization_control 里的 24 个角色。"""
+        body = _roles(client, admin_headers)
+        store_templates = organization_store.get_role_catalog().templates
+        assert body["total_templates"] == len(store_templates)
+        assert body["total_templates"] != 24, "24 是 fixture 值，不能从真实接口返回"
+        assert [t["role_id"] for t in body["templates"]] == [
+            t.role_id for t in store_templates
+        ]
+
+    def test_role_ids_are_accepted_by_the_write_path(
+        self, client, admin_headers, bundle
+    ):
+        """★ 闭环：读路径给出的 role_id 必须能直接拿去创建智能体。
+
+        ``RoleTemplate.role_id`` 是 uuid4 factory，各处自行 build 会得到不同 id
+        ⇒ 这条用例把「读到的 id」喂回「写端点」，同源问题会当场 404。
+        """
+        template = _roles(client, admin_headers)["templates"][0]
+        created = _create(
+            client, admin_headers, bundle, role_template_id=template["role_id"]
+        )
+        assert created["role_template_id"] == template["role_id"]
+
+    def test_in_use_counts_real_agents_scoped_to_that_organization(
+        self, client, admin_headers, bundle
+    ):
+        template_id = bundle.catalog.templates[0].role_id
+        before = _roles(client, admin_headers, org_id=bundle.org.org_id)
+        assert before["in_use_total"] == 0, "新组织的在用数必须从 0 开始"
+
+        _create(client, admin_headers, bundle, role_template_id=template_id)
+        _create(client, admin_headers, bundle, role_template_id=template_id)
+
+        after = _roles(client, admin_headers, org_id=bundle.org.org_id)
+        mine = next(t for t in after["templates"] if t["role_id"] == template_id)
+        assert mine["in_use"] == 2, "在用数必须是数出来的，不能是常量"
+        assert after["in_use_total"] == 2
+        # 其它模板不受影响（否则「数出来」这件事说不清）
+        assert all(
+            t["in_use"] == 0 for t in after["templates"] if t["role_id"] != template_id
+        )
+
+    def test_in_use_ignores_another_organizations_agents(
+        self, client, admin_headers, bundle
+    ):
+        """对照组：另一个**本租户**组织里的编制不能算进我组织的在用数。"""
+        template_id = bundle.catalog.templates[0].role_id
+        suffix = uuid4().hex[:8]
+        other = organization_store.create_organization(
+            tenant_id="default", name=f"旁人组织-{suffix}"
+        )
+        other_dept = organization_store.create_department(
+            org_id=other.org_id, name=f"旁人部门-{suffix}"
+        )
+        organization_store.create_agent(
+            org_id=other.org_id,
+            department_id=other_dept.department_id,
+            name=f"旁人岗位-{suffix}",
+            role_template_id=template_id,
+        )
+
+        mine = _roles(client, admin_headers, org_id=bundle.org.org_id)
+        assert next(t for t in mine["templates"] if t["role_id"] == template_id)[
+            "in_use"
+        ] == 0, "别的组织的编制被算进了本组织"
+
+    def test_unknown_org_id_is_404(self, client, admin_headers):
+        r = client.get(f"{BASE}/roles?org_id={uuid4().hex}", headers=admin_headers)
+        assert r.status_code == 404, r.text
+        assert r.json()["code"] == "resource_not_found"
+
+    def test_foreign_tenant_org_id_is_404(
+        self, client, admin_headers, foreign_bundle
+    ):
+        r = client.get(
+            f"{BASE}/roles?org_id={foreign_bundle.org.org_id}", headers=admin_headers
+        )
+        assert r.status_code == 404, r.text
+
+    def test_requires_org_read(self, client, csrf_exempt_headers):
+        _use_role("user")
+        r = client.get(f"{BASE}/roles", headers=csrf_exempt_headers)
+        assert r.status_code == 403, r.text
+        assert r.json()["code"] == "authorization_failed"
+
+    def test_unauthenticated_is_401(self, client, csrf_exempt_headers):
+        _use_role("anonymous", authenticated=False)
+        r = client.get(f"{BASE}/roles", headers=csrf_exempt_headers)
+        assert r.status_code == 401, r.text
+
+
+class TestOrganizationAuditRead:
+    def test_fresh_tenant_has_no_fabricated_baseline(self, client, admin_headers):
+        """★ 一个从没写过东西的租户必须是 0 条 —— 不能凭空出现 fixture 的 13 条。
+
+        用**全新租户**断言才成立：本进程其它用例的写入都落在别处。
+        """
+        app.dependency_overrides[get_current_principal] = lambda: _principal_for(
+            f"audit-clean-{uuid4().hex[:8]}"
+        )
+        body = _audit(client, admin_headers)
+        assert body["total"] == 0
+        assert body["total"] != 13, "13 是 organization_control 的 fixture 值"
+        assert body["records"] == []
+        assert body["summary"] == {
+            "success": 0,
+            "failure": 0,
+            "latest_outcome": None,
+        }
+
+    def test_create_organization_is_audited(self, client, admin_headers):
+        name = f"审计组织-{uuid4().hex[:6]}"
+        created = client.post(
+            f"{BASE}/organizations", json={"name": name}, headers=admin_headers
+        )
+        assert created.status_code == 201, created.text
+        org_id = created.json()["org_id"]
+
+        body = _audit(client, admin_headers, resource_type="organization", limit=200)
+        mine = _records_for(body, org_id)
+        assert len(mine) == 1, "创建组织必须落一条审计，且只有一条"
+        assert mine[0]["action"] == "organization.create"
+        assert mine[0]["outcome"] == "success"
+        assert mine[0]["details"]["name"] == name
+        assert mine[0]["actor_id"] and mine[0]["actor_id"] != "anonymous"
+
+    def test_create_department_is_audited(self, client, admin_headers, bundle):
+        name = f"审计部门-{uuid4().hex[:6]}"
+        created = client.post(
+            f"{BASE}/departments",
+            json={"org_id": bundle.org.org_id, "name": name},
+            headers=admin_headers,
+        )
+        assert created.status_code == 201, created.text
+        department_id = created.json()["department_id"]
+
+        body = _audit(client, admin_headers, resource_type="department", limit=200)
+        mine = _records_for(body, department_id)
+        assert len(mine) == 1
+        assert mine[0]["action"] == "department.create"
+        assert mine[0]["details"]["org_id"] == bundle.org.org_id
+        assert mine[0]["details"]["name"] == name
+
+    def test_create_agent_is_audited_with_real_details(
+        self, client, admin_headers, bundle
+    ):
+        created = _create(client, admin_headers, bundle)
+        body = _audit(
+            client, admin_headers, resource_type="organization_agent", limit=200
+        )
+        mine = _records_for(body, created["agent_id"])
+        assert len(mine) == 1
+        assert mine[0]["action"] == "organization_agent.create"
+        assert mine[0]["details"]["department_id"] == bundle.dept.department_id
+        assert (
+            mine[0]["details"]["role_template_id"] == created["role_template_id"]
+        )
+
+    def test_records_are_tenant_scoped(self, client, admin_headers, foreign_bundle):
+        """★ 对照组双向断言：这条记录**必须**出现在它的租户，**且不**出现在本租户。
+
+        只断言「不出现」是恒真的（写不写都不出现），构不成判据。
+        """
+        app.dependency_overrides[get_current_principal] = lambda: _principal_for(
+            foreign_bundle.org.tenant_id
+        )
+        created = client.post(
+            f"{BASE}/organizations",
+            json={"name": f"外租户组织-{uuid4().hex[:6]}"},
+            headers=admin_headers,
+        )
+        assert created.status_code == 201, created.text
+        foreign_org_id = created.json()["org_id"]
+
+        foreign_body = _audit(
+            client, admin_headers, resource_type="organization", limit=200
+        )
+        assert _records_for(foreign_body, foreign_org_id), "记录没出现在它自己的租户里"
+
+        app.dependency_overrides[get_current_principal] = lambda: _principal_for(
+            "default"
+        )
+        default_body = _audit(
+            client, admin_headers, resource_type="organization", limit=200
+        )
+        assert not _records_for(
+            default_body, foreign_org_id
+        ), "别的租户的审计记录漏进了本租户"
+
+    def test_pagination_total_and_list_come_from_the_same_data(
+        self, client, admin_headers
+    ):
+        mine_ids = set()
+        for _ in range(3):
+            r = client.post(
+                f"{BASE}/organizations",
+                json={"name": f"分页组织-{uuid4().hex[:6]}"},
+                headers=admin_headers,
+            )
+            assert r.status_code == 201, r.text
+            mine_ids.add(r.json()["org_id"])
+
+        full = _audit(client, admin_headers, resource_type="organization", limit=200)
+        assert mine_ids <= {rec["resource_id"] for rec in full["records"]}
+        assert full["total"] == len(full["records"]), "total 与列表不同源"
+
+        first = _audit(
+            client, admin_headers, resource_type="organization", limit=1, offset=0
+        )
+        second = _audit(
+            client, admin_headers, resource_type="organization", limit=1, offset=1
+        )
+        assert first["total"] == full["total"], "分页请求的 total 必须与全量一致"
+        assert len(first["records"]) == 1 and len(second["records"]) == 1
+        assert first["records"][0]["id"] != second["records"][0]["id"], "offset 没生效"
+
+    def test_outcome_filter_excludes_my_success_records(self, client, admin_headers):
+        created = client.post(
+            f"{BASE}/organizations",
+            json={"name": f"筛选组织-{uuid4().hex[:6]}"},
+            headers=admin_headers,
+        )
+        org_id = created.json()["org_id"]
+
+        failures = _audit(client, admin_headers, outcome="failure", limit=200)
+        assert not _records_for(failures, org_id), "成功记录出现在了 failure 筛选里"
+
+        successes = _audit(client, admin_headers, outcome="success", limit=200)
+        assert _records_for(successes, org_id), "成功记录没出现在 success 筛选里"
+
+    def test_limit_out_of_range_is_422(self, client, admin_headers):
+        for bad_limit in (0, 201):
+            r = client.get(
+                f"{BASE}/audit", params={"limit": bad_limit}, headers=admin_headers
+            )
+            assert r.status_code == 422, r.text
+            assert r.json()["code"] == "validation_error"
+
+    def test_negative_offset_is_422(self, client, admin_headers):
+        r = client.get(f"{BASE}/audit", params={"offset": -1}, headers=admin_headers)
+        assert r.status_code == 422, r.text
+        assert r.json()["code"] == "validation_error"
+
+    def test_requires_org_read(self, client, csrf_exempt_headers):
+        _use_role("user")
+        r = client.get(f"{BASE}/audit", headers=csrf_exempt_headers)
+        assert r.status_code == 403, r.text
+        assert r.json()["code"] == "authorization_failed"
+
+    def test_unauthenticated_is_401(self, client, csrf_exempt_headers):
+        _use_role("anonymous", authenticated=False)
+        r = client.get(f"{BASE}/audit", headers=csrf_exempt_headers)
+        assert r.status_code == 401, r.text

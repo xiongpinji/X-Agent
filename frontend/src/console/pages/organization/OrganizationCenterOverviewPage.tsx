@@ -1,106 +1,113 @@
+/**
+ * 组织权限中心（概览）。
+ *
+ * 此前本页会额外 fetch 一次 `/api/v1/organization-control/overview` —— 那个路由
+ * **未挂载**，恒 404，且失败分支是 `if (!response.ok) return`（静默吞掉）⇒ 页面
+ * 一直在用 props 里的数字当 0 显示。也就是说：**每次打开这一页都会打一个必然失败
+ * 的请求，然后把失败伪装成「没有数据」**。
+ *
+ * 现在删掉那次 fetch，只认外部传入的真实数据（全部来自组织域真实端点）。
+ */
 import React from "react";
 
 export type OrganizationCenterOverviewPageProps = {
-  resourceType?: string;
-  resourceId?: string;
-  totalDepartments?: number;
-  totalRoles?: number;
-  totalMembers?: number;
-  pendingReviews?: number;
-  riskLevel?: string;
-  linkedOrganizationSummary?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null } | null;
-  linkedDepartmentsSummary?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null } | null;
-  linkedRolesSummary?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null } | null;
-  linkedAuditsSummary?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null } | null;
+  organizationName: string;
+  totalDepartments: number;
+  totalAgents: number;
+  /** 岗位模板总数（真实角色目录）。 */
+  totalRoleTemplates: number;
+  /** 该组织下真实在用的智能体数量。 */
+  inUseAgents: number;
+  /** 当前租户的组织域审计事件总数。 */
+  auditTotal: number;
+  auditFailure: number;
+  loading?: boolean;
+  error?: string;
   onOpenStructure?: () => void;
   onOpenRoles?: () => void;
   onOpenAudit?: () => void;
 };
 
-type OrganizationOverviewApiResponse = {
-  resource_type: string;
-  resource_id: string;
-  primary: {
-    total_departments?: number;
-    total_roles?: number;
-    total_members?: number;
-    pending_reviews?: number;
-    risk_level?: string;
-  };
-  linked_summaries: {
-    organization?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null };
-    departments?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null };
-    roles?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null };
-    audits?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null };
-  };
-};
-
-export function OrganizationCenterOverviewPage(props: OrganizationCenterOverviewPageProps) {
-  const [apiData, setApiData] = React.useState<OrganizationOverviewApiResponse | null>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const response = await fetch("/api/v1/organization-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } });
-        if (!response.ok) return;
-        const payload = (await response.json()) as OrganizationOverviewApiResponse;
-        if (!cancelled) setApiData(payload);
-      } catch (error) {
-        console.warn("Failed to load organization overview", error);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const resourceType = props.resourceType ?? apiData?.resource_type ?? "organization_center_overview";
-  const resourceId = props.resourceId ?? apiData?.resource_id ?? "-";
-  const totalDepartments = props.totalDepartments ?? apiData?.primary.total_departments ?? 0;
-  const totalRoles = props.totalRoles ?? apiData?.primary.total_roles ?? 0;
-  const totalMembers = props.totalMembers ?? apiData?.primary.total_members ?? 0;
-  const pendingReviews = props.pendingReviews ?? apiData?.primary.pending_reviews ?? 0;
-  const riskLevel = props.riskLevel ?? apiData?.primary.risk_level ?? "低";
-
+export function OrganizationCenterOverviewPage(
+  props: OrganizationCenterOverviewPageProps,
+) {
   return (
     <div className="space-y-4">
       <header className="console-page-header">
         <h1 className="page-title">组织权限中心</h1>
-        <div className="console-resource-id">{resourceType} · 资源 ID：{resourceId}</div>
-        <div className="console-summary-line">组织摘要：{apiData?.linked_summaries.organization?.summary?.title ?? props.linkedOrganizationSummary?.summary?.title ?? "organization"} · {totalMembers} 名成员</div>
-        <div className="console-summary-line">部门摘要：{apiData?.linked_summaries.departments?.summary?.title ?? props.linkedDepartmentsSummary?.summary?.title ?? "departments"} · {totalDepartments} 个部门</div>
-        <div className="console-summary-line">角色摘要：{apiData?.linked_summaries.roles?.summary?.title ?? props.linkedRolesSummary?.summary?.title ?? "roles"} · {totalRoles} 个角色</div>
-        <div className="console-summary-line">审计摘要：{apiData?.linked_summaries.audits?.summary?.title ?? props.linkedAuditsSummary?.summary?.title ?? "audits"} · {pendingReviews} 个待审</div>
+        <div className="console-resource-id">
+          组织：{props.organizationName || "未选择组织"}
+        </div>
+        <div className="console-summary-line">
+          部门 {props.totalDepartments} 个 · 智能体 {props.totalAgents} 个
+        </div>
+        <div className="console-summary-line">
+          岗位模板 {props.totalRoleTemplates} 个 · 在用 {props.inUseAgents} 个
+        </div>
+        <div className="console-summary-line">
+          组织域审计 {props.auditTotal} 条 · 失败 {props.auditFailure} 条
+        </div>
       </header>
 
+      {props.error ? (
+        <p role="alert" className="console-section text-sm text-red-600">
+          {props.error}
+        </p>
+      ) : null}
+
       <section className="console-kpi-row">
-        <StatCard label="部门数" value={String(totalDepartments)} />
-        <StatCard label="角色数" value={String(totalRoles)} />
-        <StatCard label="成员数" value={String(totalMembers)} />
-        <StatCard label="待审核" value={String(pendingReviews)} />
-        <StatCard label="风险等级" value={riskLevel} />
+        <StatCard label="部门数" value={String(props.totalDepartments)} />
+        <StatCard label="智能体数" value={String(props.totalAgents)} />
+        <StatCard label="岗位模板" value={String(props.totalRoleTemplates)} />
+        <StatCard label="在用岗位" value={String(props.inUseAgents)} />
+        <StatCard label="审计事件" value={String(props.auditTotal)} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Panel title="组织概览">
           <div className="space-y-2 text-sm text-gray-600">
-            <div>组织权限中心用于治理组织、角色和权限。</div>
-            <div className="text-xs text-gray-500">当前结构：{totalDepartments} 个部门 · {totalRoles} 个角色 · {totalMembers} 名成员</div>
-            <div className="text-xs text-gray-500">待审核：{pendingReviews} 项 · 风险：{riskLevel}</div>
+            <div>组织权限中心用于治理组织、岗位模板与审计流水。</div>
+            <div className="text-xs text-gray-500">
+              当前结构：{props.totalDepartments} 个部门 · {props.totalAgents} 个智能体 ·{" "}
+              {props.totalRoleTemplates} 个岗位模板
+            </div>
+            <div className="text-xs text-gray-500">
+              审计：共 {props.auditTotal} 条，其中失败 {props.auditFailure} 条
+            </div>
+            {props.loading ? (
+              <div role="status" className="text-xs text-gray-400">
+                正在同步组织治理数据…
+              </div>
+            ) : null}
           </div>
         </Panel>
 
         <Panel title="快捷入口">
           <div className="grid gap-2">
-            <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenStructure?.()}>查看组织结构</button>
-            {/* onOpenRoles / onOpenAudit 只在调用方显式提供时才渲染。
-                「角色权限」「组织审核」两页渲染的是硬编码占位（24 个角色 / 13 条
-                审核事件），且 fetch 的 /api/v1/organization-control/* 未挂载恒 404。
-                控制台不再提供通往它们的入口 ⇒ 这两个按钮随之消失。 */}
-            {props.onOpenRoles ? <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenRoles?.()}>查看角色权限</button> : null}
-            {props.onOpenAudit ? <button className="border-b px-3 py-2 text-left hover:bg-gray-50" onClick={() => props.onOpenAudit?.()}>查看审核队列</button> : null}
+            {props.onOpenStructure ? (
+              <button
+                className="border-b px-3 py-2 text-left hover:bg-gray-50"
+                onClick={() => props.onOpenStructure?.()}
+              >
+                查看组织结构
+              </button>
+            ) : null}
+            {props.onOpenRoles ? (
+              <button
+                className="border-b px-3 py-2 text-left hover:bg-gray-50"
+                onClick={() => props.onOpenRoles?.()}
+              >
+                查看角色权限
+              </button>
+            ) : null}
+            {props.onOpenAudit ? (
+              <button
+                className="border-b px-3 py-2 text-left hover:bg-gray-50"
+                onClick={() => props.onOpenAudit?.()}
+              >
+                查看审核队列
+              </button>
+            ) : null}
           </div>
         </Panel>
       </section>
@@ -110,7 +117,10 @@ export function OrganizationCenterOverviewPage(props: OrganizationCenterOverview
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="console-kpi"><span className="kpi-label">{label}</span><span className="kpi-value">{value}</span></div>
+    <div className="console-kpi">
+      <span className="kpi-label">{label}</span>
+      <span className="kpi-value">{value}</span>
+    </div>
   );
 }
 

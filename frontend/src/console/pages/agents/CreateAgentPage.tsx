@@ -2,6 +2,12 @@ import React, { useMemo, useState } from "react";
 
 import { sendFailure } from "../../sendOutcome";
 
+/** 组织下拉项 —— 只要 id 和名字，刻意不耦合组织目录 hook 的完整记录。 */
+export type CreateAgentOrganizationOption = {
+  org_id: string;
+  name: string;
+};
+
 export type CreateAgentPageProps = {
   roleCatalog: RoleCatalog;
   organizationGraph: OrganizationGraphView;
@@ -9,12 +15,24 @@ export type CreateAgentPageProps = {
   initialOrgId?: string;
   initialDepartmentId?: string;
   /**
-   * 当前组织名（只读展示）。
+   * 当前组织名（只读回退展示）。
    *
    * 表单里此前**连「所属组织」这一栏都没有** —— orgId 隐式取自组织图，用户看不见
-   * 自己正往哪个组织里建人。有了组织切换之后这件事更必须显式化。
+   * 自己正往哪个组织里建人。
    */
   organizationName?: string;
+  /**
+   * 可供选择的组织。给出时才渲染下拉；不给出则退回只读展示。
+   */
+  organizations?: CreateAgentOrganizationOption[];
+  /**
+   * 拉取**指定组织**的组织图（部门 + 智能体）。
+   *
+   * 为什么必须有：「所属部门」「上级智能体」都是**组织内**的 id。在表单里换组织
+   * 之后如果不重拉，用户会拿着 A 组织的 department_id 往 B 组织提交 ——
+   * 后端会 404（部门不属于该组织），而这本可以在前端就不发生。
+   */
+  onLoadOrganizationGraph?: (orgId: string) => Promise<OrganizationGraphView>;
   onCreateAgent: (payload: AgentCreatePayload) => Promise<AgentCreateResult>;
   onPreviewWorkflow?: (roleTemplateId: string) => void;
   onPreviewTools?: (roleTemplateId: string) => void;
@@ -63,7 +81,10 @@ export type AgentCreatePayload = {
 
 const defaultFormState = (props: CreateAgentPageProps): AgentCreateFormState => ({
   orgId: props.initialOrgId ?? props.organizationGraph.organization?.org_id ?? "",
-  departmentId: props.initialDepartmentId ?? props.organizationGraph.departments[0]?.department_id ?? "",
+  departmentId:
+    props.initialDepartmentId ??
+    props.organizationGraph.departments[0]?.department_id ??
+    "",
   name: "",
   title: "",
   managerAgentId: "",
@@ -76,23 +97,127 @@ export function CreateAgentPage(props: CreateAgentPageProps) {
   const [submitError, setSubmitError] = useState("");
   const [submitNotice, setSubmitNotice] = useState("");
 
+  // ── 当前表单所指向的组织图 ────────────────────────────────────────────────
+  // `props.organizationGraph` 是**控制台当前活动组织**的图；表单里可以切到别的
+  // 组织，所以需要一份「已经加载好的那份图」以及它对应的 orgId。
+  const propsGraphOrgId = props.organizationGraph.organization?.org_id ?? "";
+  const [loadedOrgId, setLoadedOrgId] = useState(propsGraphOrgId);
+  const [loadedGraph, setLoadedGraph] = useState<OrganizationGraphView>(
+    props.organizationGraph,
+  );
+  const [orgLoad, setOrgLoad] = useState<{ loading: boolean; error: string }>({
+    loading: false,
+    error: "",
+  });
+
+  React.useEffect(() => {
+    if (!form.orgId) return;
+    if (form.orgId === loadedOrgId) return;
+
+    // 切回控制台当前组织 ⇒ 直接用 props 那份（它本来就会随 bootstrap 刷新）
+    if (form.orgId === propsGraphOrgId) {
+      setLoadedOrgId(form.orgId);
+      setLoadedGraph(props.organizationGraph);
+      setOrgLoad({ loading: false, error: "" });
+      return;
+    }
+
+    const loader = props.onLoadOrganizationGraph;
+    if (!loader) {
+      // 没有加载通道时不要静默假装成功：把「无法确认该组织结构」说出来。
+      setOrgLoad({ loading: false, error: "当前环境无法加载该组织的部门列表" });
+      return;
+    }
+
+    let cancelled = false;
+    setOrgLoad({ loading: true, error: "" });
+    void (async () => {
+      try {
+        const graph = await loader(form.orgId);
+        if (cancelled) return;
+        setLoadedGraph(graph);
+        setLoadedOrgId(form.orgId);
+        // 部门必须落到新组织的第一个部门上；留空则由下面的必填校验拦下。
+        setForm((prev) =>
+          prev.orgId === form.orgId
+            ? {
+                ...prev,
+                departmentId: graph.departments[0]?.department_id ?? "",
+                managerAgentId: "",
+              }
+            : prev,
+        );
+        setOrgLoad({ loading: false, error: "" });
+      } catch (cause) {
+        if (cancelled) return;
+        setOrgLoad({
+          loading: false,
+          error: sendFailure("加载该组织的部门", cause).error,
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    form.orgId,
+    loadedOrgId,
+    propsGraphOrgId,
+    props.organizationGraph,
+    props.onLoadOrganizationGraph,
+  ]);
+
+  // 表单组织与控制台当前组织一致时优先用 props 那份（会自动跟随后台刷新）
+  const orgGraph =
+    form.orgId && form.orgId === propsGraphOrgId && props.organizationGraph.organization
+      ? props.organizationGraph
+      : loadedGraph;
+
   const selectedTemplate = useMemo(
-    () => props.roleCatalog.templates.find((item) => item.role_id === form.roleTemplateId) ?? null,
+    () =>
+      props.roleCatalog.templates.find(
+        (item) => item.role_id === form.roleTemplateId,
+      ) ?? null,
     [props.roleCatalog.templates, form.roleTemplateId],
   );
 
   const selectedAvatar = useMemo(
-    () => selectedTemplate ? props.avatars.find((avatar) => avatar.role_name === selectedTemplate.role_name) ?? null : null,
+    () =>
+      selectedTemplate
+        ? props.avatars.find(
+            (avatar) => avatar.role_name === selectedTemplate.role_name,
+          ) ?? null
+        : null,
     [props.avatars, selectedTemplate],
   );
 
   const workflow = useMemo(
-    () => selectedTemplate ? props.roleCatalog.workflows.find((item) => item.role_template_id === selectedTemplate.role_id) ?? null : null,
+    () =>
+      selectedTemplate
+        ? props.roleCatalog.workflows.find(
+            (item) => item.role_template_id === selectedTemplate.role_id,
+          ) ?? null
+        : null,
     [props.roleCatalog.workflows, selectedTemplate],
   );
 
-  const update = <K extends keyof AgentCreateFormState>(key: K, value: AgentCreateFormState[K]) => {
+  const update = <K extends keyof AgentCreateFormState>(
+    key: K,
+    value: AgentCreateFormState[K],
+  ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const changeOrganization = (nextOrgId: string) => {
+    if (nextOrgId === form.orgId) return;
+    // ★ 部门与上级必须**当场清空**：它们是组织内的 id，留着会把 A 组织的部门 id
+    //   提交到 B 组织。清空后由上面的 effect 在新组织的图到货时补上。
+    setForm((prev) => ({
+      ...prev,
+      orgId: nextOrgId,
+      departmentId: "",
+      managerAgentId: "",
+    }));
   };
 
   const handleSubmit = async () => {
@@ -139,9 +264,28 @@ export function CreateAgentPage(props: CreateAgentPageProps) {
         </header>
         <div className="space-y-3">
           {props.roleCatalog.templates.map((template) => (
-            <button key={template.role_id} className={`w-full border-b p-3 text-left transition ${form.roleTemplateId === template.role_id ? "border-blue-500 bg-blue-50" : "hover:bg-gray-50"}`} onClick={() => { update("roleTemplateId", template.role_id); props.onPreviewWorkflow?.(template.role_id); }}>
-              <div className="flex items-center gap-3"><div className="h-10 w-10 rounded-full bg-gray-200" /><div className="min-w-0"><div className="font-medium">{template.role_name}</div><div className="truncate text-xs text-gray-500">{template.title}</div></div></div>
-              <div className="mt-2 line-clamp-2 text-sm text-gray-600">{template.description}</div>
+            <button
+              key={template.role_id}
+              className={`w-full border-b p-3 text-left transition ${
+                form.roleTemplateId === template.role_id
+                  ? "border-blue-500 bg-blue-50"
+                  : "hover:bg-gray-50"
+              }`}
+              onClick={() => {
+                update("roleTemplateId", template.role_id);
+                props.onPreviewWorkflow?.(template.role_id);
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-gray-200" />
+                <div className="min-w-0">
+                  <div className="font-medium">{template.role_name}</div>
+                  <div className="truncate text-xs text-gray-500">{template.title}</div>
+                </div>
+              </div>
+              <div className="mt-2 line-clamp-2 text-sm text-gray-600">
+                {template.description}
+              </div>
             </button>
           ))}
         </div>
@@ -151,23 +295,107 @@ export function CreateAgentPage(props: CreateAgentPageProps) {
         <header className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">创建智能体</h2>
-            <p className="text-sm text-gray-500">填写岗位实例信息，并设置组织挂载关系。</p>
+            <p className="text-sm text-gray-500">
+              填写岗位实例信息，并设置组织挂载关系。
+            </p>
           </div>
-          <button className="border px-3 py-2 text-sm hover:bg-gray-50" onClick={props.onCancel}>返回组织图</button>
+          <button
+            className="border px-3 py-2 text-sm hover:bg-gray-50"
+            onClick={props.onCancel}
+          >
+            返回组织图
+          </button>
         </header>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="智能体名称"><input className="w-full border px-3 py-2" value={form.name} onChange={(e) => update("name", e.target.value)} placeholder="例如：短剧导演智能体" /></Field>
-          <Field label="岗位标题"><input className="w-full border px-3 py-2" value={form.title} onChange={(e) => update("title", e.target.value)} placeholder="例如：内容总监" /></Field>
-          {/* 「所属组织」是只读的：组织切换统一在组织图页做，这里只如实显示建到哪去。
-              此前表单里根本没有这一栏，orgId 隐式取自组织图，用户看不见目标组织。 */}
-          <Field label="所属组织">
-            <div className="w-full border bg-gray-50 px-3 py-2 text-sm text-gray-700">
-              {props.organizationName ?? props.organizationGraph.organization?.name ?? "未选择组织（请先到「组织图」新建或切换组织）"}
-            </div>
+          <Field label="智能体名称">
+            <input
+              className="w-full border px-3 py-2"
+              value={form.name}
+              onChange={(e) => update("name", e.target.value)}
+              placeholder="例如：短剧导演智能体"
+            />
           </Field>
-          <Field label="所属部门"><select className="w-full border px-3 py-2" value={form.departmentId} onChange={(e) => update("departmentId", e.target.value)}>{props.organizationGraph.departments.map((department) => <option key={department.department_id} value={department.department_id}>{department.name}</option>)}</select></Field>
-          <Field label="上级智能体"><select className="w-full border px-3 py-2" value={form.managerAgentId} onChange={(e) => update("managerAgentId", e.target.value)}><option value="">无</option>{props.organizationGraph.agent_instances.map((agent) => <option key={agent.agent_id} value={agent.agent_id}>{agent.name}</option>)}</select></Field>
+          <Field label="岗位标题">
+            <input
+              className="w-full border px-3 py-2"
+              value={form.title}
+              onChange={(e) => update("title", e.target.value)}
+              placeholder="例如：内容总监"
+            />
+          </Field>
+          {/* 「所属组织」此前是纯只读展示（用户只能去组织图页切组织）。现在给出
+              组织列表时改为可就地切换：换组织会立刻去拉那个组织的部门与上级智能体，
+              否则「所属部门」会停在另一个组织的 id 上。 */}
+          <Field label="所属组织">
+            {props.organizations && props.organizations.length > 0 ? (
+              <select
+                className="w-full border px-3 py-2"
+                value={form.orgId}
+                onChange={(e) => changeOrganization(e.target.value)}
+              >
+                {props.organizations.map((organization) => (
+                  <option key={organization.org_id} value={organization.org_id}>
+                    {organization.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="w-full border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                {props.organizationName ??
+                  props.organizationGraph.organization?.name ??
+                  "未选择组织（请先到「组织图」新建组织）"}
+              </div>
+            )}
+          </Field>
+          <Field label="所属部门">
+            <select
+              className="w-full border px-3 py-2"
+              value={form.departmentId}
+              // ★ 加载失败时也必须禁用：那时 orgGraph 还是**上一个组织**的图，
+              //   放开就会让用户把 A 组织的部门选到 B 组织名下。
+              disabled={orgLoad.loading || !!orgLoad.error || !form.orgId}
+              onChange={(e) => update("departmentId", e.target.value)}
+            >
+              <option value="">
+                {orgLoad.loading
+                  ? "正在加载该组织的部门…"
+                  : orgLoad.error
+                    ? "无法加载该组织的部门"
+                    : orgGraph.departments.length === 0
+                      ? "该组织下还没有部门（请先到「组织结构」新建）"
+                      : "请选择部门"}
+              </option>
+              {orgGraph.departments.map((department) => (
+                <option
+                  key={department.department_id}
+                  value={department.department_id}
+                >
+                  {department.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="上级智能体">
+            <select
+              className="w-full border px-3 py-2"
+              value={form.managerAgentId}
+              disabled={orgLoad.loading || !!orgLoad.error || !form.orgId}
+              onChange={(e) => update("managerAgentId", e.target.value)}
+            >
+              <option value="">无</option>
+              {orgGraph.agent_instances.map((agent) => (
+                <option key={agent.agent_id} value={agent.agent_id}>
+                  {agent.name}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
+        {orgLoad.error ? (
+          <p role="alert" className="mt-4 text-sm text-red-600">
+            {orgLoad.error}
+          </p>
+        ) : null}
         {/* 会议室 / 人格风格 / 语气 / 决策风格四处输入框已删除：
             前三者的值后端一个都没读（rooms 是每次现造的假实体，AgentNode 没有
             会议室字段），人格三项发的是与模板默认值逐字相同的常量。岗位画像改为
@@ -175,25 +403,108 @@ export function CreateAgentPage(props: CreateAgentPageProps) {
         <p className="mt-4 text-sm text-gray-500">
           岗位画像（能力、工具、人格风格、语气、决策风格）由所选岗位模板继承，此处不单独设置。
         </p>
-        <div className="mt-4 border bg-gray-50 p-4"><h3 className="font-medium">角色预览</h3><div className="mt-2 flex items-center gap-3"><div className="h-14 w-14 rounded-full bg-gray-200" /><div><div className="font-semibold">{selectedTemplate?.role_name ?? "未选择角色"}</div><div className="text-sm text-gray-500">{selectedTemplate?.title ?? "-"}</div></div></div><div className="mt-3 text-sm text-gray-600">{selectedTemplate?.description ?? ""}</div></div>
-        {submitError ? <p role="alert" className="mt-4 text-sm text-red-600">{submitError}</p> : null}
+        <div className="mt-4 border bg-gray-50 p-4">
+          <h3 className="font-medium">角色预览</h3>
+          <div className="mt-2 flex items-center gap-3">
+            <div className="h-14 w-14 rounded-full bg-gray-200" />
+            <div>
+              <div className="font-semibold">
+                {selectedTemplate?.role_name ?? "未选择角色"}
+              </div>
+              <div className="text-sm text-gray-500">{selectedTemplate?.title ?? "-"}</div>
+            </div>
+          </div>
+          <div className="mt-3 text-sm text-gray-600">
+            {selectedTemplate?.description ?? ""}
+          </div>
+        </div>
+        {submitError ? (
+          <p role="alert" className="mt-4 text-sm text-red-600">
+            {submitError}
+          </p>
+        ) : null}
         {submitNotice ? (
-          <p role="status" className="mt-4 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          <p
+            role="status"
+            className="mt-4 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800"
+          >
             {submitNotice}
           </p>
         ) : null}
-        <div className="mt-4 flex justify-end gap-3"><button className="border px-4 py-2" onClick={props.onCancel}>取消</button><button className="bg-blue-600 px-4 py-2 text-white disabled:opacity-50" disabled={submitting} onClick={handleSubmit}>{submitting ? "创建中..." : "创建智能体"}</button></div>
+        <div className="mt-4 flex justify-end gap-3">
+          <button className="border px-4 py-2" onClick={props.onCancel}>
+            取消
+          </button>
+          <button
+            className="bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+            disabled={submitting}
+            onClick={handleSubmit}
+          >
+            {submitting ? "创建中..." : "创建智能体"}
+          </button>
+        </div>
       </section>
 
       <aside className="console-section space-y-4">
-        <section><h3 className="font-semibold">角色形象</h3><div className="mt-3 flex items-center gap-3"><div className="h-16 w-16 rounded-full bg-gradient-to-br from-gray-200 to-gray-300" /><div><div className="font-medium">{selectedAvatar?.display_name ?? "默认形象"}</div><div className="text-xs text-gray-500">{selectedAvatar?.style ?? "business"}</div></div></div></section>
-        <section><h3 className="font-semibold">工作流预览</h3><ul className="mt-3 space-y-2 text-sm text-gray-600">{workflow?.steps?.map((step) => <li key={step} className="border-b px-3 py-2">{step}</li>) ?? <li className="text-gray-400">暂无工作流</li>}</ul><button className="mt-3 border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onPreviewWorkflow?.(form.roleTemplateId)}>预览工作流</button></section>
-        <section><h3 className="font-semibold">岗位能力</h3><div className="mt-3 flex flex-wrap gap-2">{selectedTemplate?.core_skills?.map((skill) => <span key={skill} className="rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700">{skill}</span>) ?? <span className="text-sm text-gray-400">暂无技能</span>}</div><button className="mt-3 border px-3 py-2 text-sm hover:bg-gray-50" onClick={() => props.onPreviewTools?.(form.roleTemplateId)}>查看工具映射</button></section>
+        <section>
+          <h3 className="font-semibold">角色形象</h3>
+          <div className="mt-3 flex items-center gap-3">
+            <div className="h-16 w-16 rounded-full bg-gradient-to-br from-gray-200 to-gray-300" />
+            <div>
+              <div className="font-medium">
+                {selectedAvatar?.display_name ?? "默认形象"}
+              </div>
+              <div className="text-xs text-gray-500">
+                {selectedAvatar?.style ?? "business"}
+              </div>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h3 className="font-semibold">工作流预览</h3>
+          <ul className="mt-3 space-y-2 text-sm text-gray-600">
+            {workflow?.steps?.map((step) => (
+              <li key={step} className="border-b px-3 py-2">
+                {step}
+              </li>
+            )) ?? <li className="text-gray-400">暂无工作流</li>}
+          </ul>
+          <button
+            className="mt-3 border px-3 py-2 text-sm hover:bg-gray-50"
+            onClick={() => props.onPreviewWorkflow?.(form.roleTemplateId)}
+          >
+            预览工作流
+          </button>
+        </section>
+        <section>
+          <h3 className="font-semibold">岗位能力</h3>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {selectedTemplate?.core_skills?.map((skill) => (
+              <span
+                key={skill}
+                className="rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700"
+              >
+                {skill}
+              </span>
+            )) ?? <span className="text-sm text-gray-400">暂无技能</span>}
+          </div>
+          <button
+            className="mt-3 border px-3 py-2 text-sm hover:bg-gray-50"
+            onClick={() => props.onPreviewTools?.(form.roleTemplateId)}
+          >
+            查看工具映射
+          </button>
+        </section>
       </aside>
     </div>
   );
 }
 
 function Field(props: { label: string; children: React.ReactNode }) {
-  return <label className="block"><div className="mb-1 text-sm font-medium text-gray-700">{props.label}</div>{props.children}</label>;
+  return (
+    <label className="block">
+      <div className="mb-1 text-sm font-medium text-gray-700">{props.label}</div>
+      {props.children}
+    </label>
+  );
 }

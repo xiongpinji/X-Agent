@@ -1,81 +1,135 @@
+/**
+ * 组织审核 —— 接**真实**审计流水。
+ *
+ * 此前这一页与「角色权限」是同一套「双重假」：硬编码 props（13 条事件 / 10 成功 /
+ * 3 失败）+ 一次对**未挂载** `/api/v1/organization-control/audit` 的 fetch（恒 404，
+ * 被静默吞掉），且渲染是 `props.x ?? apiData?.x` ⇒ props 永远命中。
+ *
+ * 现在数据来自 `core.audit.AuditStore` —— 与创建组织/部门/岗位智能体时**写的是同
+ * 一份存储**，按租户隔离。空就是空，不再显示编造的 13 条。
+ */
 import React from "react";
 
-export type OrganizationAuditPageProps = {
-  totalEvents?: number;
-  successEvents?: number;
-  failedEvents?: number;
-  lastEventStatus?: string;
-  riskLevel?: string;
-};
+import type {
+  OrganizationAuditRecord,
+  OrganizationAuditSummary,
+} from "../../hooks/useOrganizationGovernance";
 
-type OrganizationAuditApiResponse = {
-  resource_type: string;
-  resource_id: string;
-  primary: {
-    total_events?: number;
-    success_events?: number;
-    failed_events?: number;
-    last_event_status?: string;
-    risk_level?: string;
-  };
-  linked_summaries: {
-    organization?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null };
-    departments?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null };
-    roles?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null };
-    audits?: { summary?: { title?: string } | null; data?: Record<string, unknown> | null };
-  };
+export type OrganizationAuditPageProps = {
+  records: OrganizationAuditRecord[];
+  total: number;
+  summary: OrganizationAuditSummary;
+  /** 后端扫描上界被撑满 ⇒ 列表只是最近一部分，必须显示出来。 */
+  truncated?: boolean;
+  loading?: boolean;
+  error?: string;
 };
 
 export function OrganizationAuditPage(props: OrganizationAuditPageProps) {
-  const [apiData, setApiData] = React.useState<OrganizationAuditApiResponse | null>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const response = await fetch("/api/v1/organization-control/audit", { method: "GET", headers: { "Content-Type": "application/json" } });
-        if (!response.ok) return;
-        const payload = (await response.json()) as OrganizationAuditApiResponse;
-        if (!cancelled) setApiData(payload);
-      } catch (error) {
-        console.warn("Failed to load organization audit", error);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const totalEvents = props.totalEvents ?? apiData?.primary.total_events ?? 0;
-  const successEvents = props.successEvents ?? apiData?.primary.success_events ?? 0;
-  const failedEvents = props.failedEvents ?? apiData?.primary.failed_events ?? 0;
-  const lastEventStatus = props.lastEventStatus ?? apiData?.primary.last_event_status ?? "-";
-  const riskLevel = props.riskLevel ?? apiData?.primary.risk_level ?? "-";
-
   return (
     <div className="space-y-4">
       <section className="console-section">
         <h2 className="text-lg font-semibold">组织审核</h2>
-        <p className="text-sm text-gray-500">查看组织权限变更与审核事件。</p>
+        <p className="text-sm text-gray-500">
+          组织、部门与岗位智能体的创建流水（与写端点同一份审计存储，按租户隔离）。
+        </p>
       </section>
+
+      {props.error ? (
+        <p role="alert" className="console-section text-sm text-red-600">
+          {props.error}
+        </p>
+      ) : null}
+
       <section className="console-kpi-row">
-        <StatCard label="事件总数" value={String(totalEvents)} />
-        <StatCard label="成功事件" value={String(successEvents)} />
-        <StatCard label="失败事件" value={String(failedEvents)} />
-        <StatCard label="最近状态" value={lastEventStatus} />
-        <StatCard label="风险等级" value={riskLevel} />
+        <StatCard label="事件总数" value={String(props.total)} />
+        <StatCard label="成功" value={String(props.summary.success)} />
+        <StatCard label="失败" value={String(props.summary.failure)} />
+        <StatCard label="最近结果" value={props.summary.latest_outcome ?? "-"} />
       </section>
+
+      {props.truncated ? (
+        <p role="status" className="console-section text-sm text-amber-700">
+          记录数已达后端扫描上界，下面只显示最近的一部分。
+        </p>
+      ) : null}
+
       <Panel title="审核记录">
-        <div className="space-y-2 text-sm text-gray-600">
-          <div>组织摘要：{apiData?.linked_summaries.organization?.summary?.title ?? "-"}</div>
-          <div>部门摘要：{apiData?.linked_summaries.departments?.summary?.title ?? "-"}</div>
-          <div>角色摘要：{apiData?.linked_summaries.roles?.summary?.title ?? "-"}</div>
-          <div>审计摘要：{apiData?.linked_summaries.audits?.summary?.title ?? "-"}</div>
-        </div>
+        {props.loading ? (
+          <p role="status" className="text-sm text-gray-500">
+            加载中…
+          </p>
+        ) : props.records.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            当前租户还没有组织域操作记录。新建组织、部门或岗位智能体后，这里会出现对应的流水。
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-gray-500">
+                  <th className="py-2">时间</th>
+                  <th className="py-2">操作人</th>
+                  <th className="py-2">动作</th>
+                  <th className="py-2">资源</th>
+                  <th className="py-2">结果</th>
+                </tr>
+              </thead>
+              <tbody>
+                {props.records.map((record) => (
+                  <tr key={record.id} className="border-b">
+                    <td className="py-2 text-xs text-gray-600">
+                      {formatTimestamp(record.created_at)}
+                    </td>
+                    <td className="py-2">{record.actor_id}</td>
+                    <td className="py-2 font-medium">{record.action}</td>
+                    <td className="py-2 text-xs text-gray-600">
+                      <div>{record.resource_type}</div>
+                      <div className="text-gray-400">{record.resource_id ?? "-"}</div>
+                    </td>
+                    <td className="py-2">
+                      <span
+                        className={
+                          record.outcome === "success"
+                            ? "rounded-full bg-green-50 px-2 py-1 text-xs text-green-700"
+                            : "rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-700"
+                        }
+                      >
+                        {record.outcome}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Panel>
     </div>
   );
 }
-function StatCard({ label, value }: { label: string; value: string }) { return <div className="console-kpi"><span className="kpi-label">{label}</span><span className="kpi-value">{value}</span></div>; }
-function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <section className="console-section"><h3 className="font-semibold">{title}</h3><div className="mt-3">{children}</div></section>; }
+
+/** 后端给的是 ISO 串；展示层只做「本地可读」，解析失败就原样返回（不吞错误）。 */
+function formatTimestamp(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="console-kpi">
+      <span className="kpi-label">{label}</span>
+      <span className="kpi-value">{value}</span>
+    </div>
+  );
+}
+
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="console-section">
+      <h3 className="font-semibold">{title}</h3>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}

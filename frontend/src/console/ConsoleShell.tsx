@@ -7,7 +7,6 @@ import type {
   MarketplaceCenterOverview,
   MemoryCenterOverview,
   NavigationCenterOverview,
-  OrganizationCenterOverview,
   ToolsCenterOverview,
 } from "./state/consoleReducer";
 import {
@@ -28,7 +27,6 @@ import {
 } from "./state/executionControlSelectors";
 import { selectToolsCenterOverviewData } from "./state/toolsCenterSelectors";
 import { selectMemoryCenterOverviewData } from "./state/memoryCenterSelectors";
-import { selectOrganizationCenterOverviewData } from "./state/organizationCenterSelectors";
 import { selectMarketplaceCenterOverviewData } from "./state/marketplaceCenterSelectors";
 import { selectNavigationCenterOverviewData } from "./state/navigationCenterSelectors";
 import { validateConsoleBootstrapResponse, validateConsoleSelectors, warnConsoleBootstrapIssues } from "./state/consoleValidation";
@@ -66,6 +64,7 @@ import type { AuditSummarySection, TraceSummarySection } from "./pages/audit/Aud
 import { apiFailureMessage } from "./sendOutcome";
 import { consoleFetch } from "./consoleFetch";
 import { useOrganizationDirectory } from "./hooks/useOrganizationDirectory";
+import { useOrganizationGovernance } from "./hooks/useOrganizationGovernance";
 import { OrganizationSwitcher } from "./components/organization/OrganizationSwitcher";
 import type {
   NewDepartmentPayload,
@@ -112,6 +111,42 @@ export function ConsoleShell() {
 
   const organizationDirectory = useOrganizationDirectory(activeOrgId);
 
+  // 组织治理数据（岗位模板目录 + 组织域审计流水）。
+  // ★ 走 (d) 批次新增的**真实**端点 /api/v1/organization/roles、/audit ——
+  // 不是 /api/v1/organization-control/*（那个模块是纯 fixture 且刻意不挂载）。
+  const governance = useOrganizationGovernance(activeOrgId);
+
+  /**
+   * 按 orgId 拉一份组织图（部门 + 智能体）。
+   *
+   * 给 CreateAgentPage 的「所属组织」下拉用：在表单里换了组织，就必须换掉
+   * 「所属部门」「上级智能体」两个下拉的选项来源 —— 它们是**组织内**的 id，
+   * 拿着 A 组织的 department_id 往 B 组织提交，后端只能 404。
+   *
+   * 直接复用 workbench 端点（与 bootstrap 同源、同结构），不另造一个返回体。
+   * 必须走 consoleFetch：裸 fetch 在浏览器里没有凭证。
+   */
+  const loadOrganizationGraphFor = React.useCallback(
+    async (orgId: string): Promise<OrganizationGraphView> => {
+      const response = await consoleFetch(
+        `/api/v1/workbench?org_id=${encodeURIComponent(orgId)}`,
+      );
+      if (!response.ok) {
+        throw new Error(await apiFailureMessage(response));
+      }
+      const payload = (await response.json()) as {
+        organization_graph?: OrganizationGraphView;
+      };
+      if (!payload.organization_graph) {
+        // 不要把「没有图」当成「空图」悄悄放过：空图会让部门下拉显示
+        // 「该组织下还没有部门」，把一次契约不符伪装成一个正常的空状态。
+        throw new Error("后端没有返回该组织的组织图");
+      }
+      return payload.organization_graph;
+    },
+    [],
+  );
+
   const activeOrganization =
     organizationDirectory.organizations.find(
       (organization) => organization.org_id === activeOrgId,
@@ -157,7 +192,6 @@ export function ConsoleShell() {
   const executionRunId = selectExecutionControlRunId(state);
   const toolsCenterData = selectToolsCenterOverviewData(state);
   const memoryCenterData = selectMemoryCenterOverviewData(state);
-  const organizationCenterData = selectOrganizationCenterOverviewData(state);
   const marketplaceCenterData = selectMarketplaceCenterOverviewData(state);
   const navigationCenterData = selectNavigationCenterOverviewData(state);
   const identityData = selectIdentityData(state);
@@ -200,11 +234,15 @@ export function ConsoleShell() {
 
     const load = async () => {
       try {
-        const [executionRes, toolsRes, memoryRes, orgRes, marketRes, navRes] = await Promise.all([
+        // ★ 这里刻意**没有** /api/v1/organization-control/overview：那个路由未挂载，
+        // 恒 404，而失败分支是 `if (res.ok)` ⇒ 每次开控制台都打一个必然失败的请求，
+        // 再把失败伪装成「没有数据」。组织域的真实数据改由上面的
+        // useOrganizationGovernance（/api/v1/organization/roles + /audit）与
+        // workbench 的组织图承担。
+        const [executionRes, toolsRes, memoryRes, marketRes, navRes] = await Promise.all([
           fetch("/api/v1/execution-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
           fetch("/api/v1/tools-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
           fetch("/api/v1/memory-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
-          fetch("/api/v1/organization-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
           fetch("/api/v1/marketplace-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
           fetch("/api/v1/navigation-control/overview", { method: "GET", headers: { "Content-Type": "application/json" } }),
         ]);
@@ -222,10 +260,6 @@ export function ConsoleShell() {
         if (memoryRes.ok) {
           const payload = (await memoryRes.json()) as OverviewResponse<MemoryCenterOverview["primary"], MemoryCenterOverview["linked_summaries"]>;
           dispatch({ type: "memoryCenter/overviewUpdate", payload: payload as unknown as MemoryCenterOverview });
-        }
-        if (orgRes.ok) {
-          const payload = (await orgRes.json()) as OverviewResponse<OrganizationCenterOverview["primary"], OrganizationCenterOverview["linked_summaries"]>;
-          dispatch({ type: "organizationCenter/overviewUpdate", payload: payload as unknown as OrganizationCenterOverview });
         }
         if (marketRes.ok) {
           const payload = (await marketRes.json()) as OverviewResponse<MarketplaceCenterOverview["primary"], MarketplaceCenterOverview["linked_summaries"]>;
@@ -395,6 +429,14 @@ export function ConsoleShell() {
             roleCatalog={roleCatalogData.roleCatalog}
             organizationGraph={overviewData.organizationGraph ?? emptyGraph()}
             organizationName={activeOrganization?.name}
+            // 「所属组织」在表单里可就地切换：切过去即拉该组织的部门与智能体。
+            // 不传 onLoadOrganizationGraph 的话，组件会显式报「无法加载该组织的部门
+            // 列表」而不是静默留一张空下拉（见 CreateAgentPage 的切换 effect）。
+            organizations={organizationDirectory.organizations.map((organization) => ({
+              org_id: organization.org_id,
+              name: organization.name,
+            }))}
+            onLoadOrganizationGraph={loadOrganizationGraphFor}
             avatars={roleCatalogData.avatars}
             onCreateAgent={handleCreateAgent}
             onPreviewWorkflow={(roleTemplateId) => dispatch({ type: "roleTemplate/setSelected", payload: roleTemplateId })}
@@ -609,14 +651,27 @@ export function ConsoleShell() {
       case "memory_history":
         return <MemoryHistoryPage totalEvents={210} successEvents={198} failedEvents={12} lastEventStatus="updated" riskLevel="low" />;
       case "org_overview":
+        // ★ 全部数字都来自真实来源，**没有一个**硬编码字面量：
+        // 组织名/部门数/智能体数来自 workbench 的组织图；岗位模板数与在用数来自
+        // /api/v1/organization/roles；审计总数与失败数来自 /api/v1/organization/audit。
         return (
           <OrganizationCenterOverviewPage
-            {...organizationCenterData}
+            organizationName={
+              overviewData.organizationGraph?.organization?.name ??
+              activeOrganization?.name ??
+              ""
+            }
+            totalDepartments={overviewData.organizationGraph?.departments.length ?? 0}
+            totalAgents={overviewData.organizationGraph?.agent_instances.length ?? 0}
+            totalRoleTemplates={governance.roles?.total_templates ?? 0}
+            inUseAgents={governance.roles?.in_use_total ?? 0}
+            auditTotal={governance.audit?.total ?? 0}
+            auditFailure={governance.audit?.summary.failure ?? 0}
+            loading={governance.loading}
+            error={governance.error}
             onOpenStructure={() => dispatch({ type: "page/set", payload: "org_structure" })}
-            // onOpenRoles / onOpenAudit 刻意不传：那两个页面是纯编造数据的占位
-            // （硬编码 24 个角色 / 13 条审核事件），且它们 fetch 的
-            // /api/v1/organization-control/* 未挂载恒 404。给一个通往假页面的
-            // 按钮，等于把假数据包装成可达功能。不传 ⇒ 组件不渲染这两个入口。
+            onOpenRoles={() => dispatch({ type: "page/set", payload: "org_roles" })}
+            onOpenAudit={() => dispatch({ type: "page/set", payload: "org_audit" })}
           />
         );
       case "org_structure":
@@ -632,14 +687,37 @@ export function ConsoleShell() {
           />
         );
       case "org_roles":
-        // ★ 已无任何入口可达（侧边栏与「组织权限中心」的按钮都已摘掉）：本页渲染的是
-        // 硬编码占位（24 角色 / 21 启用 / 12 权限集），数据源
-        // /api/v1/organization-control/* 未挂载。保留 case 而不是删除，是为了让
-        // 「零引用 ≠ 可删」这条纪律生效前不误删 —— 它的去留应作为一个独立决定。
-        return <OrganizationRolesPage totalRoles={24} activeRoles={21} pendingRoles={3} permissionSets={12} riskLevel="medium" />;
+        // 本页此前渲染硬编码占位（24 角色 / 21 启用 / 12 权限集），且数据源
+        // /api/v1/organization-control/* 未挂载恒 404。现在接真实角色目录：
+        // 模板来自 store.get_role_catalog()，「在用」数是后端按该组织 list_agents
+        // 数出来的 —— 与写路径同源，读到的 role_id 可以直接喂回 POST /agents。
+        return (
+          <OrganizationRolesPage
+            templates={governance.roles?.templates ?? []}
+            totalTemplates={governance.roles?.total_templates ?? 0}
+            inUseTotal={governance.roles?.in_use_total ?? 0}
+            roleGroups={governance.roles?.role_groups ?? {}}
+            activeOrgId={activeOrgId}
+            loading={governance.loading}
+            error={governance.error}
+          />
+        );
       case "org_audit":
-        // ★ 同上，已无入口可达。
-        return <OrganizationAuditPage totalEvents={13} successEvents={10} failedEvents={3} lastEventStatus="pending" riskLevel="medium" />;
+        // 本页此前渲染硬编码占位（13 条事件 / 10 成功 / 3 失败），数据源同样未挂载。
+        // 现在数据来自 core.audit.AuditStore —— 与创建组织/部门/岗位智能体时写的
+        // 是同一份存储，按租户隔离。
+        return (
+          <OrganizationAuditPage
+            records={governance.audit?.records ?? []}
+            total={governance.audit?.total ?? 0}
+            summary={
+              governance.audit?.summary ?? { success: 0, failure: 0, latest_outcome: null }
+            }
+            truncated={governance.audit?.truncated ?? false}
+            loading={governance.loading}
+            error={governance.error}
+          />
+        );
       case "audit":
         return (
           <AuditReplayPage
@@ -679,10 +757,12 @@ export function ConsoleShell() {
             <button onClick={() => dispatch({ type: "page/set", payload: "organization_graph" })}>组织图</button>
             <button onClick={() => dispatch({ type: "page/set", payload: "org_overview" })}>组织权限中心</button>
             <button onClick={() => dispatch({ type: "page/set", payload: "org_structure" })}>组织结构</button>
-            {/* 「角色权限」(org_roles) 与「组织审核」(org_audit) 两个侧边栏入口已摘除：
-                它们展示的是硬编码占位（24 个角色 / 13 条审核事件），数据源
-                /api/v1/organization-control/* 未挂载恒 404。留一个通往编造数字的
-                入口 = 把静态 fixture 当成功能交付。页面本身保留（见 renderPage）。 */}
+            {/* 这两个入口此前被摘除，因为它们指向的是硬编码占位（24 个角色 /
+                13 条审核事件），而数据源 /api/v1/organization-control/* 未挂载恒 404。
+                (d) 批次把两个页面改接真实端点后，入口恢复 —— 现在它们通往的数据与
+                「创建智能体」「新建部门」写入的是同一份存储。 */}
+            <button onClick={() => dispatch({ type: "page/set", payload: "org_roles" })}>角色权限</button>
+            <button onClick={() => dispatch({ type: "page/set", payload: "org_audit" })}>组织审核</button>
             <button onClick={() => dispatch({ type: "page/set", payload: "meeting_room" })}>会议室</button>
             <button onClick={() => dispatch({ type: "page/set", payload: "realtime_chat" })}>对话</button>
             <button onClick={() => dispatch({ type: "page/set", payload: "workflow" })}>工作流</button>
