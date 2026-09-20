@@ -157,4 +157,5 @@ select = ["E", "F", "I", "UP", "B", "C4", "SIM", "RUF"]
 ignore = ["E501"]  # Line too long (handled by black)
 
 [tool.ruff.lint.isort]
-profile = "black"
+# ruff's isort is black-compatible by default; the former `profile = "black"`
+# key is an isort/black setting and made every ruff invocation fail outright.

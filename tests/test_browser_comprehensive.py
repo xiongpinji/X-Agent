@@ -15,9 +15,34 @@ from playwright.async_api import async_playwright, Browser, Page
 logger = logging.getLogger(__name__)
 
 
+def _real_browser_available() -> bool:
+    """True only when browser binaries are actually installed.
+
+    The playwright pip package importing is not enough: without
+    `playwright install chromium` every launch() raises "Executable doesn't
+    exist" and the browser/page fixtures error out (29 setup errors in the
+    T7 baseline). Skip honestly instead.
+    """
+    import os
+    candidates = []
+    env_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    if env_path:
+        candidates.append(env_path)
+    candidates.append(os.path.expanduser("~/.cache/ms-playwright"))
+    for path in candidates:
+        try:
+            if os.path.isdir(path) and any(os.scandir(path)):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 @pytest.fixture
 async def browser():
     """Provide browser instance for tests."""
+    if not _real_browser_available():
+        pytest.skip("real Playwright browsers not installed (playwright install chromium)")
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         yield browser
