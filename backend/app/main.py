@@ -31,6 +31,11 @@ from backend.app.api.auth import router as auth_router
 from backend.app.api.feishu import router as feishu_router
 from backend.app.api.integrations import router as integrations_router
 from backend.app.api.memory import router as memory_router
+from backend.app.api.api_keys import router as api_keys_router
+from backend.app.api.artifacts import router as artifacts_router
+from backend.app.api.mcp import router as mcp_router
+from backend.app.api.search import router as search_router
+from backend.app.api.sessions import router as sessions_router
 from backend.app.api.messages import router as messages_router
 from backend.app.api.org import router as org_router
 from backend.app.api.evolution import router as evolution_router
@@ -490,6 +495,11 @@ app.include_router(dispatch_router)
 app.include_router(feishu_router)
 app.include_router(integrations_router)
 app.include_router(memory_router)
+app.include_router(api_keys_router)
+app.include_router(artifacts_router)
+app.include_router(mcp_router)
+app.include_router(search_router)
+app.include_router(sessions_router)
 app.include_router(org_router)
 app.include_router(evolution_router)
 app.include_router(migration_router)
