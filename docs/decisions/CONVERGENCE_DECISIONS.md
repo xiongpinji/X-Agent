@@ -80,6 +80,31 @@ dependencies_refactored 引用）、`parallel_agents_integration.py`（0 生产�
 
 - [x] 组 1-8 裁决方向确认（技能家族=归档，用户 2026-09-20 拍板）
 - [x] W1 执行（2026-09-20，commit a76398e）
-- [ ] W2 放行（"仅测试引用"僵尸 + 专属测试，git rm 方式）
-- [ ] W3 候选挂载名单（mcp/search/api_keys/artifacts/sessions/health_checks）确认
-- [ ] `v1.0.0-beta` tag 处置：删除 tag（推荐）还是保留？
+- [x] W2 执行（2026-09-20，commit 877eaa9，114 文件；用户指令"一次性规划并执行"放行）
+- [x] W3 执行（2026-09-20，commit b12a41e：38 个僵尸 API 模块删除 + 5 个候选挂载
+      （mcp/search/api_keys/artifacts/sessions；health_checks 经核已有等价表面未重复挂载）；
+      OpenAPI 表面 323 paths / 361 ops，见 docs/API_INVENTORY.md，T9=commit d0fef66）
+- [ ] `v1.0.0-beta` tag 处置：删除 tag（推荐）还是保留？**（仍待用户）**
+
+## 7. 一次性执行收官记录（2026-09-20）
+
+| 任务 | 状态 | commit / 产出 |
+|---|---|---|
+| W2 僵尸家族归档 | ✅ | 877eaa9（114 文件） |
+| W2.5 引用链级联 | ✅ | 并入 877eaa9/b12a41e |
+| W3 API 挂载/清理 | ✅ | b12a41e（38 删 + 5 挂载） |
+| T7 测试基线归零 | ✅ | fdfcd5d + 16ee93a；3028 passed / 4 failed（2 环境依赖 + 2 待用户 PathMapper）/ 0 未解释；4 个真实生产 bug 修复（SSE 路由遮蔽、浏览器假就绪、CLI 配置保存、fakeredis HGETALL）→ docs/reports/T7_TEST_BASELINE.md |
+| T8 CI 门禁 | ✅ | 16ee93a：11 workflow → 5；单一 ci.yml（阻断=fast-gate+frontend，报告=lint/mypy/full-suite） |
+| T9 API 治理 | ✅ | d0fef66：op-id 去重 + docs/API_INVENTORY.md |
+| T10 | ⛔ 阻塞 | 需用户提供资源（真实 LLM key / GitHub repo 验证 Phase 5.5） |
+| T11 外围冻结 | ✅ | 16ee93a：desktop/mobile/sdks/cloud 各 STATUS.md |
+| T12 前端 | ✅ | 0b602ee：构建从"从未可运行"到全绿（双前端真相 + api.ts 对齐）→ docs/reports/T12_FRONTEND.md |
+| T13 打 tag | ❌ 不打 | M2 出关标准未全满足：①CI 未在真实 GitHub 验证；④Phase 5.5 端到端被 T10 阻塞；⑥无可安装包。满足后再打 v0.2.0-beta |
+
+**新增待用户决策**（详见各报告）：
+1. React 应用（frontend/src + app.html）是否升级为生产 UI（后端 static → dist）？
+2. frontend/src/console（52 文件孤岛）及 16 个前端孤岛：删除还是补全挂载？
+3. memory PUT/DELETE：接受 append-only（前端已显式报错）还是增补 revision 式端点？
+4. PathMapper ×2 测试（PermissionError）：审查报告遗留决策项。
+5. TestClient ~3MB/请求滞留与 AgentLoop 计划膨胀挤掉 final 步：两个已记录的生产侧
+   隐患（T7 报告 §3），是否立项 M2 修复？

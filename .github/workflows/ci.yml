@@ -80,6 +80,25 @@ jobs:
             tests/enterprise \
             -q -o addopts="--strict-markers" -p no:cacheprovider --timeout=120
 
+  frontend:
+    name: Frontend build + typecheck (blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # tsc (typecheck of the mounted tree) + vite multi-page build
+      # (vanilla console index.html + React app.html; see docs/reports/T12_FRONTEND.md)
+      - run: npm run build
+
   # ------------------------------------------------------- non-blocking debt
   lint-report:
     name: Lint / type report (non-blocking, known debt)
