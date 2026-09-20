@@ -14,8 +14,8 @@ X-Agent Core combines cutting-edge LLM capabilities with enterprise-grade infras
 - **Observability & Tracing**: Full request tracing with Langfuse integration for debugging and performance monitoring
 - **Approval Workflows**: Human-in-the-loop approval system for sensitive operations with audit trails
 - **Policy Engine**: Define and enforce policies for agent behavior and resource access
-- **PostgreSQL Persistence**: Reliable data storage with support for complex queries and transactions
-- **Vector Search**: Qdrant integration for semantic similarity search and memory retrieval
+- **Layered Persistence**: Local-first stores (SQLite/JSONL) run out of the box with zero setup; PostgreSQL, Qdrant (vector search), and Redis are supported as production-grade options
+- **Vector Search**: Optional Qdrant integration for semantic similarity search and memory retrieval
 - **Multi-Tenant Support**: Built-in tenant isolation and role-based access control
 - **Plugin System**: Extensible plugin architecture for custom functionality
 - **Cloud Sandbox Engine** *(Phase 5.5)*: Isolated code execution with Docker containerization, optional subprocess fallback, GitHub Issue→PR automation, and fire-and-forget task queuing
@@ -34,8 +34,8 @@ X-Agent Core combines cutting-edge LLM capabilities with enterprise-grade infras
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/x-agent/x-agent-core.git
-   cd x-agent-core
+   git clone https://github.com/xiongpinji/X-Agent.git
+   cd X-Agent
    ```
 
 2. **Create a virtual environment**
@@ -149,4 +149,4 @@ This project is licensed under the MIT License - see [LICENSE](./LICENSE) file f
 
 ## Support
 
-- GitHub Issues: [Report bugs or request features](https://github.com
+- GitHub Issues: [Report bugs or request features](https://github.com/xiongpinji/X-Agent/issues)
