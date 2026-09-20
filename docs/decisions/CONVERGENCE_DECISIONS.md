@@ -1,6 +1,6 @@
 # T5 收敛决策矩阵（v1/v2 双轨 + 僵尸代码盘点）
 
-> 日期：2026-09-20 ｜ 基线：develop @ ecc9343 ｜ 状态：**待用户确认**
+> 日期：2026-09-20 ｜ 基线：develop @ ecc9343 ｜ 状态：**W1 已执行（a76398e）；W2/W3 待放行**
 > 方法：对每个候选模块统计生产代码引用（backend/cli，排除自身与 tests）与测试引用；
 > 对 API 模块额外核对是否被 `main.py` 实际注册（include_router）。
 > 所有数字可用 `grep -rlnE 'core\.<module>\b' backend cli tests --include='*.py'` 复现。
@@ -74,8 +74,12 @@ dependencies_refactored 引用）、`parallel_agents_integration.py`（0 生产�
 
 ## 6. 待用户决策清单
 
-- [ ] 组 1-8 裁决是否按建议执行？（特别是：**技能系统全家族归档** —— 若"技能"是产品方向，
-      应改为"挂载 skills_api + 收敛为单实现"，工作量完全不同）
-- [ ] W2 采用 `git rm`（推荐）还是移入归档目录？
-- [ ] W3 候选挂载名单（mcp/search/api_keys/artifacts/sessions/health_checks）是否同意先挂载这 6 个？
-- [ ] `v1.0.0-beta` tag 处置：删除 tag（推荐，与 pyproject 0.1.0 和 ROADMAP v0.2.0-beta 对齐）还是保留？
+> **2026-09-20 用户批复**：① 立即执行 W1（已完成，commit a76398e，17 文件删除，
+> 全量收集 4096 tests 0 err，RC 子集 120 passed）；② 技能系统全家族 → **归档**方向确认
+> （随 W2 执行）；③ W2/W3 整体执行待用户读完本矩阵后放行。
+
+- [x] 组 1-8 裁决方向确认（技能家族=归档，用户 2026-09-20 拍板）
+- [x] W1 执行（2026-09-20，commit a76398e）
+- [ ] W2 放行（"仅测试引用"僵尸 + 专属测试，git rm 方式）
+- [ ] W3 候选挂载名单（mcp/search/api_keys/artifacts/sessions/health_checks）确认
+- [ ] `v1.0.0-beta` tag 处置：删除 tag（推荐）还是保留？
