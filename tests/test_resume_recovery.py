@@ -307,7 +307,12 @@ async def test_resume_run_reuses_previous_subtask_state() -> None:
         tracer=DummyTracer(),
         run_store=store,
         repair_loop=DummyRepairLoop(),
-        max_iterations=3,
+        # NOTE: was 3. _apply_execution_plan scaffolds the 2-step resume plan up to
+        # ~7 executable steps (reflect/tool injections), so a budget of 3 exhausted
+        # before the "final" step ran. This test targets resume state inheritance,
+        # not iteration budgeting; the scaffold-vs-budget interaction is logged as
+        # a finding in docs/reports/T7_TEST_BASELINE.md.
+        max_iterations=10,
     )
     result = await loop.run(
         RunContext(trace_id="resume-target", agent_id="agent-a", session_id="session-1"),

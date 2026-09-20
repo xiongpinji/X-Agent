@@ -1,6 +1,31 @@
+import pytest
+
 from backend.app.services.browser.playwright_client import browser_client
 
 
+def _real_browser_available() -> bool:
+    """True only when playwright is importable AND browser binaries are installed.
+
+    browser_client.has_real_client alone is insufficient: it only checks that the
+    playwright package imports, so these real-browser tests used to run (and crash
+    with nested-event-loop errors) on machines without `playwright install`.
+    """
+    if not browser_client.has_real_client:
+        return False
+    import os
+    browsers = os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or os.path.expanduser(
+        "~/.cache/ms-playwright"
+    )
+    try:
+        return os.path.isdir(browsers) and any(os.scandir(browsers))
+    except OSError:
+        return False
+
+
+@pytest.mark.skipif(
+    not _real_browser_available(),
+    reason="Playwright browser not available (requires real browser installation).",
+)
 def test_browser_service_creates_recoverable_session() -> None:
     session = browser_client.create_session(trace_id="trace-real", run_id="run-real", tenant_id="tenant-real")
 

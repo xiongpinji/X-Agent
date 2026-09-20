@@ -208,10 +208,9 @@ def save_config(config: CLIConfig) -> None:
 
     try:
         import tomllib
-        import tomli_w as toml_writer  # type: ignore
-    except ImportError:
+    except ImportError:  # Python < 3.11
         import tomli as tomllib  # type: ignore
-        import tomli_w as toml_writer  # type: ignore
+    import tomli_w as toml_writer  # type: ignore
 
     data = {
         "xagent": {

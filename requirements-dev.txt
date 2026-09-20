@@ -12,7 +12,7 @@ pytest-cov==4.0.0
 aiosqlite==0.20.0
 locust==2.20.0
 # 内存 Redis 测试替身：RateLimiterRedis / CSRFTokenStoreRedis 等依赖 db_manager.redis
-fakeredis==2.35.1
+fakeredis==2.38.0  # >=2.38 required: 2.35.x hgetall ignores decode_responses (broke CSRFTokenStoreRedis tests)
 # fakeredis 执行 Redis Lua 脚本（check_rate_limit 的原子限流）所需的 Lua 运行时绑定
 lupa==2.5
 

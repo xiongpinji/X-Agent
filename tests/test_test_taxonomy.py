@@ -11,7 +11,7 @@ def test_test_file_naming_matches_taxonomy() -> None:
         parts = path.parts
         name = path.name
         if parts[0] == "e2e":
-            assert name.endswith("_e2e.py") or name in {'test_desktop_e2e.py', 'test_desktop_macro_e2e.py', 'test_execution_reporting.py', 'test_functional_e2e.py', 'test_offline_e2e.py', 'test_open_source_catalog_e2e.py', 'test_open_source_e2e.py', 'test_performance_security_e2e.py', 'test_sync_e2e.py', 'test_workflow_e2e.py'}
+            assert name.endswith("_e2e.py") or name in {'test_agent_fix_real_llm.py', 'test_desktop_e2e.py', 'test_desktop_macro_e2e.py', 'test_execution_reporting.py', 'test_functional_e2e.py', 'test_offline_e2e.py', 'test_open_source_catalog_e2e.py', 'test_open_source_e2e.py', 'test_performance_security_e2e.py', 'test_sync_e2e.py', 'test_workflow_e2e.py'}
         elif parts[0] == "runtime":
             assert name.endswith("_runtime.py") or name.endswith("_helpers.py") or name.endswith("_compose.py") or name in {'test_desktop_runtime_complex.py', 'test_open_source_package_only.py'}
         elif parts[0] == "contracts":

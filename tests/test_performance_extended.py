@@ -1,6 +1,17 @@
 """Performance tests - response time, throughput, and resource usage."""
 
+import os
+
 import pytest
+
+# Load/stress/memory-growth tests: opt-in like tests/performance/ (they spawn thread
+# pools against TestClient and sample RSS — unsuitable for small/CI runners and
+# OOM-killed the process on a 2GB sandbox). Set XAGENT_PERFORMANCE_TESTS=1 to run.
+pytestmark = pytest.mark.skipif(
+    os.environ.get("XAGENT_PERFORMANCE_TESTS") != "1",
+    reason="performance/load tests are opt-in: set XAGENT_PERFORMANCE_TESTS=1",
+)
+
 import time
 import asyncio
 import psutil

@@ -324,6 +324,20 @@ async def _stream_events(
         yield f"data: {event_json}\n\n"
 
 
+@router.get("/stream/health")
+async def stream_health() -> dict[str, Any]:
+    """
+    Get health status of the streaming service.
+
+    Returns:
+        Health status
+    """
+    return {
+        "status": "healthy",
+        "store_stats": event_store.get_stats(),
+    }
+
+
 @router.get("/stream/{run_id}")
 async def subscribe_to_stream(
     run_id: str,
@@ -677,15 +691,3 @@ async def get_stream_stats(
     }
 
 
-@router.get("/stream/health")
-async def stream_health() -> dict[str, Any]:
-    """
-    Get health status of the streaming service.
-
-    Returns:
-        Health status
-    """
-    return {
-        "status": "healthy",
-        "store_stats": event_store.get_stats(),
-    }

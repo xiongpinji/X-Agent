@@ -12,6 +12,35 @@ except ImportError:  # pragma: no cover - optional runtime dependency
     Browser = BrowserContext = Page = object  # type: ignore[assignment]
     sync_playwright = None  # type: ignore[assignment]
 
+import logging
+import os
+from functools import lru_cache
+
+logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _playwright_browsers_installed() -> bool:
+    """Cheap filesystem check for `playwright install` browser builds.
+
+    The playwright pip package being importable does NOT mean a browser binary
+    exists; launching without one raises and (pre-fix) poisoned the event loop
+    instead of falling back to the in-memory simulation this client promises.
+    """
+    candidates = []
+    env_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    if env_path:
+        candidates.append(env_path)
+    candidates.append(os.path.expanduser("~/.cache/ms-playwright"))
+    candidates.append(os.path.expanduser("~/Library/Caches/ms-playwright"))
+    for path in candidates:
+        try:
+            if os.path.isdir(path) and any(os.scandir(path)):
+                return True
+        except OSError:
+            continue
+    return False
+
 
 @dataclass(slots=True)
 class BrowserActionResult:
@@ -74,10 +103,12 @@ class PlaywrightBrowserClient:
 
     @property
     def has_real_client(self) -> bool:
+        if sync_playwright is None or not _playwright_browsers_installed():
+            return False
         try:
-            return sync_playwright is not None and not asyncio.get_running_loop().is_running()
+            return not asyncio.get_running_loop().is_running()
         except RuntimeError:
-            return sync_playwright is not None
+            return True
 
     def _validate_selector(self, selector: str) -> None:
         """Validate CSS selector to prevent DoS attacks and injection.
@@ -122,20 +153,31 @@ class PlaywrightBrowserClient:
             tenant_id=tenant_id,
             user_id=user_id,
         )
-        if sync_playwright is not None:
+        if sync_playwright is not None and _playwright_browsers_installed():
             try:
                 loop_running = asyncio.get_running_loop().is_running()
             except RuntimeError:
                 loop_running = False
             if not loop_running:
-                playwright = sync_playwright().start()
-                browser = playwright.chromium.launch(headless=headless)
-                context = browser.new_context()
-                page = context.new_page()
-                session.browser = browser
-                session.context = context
-                session.page = page
-                session.managed = True
+                playwright = None
+                try:
+                    playwright = sync_playwright().start()
+                    browser = playwright.chromium.launch(headless=headless)
+                    context = browser.new_context()
+                    page = context.new_page()
+                    session.browser = browser
+                    session.context = context
+                    session.page = page
+                    session.managed = True
+                except Exception as exc:  # fall back to in-memory simulation
+                    logger.warning("Real browser unavailable, using in-memory fallback: %s", exc)
+                    if playwright is not None:
+                        try:
+                            playwright.stop()
+                        except Exception:  # pragma: no cover - best effort cleanup
+                            pass
+                    session.browser = session.context = session.page = None
+                    session.managed = False
         self._sessions[session.session_id] = session
         return session
 
