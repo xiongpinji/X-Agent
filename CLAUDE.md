@@ -83,26 +83,20 @@ X-Agent/
 
 ## 📚 关键文档（按重要性排序）
 
+> 2026-09-20 文档整理：根目录历史报告已归档至 `docs/archive/reports-2026/`（见该目录 README 索引）。
+
 读取以下文档了解完整背景：
 
-1. **`competitive_analysis_report.md`** - 竞品深度分析（8000字）
-   - 6个竞品对比（Claude Code、Codex、Cursor、Windsurf等）
-   - 6个关键能力差距分析
+1. **`docs/archive/reports-2026/COMPETITIVE_GAP_ANALYSIS_2026.md`** - 竞品差距分析与提升方案
+   - 竞品对比（Codex、Claude Code、Cursor、Devin 等）
+   - 内部技术债清单 + 关键能力差距
    - 战略建议
 
-2. **`UPGRADE_PLAN.md`** - 14周升级计划
-   - 6个Phase详细任务分解
-   - 资源需求和时间线
-   - 验收标准
+2. **`docs/archive/reports-2026/UPGRADE_PLAN.md`** - 14周升级计划（历史规划，Phase 1-6 背景）
 
-3. **`MCP_ENHANCEMENT_REPORT.md`** - Phase 1 进度报告
-   - 已完成的MCP工作
-   - 待完成清单
-   - 集成示例代码
+3. **`RELEASE_READINESS.md`** - 当前发布就绪状态、验证命令与生产清单
 
-4. **`UPGRADE_IMPLEMENTATION_REPORT.md`** - 实施报告
-
-5. **`WORK_SUMMARY.md`** - 工作总结
+4. **`docs/INDEX.md`** - 完整文档导航
 
 ---
 
@@ -293,8 +287,8 @@ test: add MCP manager unit tests
 如果用户进入新会话，说"继续X-Agent升级工作"或类似的话，Claude应该：
 
 1. 先读取本文件（CLAUDE.md）了解全貌
-2. 读取 `MCP_ENHANCEMENT_REPORT.md` 了解Phase 1详情
-3. 读取 `UPGRADE_PLAN.md` 了解后续计划
+2. 读取 `RELEASE_READINESS.md` 了解当前状态与验证命令
+3. 读取 `docs/archive/reports-2026/UPGRADE_PLAN.md` 了解 Phase 1-6 历史规划
 4. 询问用户选择哪个任务（A/B/C选项）
 5. 开始具体工作前，用 codegraph 工具确认现有代码状态
 
