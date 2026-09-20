@@ -2,7 +2,35 @@
 
 All notable changes to X-Agent are documented in this file.
 
+This is the single authoritative changelog. The former `CHANGELOG_NEW.md` (which contained a
+conflicting, partly aspirational version history) was archived to
+`docs/archive/reports-2026/CHANGELOG_NEW.md` on 2026-09-20 and is superseded by this file.
+
+> **Versioning note**: the repository currently carries a `v1.0.0-beta` tag (2026-06-05) while
+> `pyproject.toml` declares `0.1.0`. Per `ROADMAP.md` (M2), the next official release will be
+> `v0.2.0-beta`; the premature `v1.0.0-beta` tag should be treated as historical and is pending
+> maintainer disposition.
+
 ## [Unreleased]
+
+### 2026-09-20 — Documentation convergence (M1/T1-T4)
+- Archived 81 stale root-level report files to `docs/archive/reports-2026/`
+- Fixed README repository URL (`x-agent/x-agent-core` → `xiongpinji/X-Agent`), storage claims
+  (local-first default with PostgreSQL/Qdrant/Redis as production options), and truncated support link
+- Rewrote ROADMAP.md: replaced stale Q2-2025–Q1-2026 calendar with condition-based milestones M1–M4
+- Consolidated changelog into this file; fixed dead doc references in CLAUDE.md
+
+### Web UI & release hardening (2026-06-05)
+- Full web UI: agent gallery, chat, settings, history, security, logs (`frontend/`)
+- Three-tier deployment strategy doc; production API-key warning (D-1)
+- Webhook secret validator; high-risk tool audit log (D-2/D-4)
+- AgentFixRunner stability fixes (unit patch hints, iteration budget applied to real agent loop,
+  reflect re-plan steered toward mutating tools, replan applies code changes after read)
+- Removed dead code (Tier 1-2, 14 files, ~6000 lines)
+
+### Phase 5.6 - Unified Channel Adapters (2026-06-04)
+- Unified `ChannelAdapter` framework in `core/channels/`
+- Discord, Telegram, and DingTalk adapters (11 tests)
 
 ### Phase 5.5 - Cloud Sandbox Engine (2026-06-04)
 
@@ -122,10 +150,7 @@ All notable changes to X-Agent are documented in this file.
 
 ## Development Milestones
 
-- **Q2 2026**: Phase 5.5 Cloud Sandbox (current)
-- **Q3 2026**: Phase 5.6 Multi-Channel Unified Adapter
-- **Q4 2026**: Production hardening and performance optimization
-- **2026+**: Enterprise compliance and advanced reasoning
+Milestone planning moved to `ROADMAP.md` (M1 Convergence → M2 v0.2.0-beta → M3 v0.3.x → M4 GA v1.0).
 
 ---
 
