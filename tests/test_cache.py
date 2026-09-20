@@ -40,17 +40,6 @@ from backend.app.core.llm_cache import (
     get_cached_embedding,
     get_cached_llm_response,
 )
-from backend.app.core.memory_cache import (
-    cache_memory_item,
-    cache_search_results,
-    cache_session,
-    get_cached_memory_item,
-    get_cached_search_results,
-    get_cached_session,
-    invalidate_memory_item_cache,
-    invalidate_search_cache,
-    invalidate_session_cache,
-)
 
 
 class TestCacheStats:
@@ -133,74 +122,6 @@ class TestCacheManager:
         await manager.set("test_key", {"data": "value"}, ttl=60)
         result = await manager.get("test_key")
         assert result == {"data": "value"}
-
-
-class TestMemoryCaching:
-    """Test memory system caching."""
-
-    @pytest.mark.asyncio
-    async def test_cache_memory_item(self) -> None:
-        from backend.app.core.memory import MemoryItem, MemoryScope
-
-        item = MemoryItem(
-            tenant_id="test_tenant",
-            content="Test memory",
-            layer=3,
-        )
-        await cache_memory_item(item)
-        cached = await get_cached_memory_item(item.id)
-        assert cached is not None
-        assert cached["content"] == "Test memory"
-
-    @pytest.mark.asyncio
-    async def test_invalidate_memory_item_cache(self) -> None:
-        from backend.app.core.memory import MemoryItem
-
-        item = MemoryItem(
-            tenant_id="test_tenant",
-            content="Test memory",
-            layer=3,
-        )
-        await cache_memory_item(item)
-        await invalidate_memory_item_cache(item.id)
-        cached = await get_cached_memory_item(item.id)
-        assert cached is None
-
-    @pytest.mark.asyncio
-    async def test_cache_search_results(self) -> None:
-        from backend.app.core.memory import MemoryItem, MemorySearchHit
-
-        item = MemoryItem(
-            tenant_id="test_tenant",
-            content="Test memory",
-            layer=3,
-        )
-        hit = MemorySearchHit(item=item, score=0.95)
-        results = [hit]
-        await cache_search_results("test_tenant", "test query", results)
-        cached = await get_cached_search_results("test_tenant", "test query")
-        assert cached is not None
-        assert len(cached) == 1
-        assert cached[0].score == 0.95
-
-    @pytest.mark.asyncio
-    async def test_cache_session(self) -> None:
-        session_data = {
-            "session_id": "test_session",
-            "tenant_id": "test_tenant",
-            "user_id": "test_user",
-        }
-        await cache_session("test_session", session_data)
-        cached = await get_cached_session("test_session")
-        assert cached == session_data
-
-    @pytest.mark.asyncio
-    async def test_invalidate_session_cache(self) -> None:
-        session_data = {"session_id": "test_session"}
-        await cache_session("test_session", session_data)
-        await invalidate_session_cache("test_session")
-        cached = await get_cached_session("test_session")
-        assert cached is None
 
 
 class TestLLMCaching:

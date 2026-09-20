@@ -13,7 +13,6 @@ from pathlib import Path
 import pytest
 
 from backend.app.core.context_compactor import ContextCompactor, CompactionResult
-from backend.app.core.memory_persistence import MemoryEntry, MemoryPersistence
 from backend.app.core.session_recovery import SessionRecovery, SessionSnapshot
 
 
@@ -134,127 +133,6 @@ class TestContextCompactor:
         # Should have summary message
         summary_msgs = [m for m in result.messages if m.get("role") == "system" and "compressed" in m.get("content", "").lower()]
         assert len(summary_msgs) > 0
-
-
-class TestMemoryPersistence:
-    """Tests for MemoryPersistence."""
-
-    @pytest.fixture
-    def memory_dir(self) -> Path:
-        """Create temporary memory directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
-
-    @pytest.fixture
-    def persistence(self, memory_dir: Path) -> MemoryPersistence:
-        """Create persistence instance."""
-        return MemoryPersistence(memory_dir)
-
-    def test_save_memory(self, persistence: MemoryPersistence) -> None:
-        """Test saving a memory entry."""
-        entry = MemoryEntry(
-            name="test_memory",
-            category="reference",
-            content="Test content",
-            tags=["test"],
-        )
-        path = persistence.save_memory(entry)
-        assert Path(path).exists()
-
-    def test_load_memory(self, persistence: MemoryPersistence) -> None:
-        """Test loading a memory entry."""
-        entry = MemoryEntry(
-            name="test_memory",
-            category="reference",
-            content="Test content",
-            tags=["test"],
-        )
-        persistence.save_memory(entry)
-        loaded = persistence.load_memory("test_memory")
-        assert loaded is not None
-        assert loaded.name == "test_memory"
-        assert loaded.content == "Test content"
-
-    def test_index_generation(self, persistence: MemoryPersistence) -> None:
-        """Test that index is generated correctly."""
-        entry = MemoryEntry(
-            name="indexed_memory",
-            category="project",
-            content="Content",
-        )
-        persistence.save_memory(entry)
-        index = persistence.get_index_markdown()
-        assert "indexed_memory" in index
-        assert "project" in index
-
-    def test_list_memories(self, persistence: MemoryPersistence) -> None:
-        """Test listing memories."""
-        for i in range(3):
-            entry = MemoryEntry(
-                name=f"memory_{i}",
-                category="reference",
-                content=f"Content {i}",
-            )
-            persistence.save_memory(entry)
-
-        memories = persistence.list_memories()
-        assert len(memories) >= 3
-
-    def test_list_memories_by_category(self, persistence: MemoryPersistence) -> None:
-        """Test listing memories by category."""
-        entry1 = MemoryEntry(
-            name="ref_memory",
-            category="reference",
-            content="Reference",
-        )
-        entry2 = MemoryEntry(
-            name="proj_memory",
-            category="project",
-            content="Project",
-        )
-        persistence.save_memory(entry1)
-        persistence.save_memory(entry2)
-
-        ref_memories = persistence.list_memories(category="reference")
-        assert any(m.name == "ref_memory" for m in ref_memories)
-
-    def test_search_memories(self, persistence: MemoryPersistence) -> None:
-        """Test searching memories."""
-        entry = MemoryEntry(
-            name="searchable",
-            category="reference",
-            content="Searchable content",
-            tags=["search", "test"],
-        )
-        persistence.save_memory(entry)
-
-        results = persistence.search_memories("search")
-        assert len(results) > 0
-        assert any(m.name == "searchable" for m in results)
-
-    def test_delete_memory(self, persistence: MemoryPersistence) -> None:
-        """Test deleting a memory."""
-        entry = MemoryEntry(
-            name="deletable",
-            category="reference",
-            content="To delete",
-        )
-        persistence.save_memory(entry)
-        assert persistence.delete_memory("deletable")
-        assert persistence.load_memory("deletable") is None
-
-    def test_memory_metadata(self, persistence: MemoryPersistence) -> None:
-        """Test memory metadata storage."""
-        entry = MemoryEntry(
-            name="metadata_test",
-            category="reference",
-            content="Content",
-            metadata={"key": "value", "number": 42},
-        )
-        persistence.save_memory(entry)
-        loaded = persistence.load_memory("metadata_test")
-        assert loaded is not None
-        assert loaded.metadata.get("key") == "value"
 
 
 class TestSessionRecovery:

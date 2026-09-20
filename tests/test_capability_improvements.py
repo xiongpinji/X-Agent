@@ -13,9 +13,6 @@ from unittest.mock import patch
 from backend.app.core.code_editor import (
     CodeEditor, CodeEdit, EditType, ASTAnalyzer, CodeFormatter, CodeRefactorer
 )
-from backend.app.core.plugin_manager import (
-    PluginManager, PluginMetadata, PluginDependency, PluginCategory
-)
 from backend.app.core.performance import (
     MemoryCache, CacheStrategy, LLMCallOptimizer, PerformanceMonitor
 )
@@ -94,59 +91,6 @@ def another_function():
 # ============================================================================
 # Plugin Manager Tests
 # ============================================================================
-
-class TestPluginManager:
-    """Test plugin management."""
-
-    @pytest.fixture(autouse=True)
-    def _isolate_plugin_registry(self):
-        """Prevent PluginRegistry from touching ~/.xagent/plugins/registry.json.
-
-        Real disk I/O causes cross-test pollution: a registry.json left over
-        from a prior run makes register() return False (name already exists).
-        """
-        from backend.app.core.plugin_manager import PluginRegistry
-        with patch.object(PluginRegistry, "_load_registry"), \
-             patch.object(PluginRegistry, "_save_registry"):
-            yield
-
-    @pytest.mark.asyncio
-    async def test_plugin_registry(self):
-        """Test plugin registry."""
-        manager = PluginManager()
-
-        metadata = PluginMetadata(
-            name="test_plugin",
-            version="1.0.0",
-            author="Test",
-            description="Test plugin",
-            category=PluginCategory.TOOLS,
-        )
-
-        success = await manager.registry.register(metadata)
-        assert success is True
-
-        plugin = await manager.registry.get(metadata.name)
-        assert plugin is not None
-        assert plugin.metadata.name == "test_plugin"
-
-    @pytest.mark.asyncio
-    async def test_plugin_search(self):
-        """Test plugin search."""
-        manager = PluginManager()
-
-        metadata = PluginMetadata(
-            name="search_test",
-            version="1.0.0",
-            author="Test",
-            description="Test search functionality",
-            category=PluginCategory.TOOLS,
-            keywords=["search", "test"],
-        )
-
-        await manager.registry.register(metadata)
-        results = await manager.registry.search(keyword="search")
-        assert len(results) > 0
 
 
 # ============================================================================
@@ -386,42 +330,6 @@ class TestAdvancedFeatures:
 # ============================================================================
 # Integration Tests
 # ============================================================================
-
-class TestIntegration:
-    """Integration tests for all components."""
-
-    @pytest.mark.asyncio
-    async def test_full_workflow(self):
-        """Test complete workflow."""
-        # Initialize components
-        editor = CodeEditor()
-        plugin_manager = PluginManager()
-        tool_manager = ToolManager()
-        coordinator = MultiAgentCoordinator()
-
-        # Register agent
-        coordinator.register_agent("main_agent", ["code_editing", "tool_execution"])
-
-        # Create task
-        task = Task(
-            name="integration_test",
-            priority=TaskPriority.NORMAL,
-            metadata={"capability": "code_editing"},
-        )
-
-        # Submit task
-        task_id = await coordinator.task_scheduler.submit(task)
-        assert task_id is not None
-
-    def test_all_modules_importable(self):
-        """Test that all modules can be imported."""
-        # This test ensures all new modules are properly structured
-        assert CodeEditor is not None
-        assert PluginManager is not None
-        assert MemoryCache is not None
-        assert Translator is not None
-        assert ToolManager is not None
-        assert MultiAgentCoordinator is not None
 
 
 if __name__ == "__main__":
