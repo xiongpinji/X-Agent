@@ -1,13 +1,17 @@
 """Enhanced memory API endpoints for hybrid memory system.
 
+Mounted under /api/v1/memory/enhanced to avoid route collision with api/memory.py
+(same-prefix POST /search produced a Duplicate Operation ID, and GET /stats was
+silently shadowed by memory.py's GET /{memory_id} wildcard).
+
 Endpoints:
-- POST /api/v1/memory/store - Store memory with auto-tiering
-- GET /api/v1/memory/recall - Recall memories
-- GET /api/v1/memory/search - Search memories
-- POST /api/v1/memory/relate - Create relationships
-- GET /api/v1/memory/related/{memory_id} - Get related memories
-- POST /api/v1/memory/merge - Merge memories
-- GET /api/v1/memory/stats - Memory statistics
+- POST /api/v1/memory/enhanced/store - Store memory with auto-tiering
+- POST /api/v1/memory/enhanced/recall - Recall memories
+- POST /api/v1/memory/enhanced/search - Search memories
+- POST /api/v1/memory/enhanced/relate - Create relationships
+- GET  /api/v1/memory/enhanced/related/{memory_id} - Get related memories
+- POST /api/v1/memory/enhanced/merge - Merge memories
+- GET  /api/v1/memory/enhanced/stats - Memory statistics
 """
 
 from __future__ import annotations
@@ -21,7 +25,7 @@ from backend.app.core.contracts import RunContext
 from backend.app.core.hybrid_memory_system import HybridMemorySystem, Memory, MemoryTierStats
 from backend.app.core.security import Principal
 
-router = APIRouter(prefix="/api/v1/memory", tags=["memory"])
+router = APIRouter(prefix="/api/v1/memory/enhanced", tags=["memory-enhanced"])
 
 
 class StoreMemoryRequest(BaseModel):
