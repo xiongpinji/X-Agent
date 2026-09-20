@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>X-Agent Web Console (React)</title>
+    <!--
+      React app entry (T12, 2026-09).
+      NOTE: frontend/index.html is the vanilla-JS console that the backend
+      actually serves at "/" (settings.static_dir = frontend/). This file is a
+      SEPARATE vite entry so `npm run build` produces a real React bundle
+      (dist/app.html + js/css) proving the React tree builds. Wiring the React
+      app as the served UI (backend static serving -> frontend/dist) is a
+      product decision tracked in docs/reports/T12_FRONTEND.md — do not flip
+      it silently.
+    -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

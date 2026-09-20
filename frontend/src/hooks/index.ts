@@ -1,3 +1,4 @@
+import * as React from 'react'
 import { useEffect, useRef, useCallback } from 'react'
 
 /**
