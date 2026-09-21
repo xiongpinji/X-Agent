@@ -252,9 +252,17 @@ async def register(request: AuthLoginRequest) -> AuthTokenResponse:
         UserCreateRequest(email=request.email, display_name=request.email.split("@")[0]),
         password=request.password,
     )
+    # FIX (2026-09-21 audit, ROADMAP M2 #3): mirror login's token->user binding.
+    # Without _store_token_user the freshly issued tokens resolve to no principal
+    # in dependencies.py and every authenticated call 401s with
+    # "Invalid or expired token" — the register-issued session was unusable.
+    access_token = _issue_token()
+    refresh_token = _issue_token(ttl_seconds=86400)  # match login: 24h refresh
+    _store_token_user(access_token, user.id)
+    _store_token_user(refresh_token, user.id)
     return AuthTokenResponse(
-        access_token=_issue_token(),
-        refresh_token=_issue_token(),
+        access_token=access_token,
+        refresh_token=refresh_token,
         user=user.model_dump(mode="json"),
     )
 

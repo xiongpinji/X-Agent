@@ -21,6 +21,19 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "celery>=5.3.0",
     "redis>=5.0.0",
+    # FIX (2026-09-21 audit round 2): dependency-declaration drift. The wheel is
+    # built from THIS file, but these runtime imports were only declared in
+    # requirements.txt — a clean `pip install x-agent-core` failed to boot the
+    # server (security.py: import bcrypt) and shipped a broken `xagent` entry
+    # point (cli.main: import typer). Keep in sync with requirements.txt.
+    "bcrypt>=4.2.0",
+    "scikit-learn>=1.5.0",
+    "sqlalchemy>=2.0.30",
+    "cryptography>=43.0.1",
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+    "prompt-toolkit>=3.0.0",
+    "pyyaml>=6.0",
 ]
 
 [tool.setuptools]
@@ -63,6 +76,13 @@ dev = [
     "mypy>=1.8.0",
     "pylint>=3.0.0",
     "pre-commit>=3.0.0",
+    # FIX (audit round 2): docs tell contributors `pip install -e ".[dev]"`,
+    # but the test suite additionally needs these (mirrors requirements-dev.txt).
+    "pytest-timeout>=2.3.0",
+    "fakeredis==2.38.0",
+    "lupa==2.5",
+    "nest-asyncio>=1.6.0",
+    "aiosqlite>=0.20.0",
 ]
 test = [
     "pytest>=8.2.0",

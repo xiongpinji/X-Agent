@@ -21,16 +21,13 @@ export default function LoginPage() {
     setError('')
     setBusy(true)
     try {
-      let res
-      if (mode === 'login') {
-        res = await apiClient.login(email, password)
-      } else {
-        await apiClient.register(email, password)
-        // NOTE: the token returned by /auth/register is rejected as invalid
-        // by the backend (live-audit finding 2026-09-21, backend bug to fix);
-        // log in again to obtain a working token.
-        res = await apiClient.login(email, password)
-      }
+      // Backend fix 2026-09-21 (ROADMAP M2 #3): /auth/register now binds its
+      // issued tokens to the new user, so they authenticate directly. The old
+      // register-then-relogin workaround is gone with the bug it worked around.
+      const res =
+        mode === 'login'
+          ? await apiClient.login(email, password)
+          : await apiClient.register(email, password)
       localStorage.setItem('auth_token', res.access_token)
       if (res.refresh_token) {
         localStorage.setItem('refresh_token', res.refresh_token)
