@@ -69,11 +69,19 @@ e2e (needs user-provided token/repo), packaging.
    Fix direction: budget-aware plan trimming (protect the final step) instead of
    unconditional injection. Evidence: docs/reports/T7_TEST_BASELINE.md §3,
    tests/test_resume_recovery.py note.
-3. **`POST /auth/register` returns an unusable access_token** — found live in the
-   2026-09-21 audit: the token issued by register is immediately rejected as
-   "Invalid or expired token", while `POST /auth/login` for the same account
-   works. Frontend LoginPage works around it (register then re-login); the
-   backend issuance/persistence ordering needs the actual fix.
+3. ~~**`POST /auth/register` returns an unusable access_token**~~ — RESOLVED
+   (2026-09-21 audit round 2, commit 746d7ef): root cause was register never
+   calling `_store_token_user`; it now mirrors login's binding. Verified live
+   (register -> /auth/me 200) and the frontend workaround was removed.
+6. **Dependency-declaration drift between pyproject and requirements.txt** —
+   RESOLVED for runtime (746d7ef aligned base+dev extras; clean-venv install
+   boots). Remaining: make one file the single source of truth (generate the
+   other) so drift cannot recur.
+7. **SSE stream frames carry Python-repr payloads, not JSON** — `POST
+   /api/v1/agents/run/stream` emits `data: {'trace_id': ...}` (single quotes),
+   which standards-compliant EventSource+JSON.parse clients cannot consume;
+   also only 2 end-of-run frames (trace+completed, duplicated ~233KB each) —
+   no incremental events. Extends item 4.
 4. **Streaming contract not fulfilled** — `POST /api/v1/agents/run/stream` returns
    a plain JSON envelope after synchronous completion (no SSE frames), and
    `async_run: true` on `/api/v1/runs/start` is ignored (runs synchronously).
