@@ -69,6 +69,19 @@ e2e (needs user-provided token/repo), packaging.
    Fix direction: budget-aware plan trimming (protect the final step) instead of
    unconditional injection. Evidence: docs/reports/T7_TEST_BASELINE.md §3,
    tests/test_resume_recovery.py note.
+3. **`POST /auth/register` returns an unusable access_token** — found live in the
+   2026-09-21 audit: the token issued by register is immediately rejected as
+   "Invalid or expired token", while `POST /auth/login` for the same account
+   works. Frontend LoginPage works around it (register then re-login); the
+   backend issuance/persistence ordering needs the actual fix.
+4. **Streaming contract not fulfilled** — `POST /api/v1/agents/run/stream` returns
+   a plain JSON envelope after synchronous completion (no SSE frames), and
+   `async_run: true` on `/api/v1/runs/start` is ignored (runs synchronously).
+   Real-time UX (a headline capability) is therefore not actually delivered on
+   these endpoints; GET /api/v1/agent/stream/{run_id} + /stream/health do work.
+5. **Run response envelope triple-duplicates payload** — summary/metadata.run/
+   snapshot embed the same ~134KB snapshot (472KB response for one run). Needs a
+   single canonical envelope before any external API consumer is built.
 
 ### M3 — Focused differentiation → v0.3.x
 Exit criteria:
