@@ -324,9 +324,18 @@ logger = logging.getLogger("xagent.http")
 tool_registry = ToolCatalog()
 
 frontend_dir = settings.static_dir
+# Production UI (T12 decision 2026-09-20): the React build in frontend/dist is
+# served at "/". The vanilla-JS console (index.html/chat.html/startup.html) stays
+# reachable under /legacy*. If dist/ has not been built, serving degrades
+# gracefully to the vanilla console.
+ui_dist_dir = frontend_dir / "dist"
+ui_app_html = ui_dist_dir / "app.html"
 app = FastAPI(title=settings.app_name, version="0.1.0")
 if frontend_dir.exists():
     app.mount("/assets", StaticFiles(directory=frontend_dir, html=False), name="assets")
+for _ui_sub in ("js", "css", "images", "fonts"):
+    if (ui_dist_dir / _ui_sub).is_dir():
+        app.mount(f"/{_ui_sub}", StaticFiles(directory=ui_dist_dir / _ui_sub), name=f"ui-{_ui_sub}")
 
 # Parse CORS origins from settings - CRITICAL: Never use wildcard in production
 allow_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
@@ -644,11 +653,35 @@ async def shutdown_event():
 
 @app.get("/chat")
 async def chat_page() -> FileResponse:
+    # React ChatPage owns /chat; vanilla console chat moved to /legacy/chat
+    if ui_app_html.exists():
+        return FileResponse(ui_app_html)
     return FileResponse(frontend_dir / "chat.html")
+
+
+@app.get("/legacy", include_in_schema=False)
+async def legacy_console() -> FileResponse:
+    """Vanilla-JS console (the pre-React production UI)."""
+    return FileResponse(frontend_dir / "index.html")
+
+
+@app.get("/legacy/chat", include_in_schema=False)
+async def legacy_chat_page() -> FileResponse:
+    return FileResponse(frontend_dir / "chat.html")
+
+
+@app.get("/legacy/startup", include_in_schema=False)
+async def legacy_startup_page() -> FileResponse:
+    startup = frontend_dir / "startup.html"
+    if startup.exists():
+        return FileResponse(startup)
+    return FileResponse(frontend_dir / "index.html")
 
 
 @app.get("/")
 async def root() -> FileResponse:
+    if ui_app_html.exists():
+        return FileResponse(ui_app_html)
     startup = frontend_dir / "startup.html"
     if startup.exists():
         return FileResponse(startup)
@@ -779,3 +812,20 @@ async def get_csrf_token(request: Request) -> JSONResponse:
         secure=(settings.app_mode == "production"),
     )
     return response
+
+
+
+@app.get("/{spa_path:path}", include_in_schema=False)
+async def spa_fallback(spa_path: str):
+    """SPA deep-link fallback for the React UI (BrowserRouter).
+
+    Registered last so every API/health/docs route and static mount wins first.
+    API-ish paths keep their JSON 404; anything else gets the React shell so
+    client-side routing can render /tasks, /tools, /memory, etc. on hard reload.
+    """
+    if ui_app_html.exists():
+        first = spa_path.split("/", 1)[0]
+        if first not in {"api", "docs", "redoc", "openapi.json", "health", "ready",
+                         "assets", "js", "css", "images", "fonts", "legacy"}:
+            return FileResponse(ui_app_html)
+    raise HTTPException(status_code=404, detail="Not found")
