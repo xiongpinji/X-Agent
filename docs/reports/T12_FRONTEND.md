@@ -63,8 +63,25 @@ React bundle（dist/app.html）。是否把 React 应用切换为生产 UI（后
 vanilla 控制台 index.html（32KB）+ React：app.html、vendor-react 160KB(gzip 52KB)、
 5 个懒加载页面 chunk、app CSS 50KB。挂载树 5 路由（Dashboard/Chat/Tasks/Tools/Memory）。
 
-## 遗留决策（需用户）
-1. React 应用是否升级为生产 UI（后端 static 服务 → frontend/dist，路由回退到 app.html）？
-2. src/console 与 16 个孤岛：删除（同后端僵尸岛处置）还是补全挂载？
-3. memory PUT/DELETE：接受 append-only 现状（前端已改为明确报错），还是为后端增补
-   基于 revision 的"逻辑删除/更新"端点？
+## 决策落地（2026-09-20 用户批复："直接升级UI，前端整体对齐，解决所有孤岛"）
+
+1. **React 已升级为生产 UI**：`backend/app/main.py` 现在优先服务 `frontend/dist/app.html`
+   （`GET /`、`/chat`、SPA 深链兜底 `/{spa_path}`；`/js` `/css` 等静态挂载）。
+   vanilla 控制台保留在 `/legacy`、`/legacy/chat`、`/legacy/startup`；dist 未构建时
+   优雅降级回 vanilla。4 个 UI 路由 `include_in_schema=False`，OpenAPI 保持 323 paths/361 ops
+   （与 docs/API_INVENTORY.md 一致）。已验证：15 项路由行为断言全过 + fast-gate 277 全绿。
+2. **孤岛已全部删除**：以 `main.tsx` 为根做完整 import 可达性分析，可达集仅 **11 个文件**
+   （App、Layout、5 页面、api.ts、websocket.ts、appStore.ts、main.tsx）；其余 **139 个文件**
+   不可达，已 `git rm`：src/console（52）、components/ui 全部（22）、streaming/feedback 组件、
+   i18n 代码+6 个翻译 JSON、hooks、utils（pwa/push/performance 系列）、agentStore、sseClient、
+   serviceWorker×2、__tests__ 全部、AgentWorkspace/FeedbackDashboard/Optimized* 页面、
+   FilePreview/InteractiveQuestion/StreamingOutput 等级联孤儿、3 个孤立 CSS。
+   tsconfig 的 exclude 孤岛清单随之删除（不再有被排除的代码）。删除后 tsc 0 错误、
+   vite build 全绿。所有内容可从 git 历史恢复（删除前 HEAD=aca332f）。
+3. **memory PUT/DELETE**：维持 append-only 现状（前端客户端抛显式错误）；未获增补端点指令，
+   如未来需要"逻辑删除/更新"，走 revision+rollback 语义另立项。
+
+### 注意
+`*_control` 系列 API（6 个挂载路由）的唯一预期消费者 src/console 已删除。这些 API 保持
+挂载与清单在册（W3 决策：不移动端点），但现在是**无前端消费者的表面**——下次 API 治理
+（M2+）时可重新评估去留。

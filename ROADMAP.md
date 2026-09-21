@@ -17,22 +17,29 @@ cloud agents and Devin.
 - Working & verified: agent loop (plan/observe/tool/reflect/replan/repair), MCP integration,
   CLI, hooks, context management, security stack (authn/authz/rate-limit/audit),
   cloud sandbox engine + Issue→PR scaffolding (Phase 5.5), channel adapters (Phase 5.6), web UI
-- Known debt: v1/v2 module duplication (agent, memory, plugin, skill, audit, collaboration),
-  317-operation API surface with UI-coupled `*_control` endpoints, dual storage paths
-  (local JSONL/SQLite vs PostgreSQL), ~76 failing / 4 erroring tests in the historical full-suite
-  baseline, over-broad peripheral targets (desktop/mobile/4 SDKs)
+- Governance pass completed 2026-09-20 (this branch): v1/v2 duplication resolved
+  (W2/W3: 152 zombie files removed, 5 dormant routers mounted; API surface inventoried at
+  323 paths / 361 ops — docs/API_INVENTORY.md), test baseline zeroed out (3028 passed /
+  0 unexplained — docs/reports/T7_TEST_BASELINE.md), CI consolidated to one honest gate,
+  frontend build+typecheck green and promoted to production UI (docs/reports/T12_FRONTEND.md),
+  peripherals frozen with STATUS notes (desktop/mobile/sdks/cloud)
+- Remaining debt: lint/format/mypy backlog (ruff ~7.7k findings, non-blocking CI report),
+  dual storage paths pending D1-D7 implementation (M2), Phase 5.5 not yet verified against a
+  real GitHub repo (needs user token/repo), 2 chartered production-risk items under M2,
+  2 environment-dependent test failures + 2 PathMapper tests awaiting user decision
 
 ## Milestones (condition-based, not calendar-based)
 
-### M1 — Convergence (in progress)
+### M1 — Convergence (complete, 2026-09-20)
 Exit criteria:
 - [x] Root-level doc sprawl archived; README/CLAUDE.md consistent with reality
-- [ ] Single CHANGELOG (Keep-a-Changelog format)
-- [ ] v1/v2 duplication resolved: one agent implementation, one memory stack, one plugin
+- [x] Single CHANGELOG (Keep-a-Changelog format) — T4, ecc9343
+- [x] v1/v2 duplication resolved: one agent implementation, one memory stack, one plugin
       system, one skill system, one audit path, one dependencies module, one middleware layout
-- [ ] Storage strategy decided and documented (local-first default vs PostgreSQL profile);
-      README claims match the decision
-- [ ] No `Duplicate Operation ID` warnings at startup
+      — W2/W3, 877eaa9 + b12a41e (114 + 38 zombie files removed, 5 dormant routers mounted)
+- [x] Storage strategy decided and documented (local-first default vs PostgreSQL profile);
+      README claims match the decision — T6, c79bd63 (D1-D7 adopted)
+- [x] No `Duplicate Operation ID` warnings at startup — T9, d0fef66
 
 ### M2 — Trustworthy baseline → v0.2.0-beta
 Exit criteria:
@@ -42,6 +49,26 @@ Exit criteria:
 - [ ] Phase 5.5 verified end-to-end against a real GitHub repo (Issue → sandbox → PR)
 - [ ] Frontend `build` + `type-check` green in CI
 - [ ] Tag **v0.2.0-beta**, installable package (`pip install` from wheel/sdist), release notes
+
+Progress (2026-09-20 governance pass): local baseline 3028 passed / 0 unexplained
+(docs/reports/T7_TEST_BASELINE.md); CI consolidated to one gate (fast-gate + frontend
+blocking, lint/full-suite reporting); API inventory published (docs/API_INVENTORY.md,
+323 paths / 361 ops); frontend build+typecheck green and promoted to the production
+UI (docs/reports/T12_FRONTEND.md). Remaining: real-GitHub CI verification, Phase 5.5
+e2e (needs user-provided token/repo), packaging.
+
+**Chartered production-risk items (立项 2026-09-20, user-approved):**
+1. **TestClient ~3MB/request retention** — measured during T7 (a 1000-request test
+   peaked >1.5GB RSS). Suspect middleware chain holding references (CSRF store,
+   rate limiter, exception handlers). Verify with tracemalloc whether the uvicorn
+   path leaks too; fix or document as TestClient-only. Owner: unassigned.
+   Evidence: docs/reports/T7_TEST_BASELINE.md §3.
+2. **AgentLoop scaffold inflation starves the final step** — `_apply_execution_plan`
+   can grow a 2-step plan to ~10 steps; under low `max_iterations` the "final" step
+   never executes and the run silently degrades to the `_finalize_answer` fallback.
+   Fix direction: budget-aware plan trimming (protect the final step) instead of
+   unconditional injection. Evidence: docs/reports/T7_TEST_BASELINE.md §3,
+   tests/test_resume_recovery.py note.
 
 ### M3 — Focused differentiation → v0.3.x
 Exit criteria:

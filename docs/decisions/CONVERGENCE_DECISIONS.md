@@ -101,9 +101,15 @@ dependencies_refactored 引用）、`parallel_agents_integration.py`（0 生产�
 | T12 前端 | ✅ | 0b602ee：构建从"从未可运行"到全绿（双前端真相 + api.ts 对齐）→ docs/reports/T12_FRONTEND.md |
 | T13 打 tag | ❌ 不打 | M2 出关标准未全满足：①CI 未在真实 GitHub 验证；④Phase 5.5 端到端被 T10 阻塞；⑥无可安装包。满足后再打 v0.2.0-beta |
 
+> **2026-09-20 用户批复（第二轮）**："直接推送；直接升级 UI；前端整体对齐；解决所有孤岛；
+> 生产隐患立项。" 落地：React 已升级为生产 UI（main.py 服务 dist/app.html，vanilla 迁至
+> /legacy*，SPA 兜底，OpenAPI 保持 323/361）；以 import 可达性分析删除 139 个不可达前端
+> 文件（可达集仅 11 文件，删除后 tsc+vite 全绿）；两个生产隐患已立项写入 ROADMAP M2
+> （TestClient ~3MB/请求滞留、AgentLoop 计划膨胀挤掉 final 步）。
+
 **新增待用户决策**（详见各报告）：
-1. React 应用（frontend/src + app.html）是否升级为生产 UI（后端 static → dist）？
-2. frontend/src/console（52 文件孤岛）及 16 个前端孤岛：删除还是补全挂载？
+1. ~~React 应用是否升级为生产 UI~~ ✅ 已升级（2026-09-20）
+2. ~~frontend/src/console 及孤岛：删除还是补全挂载~~ ✅ 已删除 139 文件（可达性分析定界）
 3. memory PUT/DELETE：接受 append-only（前端已显式报错）还是增补 revision 式端点？
 4. PathMapper ×2 测试（PermissionError）：审查报告遗留决策项。
 5. TestClient ~3MB/请求滞留与 AgentLoop 计划膨胀挤掉 final 步：两个已记录的生产侧
