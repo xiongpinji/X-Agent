@@ -31,10 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      XAGENT_TOOL_EXECUTION_STORE_PATH: ${{ runner.temp }}/t7_tools.json
-      XAGENT_AUDIT_STORE_PATH: ${{ runner.temp }}/t7_audit.jsonl
-      XAGENT_RUN_STORE_PATH: ${{ runner.temp }}/t7_runs.jsonl
-      XAGENT_MEMORY_STORE_PATH: ${{ runner.temp }}/t7_memory.jsonl
+      XAGENT_TOOL_EXECUTION_STORE_PATH: /tmp/xagent_ci_tools.json
+      XAGENT_AUDIT_STORE_PATH: /tmp/xagent_ci_audit.jsonl
+      XAGENT_RUN_STORE_PATH: /tmp/xagent_ci_runs.jsonl
+      XAGENT_MEMORY_STORE_PATH: /tmp/xagent_ci_memory.jsonl
     steps:
       - uses: actions/checkout@v4
 
@@ -130,10 +130,10 @@ jobs:
       matrix:
         shard: [0, 1, 2, 3]
     env:
-      XAGENT_TOOL_EXECUTION_STORE_PATH: ${{ runner.temp }}/tools_${{ matrix.shard }}.json
-      XAGENT_AUDIT_STORE_PATH: ${{ runner.temp }}/audit_${{ matrix.shard }}.jsonl
-      XAGENT_RUN_STORE_PATH: ${{ runner.temp }}/runs_${{ matrix.shard }}.jsonl
-      XAGENT_MEMORY_STORE_PATH: ${{ runner.temp }}/memory_${{ matrix.shard }}.jsonl
+      XAGENT_TOOL_EXECUTION_STORE_PATH: /tmp/xagent_ci_tools_${{ matrix.shard }}.json
+      XAGENT_AUDIT_STORE_PATH: /tmp/xagent_ci_audit_${{ matrix.shard }}.jsonl
+      XAGENT_RUN_STORE_PATH: /tmp/xagent_ci_runs_${{ matrix.shard }}.jsonl
+      XAGENT_MEMORY_STORE_PATH: /tmp/xagent_ci_memory_${{ matrix.shard }}.jsonl
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
