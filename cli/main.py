@@ -168,7 +168,11 @@ def health() -> None:
 
         result = asyncio.run(client.health_check())
 
-        if result.get("status") == "healthy":
+        if str(result.get("status", "")).lower() in {"healthy", "ok", "ready"}:
+            # backend /health answers {"status": "ok"}; /ready answers "ready".
+            # The old strict == "healthy" check made every successful probe
+            # report "Backend is unhealthy: Unknown error" (found in the
+            # 2026-09-21 live audit).
             print_info(f"Backend is healthy (mode: {config.mode})")
         else:
             error = result.get("error", "Unknown error")

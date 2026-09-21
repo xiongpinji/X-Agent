@@ -14,6 +14,22 @@ export interface PaginatedResponse<T> {
   hasMore: boolean
 }
 
+export interface AuthUser {
+  id: string
+  email: string
+  display_name?: string
+  role?: string
+  tenant_id?: string
+}
+
+export interface AuthResponse {
+  access_token: string
+  refresh_token?: string
+  expires_in?: number
+  token_type?: string
+  user?: AuthUser
+}
+
 export interface Task {
   id: string
   name: string
@@ -83,12 +99,39 @@ class ApiClient {
     this.setupInterceptors()
   }
 
+  private csrfToken: string | null = null
+
+  /**
+   * The backend CSRF middleware rejects every state-changing request without
+   * an X-CSRF-Token header (403 "CSRF token required"). Tokens are issued by
+   * POST /api/v1/csrf-token, which also sets the session_id cookie that binds
+   * the token — same-origin axios sends that cookie automatically.
+   */
+  private async ensureCsrfToken(): Promise<string | null> {
+    if (this.csrfToken) return this.csrfToken
+    try {
+      // Bare axios (not this.client) to avoid interceptor recursion.
+      const res = await axios.post(`${this.baseURL}/csrf-token`)
+      this.csrfToken = res.data?.csrf_token ?? null
+    } catch {
+      this.csrfToken = null
+    }
+    return this.csrfToken
+  }
+
   private setupInterceptors() {
     this.client.interceptors.request.use(
-      (config) => {
+      async (config) => {
         const token = localStorage.getItem('auth_token')
         if (token) {
           config.headers.Authorization = `Bearer ${token}`
+        }
+        const method = (config.method || 'get').toLowerCase()
+        if (method !== 'get' && method !== 'head' && method !== 'options') {
+          const csrf = await this.ensureCsrfToken()
+          if (csrf) {
+            config.headers['X-CSRF-Token'] = csrf
+          }
         }
         return config
       },
@@ -101,6 +144,10 @@ class ApiClient {
         if (error.response?.status === 401) {
           localStorage.removeItem('auth_token')
           window.location.href = '/login'
+        }
+        if (error.response?.status === 403) {
+          // Stale/invalid CSRF token — drop the cache so the next mutation refetches.
+          this.csrfToken = null
         }
         return Promise.reject(error)
       }
@@ -157,6 +204,17 @@ class ApiClient {
 
   async deleteTask(id: string): Promise<void> {
     await this.client.delete(`/tasks/${id}`)
+  }
+
+  // Auth API (backend /api/v1/auth/*; CSRF header handled by the interceptor)
+  async login(email: string, password: string): Promise<AuthResponse> {
+    const response = await this.client.post<AuthResponse>('/auth/login', { email, password })
+    return response.data
+  }
+
+  async register(email: string, password: string): Promise<AuthResponse> {
+    const response = await this.client.post<AuthResponse>('/auth/register', { email, password })
+    return response.data
   }
 
   // Memory API

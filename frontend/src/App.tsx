@@ -12,6 +12,7 @@ const ChatPage = lazy(() => import('@/pages/ChatPage'))
 const TasksPage = lazy(() => import('@/pages/TasksPage'))
 const ToolsPage = lazy(() => import('@/pages/ToolsPage'))
 const MemoryPage = lazy(() => import('@/pages/MemoryPage'))
+const LoginPage = lazy(() => import('@/pages/LoginPage'))
 
 // Loading fallback component
 const PageLoader = () => (
@@ -56,18 +57,27 @@ export const App: React.FC = () => {
         'h-screen',
         theme === 'dark' ? 'dark bg-slate-950' : 'bg-white'
       )}>
-        <Layout>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/chat" element={<ChatPage />} />
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/tools" element={<ToolsPage />} />
-              <Route path="/memory" element={<MemoryPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
-        </Layout>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* Login sits outside the app chrome */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              path="/*"
+              element={
+                <Layout>
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/chat" element={<ChatPage />} />
+                    <Route path="/tasks" element={<TasksPage />} />
+                    <Route path="/tools" element={<ToolsPage />} />
+                    <Route path="/memory" element={<MemoryPage />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </Layout>
+              }
+            />
+          </Routes>
+        </Suspense>
       </div>
     </Router>
   )
