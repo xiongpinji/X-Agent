@@ -35,32 +35,5 @@
     }
   },
   "include": ["src"],
-  /* src/console: 52-file unmounted island — nothing imports it, it references
-     types that don't exist, and it has never compiled. Frozen pending a
-     delete-or-finish decision (see src/console/STATUS.md).
-     src/__tests__: no test runner is installed (vitest/jest absent from
-     package.json); these files cannot execute and are excluded from typecheck. */
-  "exclude": [
-    "src/console",
-    "src/**/__tests__",
-    /* Unmounted aspirational islands (T12): no file in the mounted tree
-       (App.tsx -> Dashboard/Chat/Tasks/Tools/Memory) imports these; several
-       have never compiled. Frozen — see docs/reports/T12_FRONTEND.md. */
-    "src/components/streaming",
-    "src/components/feedback",
-    "src/components/Forum.tsx",
-    "src/components/AnalyticsDashboard.tsx",
-    "src/components/ExecutionPanel.tsx",
-    "src/pages/AgentWorkspace.tsx",
-    "src/pages/FeedbackDashboard.tsx",
-    "src/pages/OptimizedDashboard.tsx",
-    "src/pages/OptimizedTasksPage.tsx",
-    "src/store/agentStore.ts",
-    "src/services/sseClient.ts",
-    "src/serviceWorker.ts",
-    "src/utils/pwaManager.ts",
-    "src/utils/pushNotificationManager.ts",
-    "src/utils/performanceOptimizer.ts"
-  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
